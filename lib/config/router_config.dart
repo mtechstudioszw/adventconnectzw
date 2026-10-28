@@ -76,6 +76,7 @@ import '../screens/events/events_screen.dart';
 import '../screens/events/post_event_screen.dart';
 import '../screens/jobs/job_details_screen.dart';
 import '../screens/jobs/jobs_screen.dart';
+import '../screens/jobs/my_jobs_screen.dart';
 import '../screens/jobs/post_job_screen.dart';
 import '../screens/legal/guidelines_screen.dart';
 import '../screens/legal/help_center_screen.dart';
@@ -820,7 +821,14 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'post',
           name: 'post_job',
-          builder: (context, state) => const PostJobScreen(),
+          builder: (context, state) => PostJobScreen(
+            initialPostType: state.uri.queryParameters['type'],
+          ),
+        ),
+        GoRoute(
+          path: 'mine',
+          name: 'my_jobs',
+          builder: (context, state) => const MyJobsScreen(),
         ),
         GoRoute(
           path: 'edit',

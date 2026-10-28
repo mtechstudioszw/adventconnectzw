@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 class Job {
   const Job({
     required this.id,
@@ -27,6 +29,10 @@ class Job {
     this.sabbathFriendly = false,
     this.isSdaInstitution = false,
     this.contactEmail,
+    this.workArrangement,
+    this.applyInstructions,
+    this.applyUrl,
+    this.pageId,
   });
 
   final String id;
@@ -57,13 +63,16 @@ class Job {
   final String? companyLogoUrl;
   final bool isActive;
   final String status;
+
   /// 'hiring' (employer offering a role) or 'seeking' (member looking
   /// for work). Drives whether the card labels the poster as a
   /// recruiter or as the candidate.
   final String postType;
+
   /// 'entry' | 'mid' | 'senior'. Patch_039 default is 'mid' so legacy
   /// rows still surface in the default filter.
   final String level;
+
   /// patch_039: 30 days from posting by default, bumped via renew_job.
   /// Server-side cron strips expired rows from the public feed.
   final DateTime? expiresAt;
@@ -81,38 +90,73 @@ class Job {
   final bool isSdaInstitution;
   final String? contactEmail;
 
+  /// 'on_site' | 'remote' | 'hybrid' (patch_278). Null on older rows.
+  final String? workArrangement;
+
+  /// How to apply, in the employer's words (patch_278).
+  final String? applyInstructions;
+
+  /// An application form link (patch_278).
+  final String? applyUrl;
+
+  /// The employer's organization Page — its company profile (patch_278).
+  final String? pageId;
+
+  String? get workArrangementLabel => switch (workArrangement) {
+    'on_site' => 'On-site',
+    'remote' => 'Remote',
+    'hybrid' => 'Hybrid',
+    _ => null,
+  };
+
   /// Every field carried. The details screen rebuilt the job by hand after
   /// "Mark as filled" / "Reopen" and dropped country, province, post type,
   /// level and expiry — so the page lost them until it was reopened.
   Job copyWith({String? status}) => Job(
-        id: id,
-        posterId: posterId,
-        posterName: posterName,
-        title: title,
-        company: company,
-        createdAt: createdAt,
-        country: country,
-        province: province,
-        location: location,
-        type: type,
-        salaryMin: salaryMin,
-        salaryMax: salaryMax,
-        currency: currency,
-        description: description,
-        requirements: requirements,
-        category: category,
-        contactPhone: contactPhone,
-        companyLogoUrl: companyLogoUrl,
-        isActive: isActive,
-        status: status ?? this.status,
-        postType: postType,
-        level: level,
-        expiresAt: expiresAt,
-        salaryRange: salaryRange,
-        sabbathFriendly: sabbathFriendly,
-        isSdaInstitution: isSdaInstitution,
-        contactEmail: contactEmail,
-      );
+    id: id,
+    posterId: posterId,
+    posterName: posterName,
+    title: title,
+    company: company,
+    createdAt: createdAt,
+    country: country,
+    province: province,
+    location: location,
+    type: type,
+    salaryMin: salaryMin,
+    salaryMax: salaryMax,
+    currency: currency,
+    description: description,
+    requirements: requirements,
+    category: category,
+    contactPhone: contactPhone,
+    companyLogoUrl: companyLogoUrl,
+    isActive: isActive,
+    status: status ?? this.status,
+    postType: postType,
+    level: level,
+    expiresAt: expiresAt,
+    salaryRange: salaryRange,
+    sabbathFriendly: sabbathFriendly,
+    isSdaInstitution: isSdaInstitution,
+    contactEmail: contactEmail,
+    workArrangement: workArrangement,
+    applyInstructions: applyInstructions,
+    applyUrl: applyUrl,
+    pageId: pageId,
+  );
+
+  /// "Town, Province", without saying "Harare, Harare" twice.
+  String get place {
+    final parts = <String>[];
+    for (final p in [location, province]) {
+      final v = (p ?? '').trim();
+      if (v.isEmpty) continue;
+      if (parts.any((x) => x.toLowerCase() == v.toLowerCase())) continue;
+      parts.add(v);
+    }
+    return parts.join(', ');
+  }
 
   bool get isFilled => status == 'filled';
   bool get isOpen => status == 'open';
@@ -168,8 +212,10 @@ class Job {
     return Job(
       id: json['id'].toString(),
       posterId: (json['poster_id'] ?? '').toString(),
-      posterName: (json['poster_name'] ??
-          (postType == 'seeking' ? 'Job seeker' : 'Recruiter')) as String,
+      posterName:
+          (json['poster_name'] ??
+                  (postType == 'seeking' ? 'Job seeker' : 'Recruiter'))
+              as String,
       title: (json['title'] ?? '') as String,
       company: (json['company'] ?? '') as String,
       country: json['country'] as String?,
@@ -189,48 +235,56 @@ class Job {
       status: (json['status'] ?? 'open') as String,
       postType: postType,
       level: (json['level'] ?? 'mid') as String,
-      expiresAt:
-          DateTime.tryParse(json['expires_at']?.toString() ?? ''),
-      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+      expiresAt: DateTime.tryParse(json['expires_at']?.toString() ?? ''),
+      createdAt:
+          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
       salaryRange: (json['salary_range'] as String?)?.trim(),
       sabbathFriendly: json['sabbath_friendly'] == true,
       isSdaInstitution: json['is_sda_institution'] == true,
       contactEmail: json['contact_email'] as String?,
+      workArrangement: json['work_arrangement'] as String?,
+      applyInstructions: (json['apply_instructions'] as String?)?.trim(),
+      applyUrl: (json['apply_url'] as String?)?.trim(),
+      pageId: json['page_id']?.toString(),
     );
   }
 
   /// Round-trip JSON for offline cache. Uses the same column names the
   /// API returns so `fromJson` can hydrate it without special-casing.
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'poster_id': posterId,
-        'poster_name': posterName,
-        'title': title,
-        'company': company,
-        'country': country,
-        'province': province,
-        'location': location,
-        'job_type': type,
-        'salary_min': salaryMin,
-        'salary_max': salaryMax,
-        'currency': currency,
-        'description': description,
-        'requirements': requirements,
-        'category': category,
-        'contact_phone': contactPhone,
-        'company_logo_url': companyLogoUrl,
-        'is_active': isActive,
-        'status': status,
-        'post_type': postType,
-        'level': level,
-        'expires_at': expiresAt?.toIso8601String(),
-        'created_at': createdAt.toIso8601String(),
-        'salary_range': salaryRange,
-        'sabbath_friendly': sabbathFriendly,
-        'is_sda_institution': isSdaInstitution,
-        'contact_email': contactEmail,
-      };
+    'id': id,
+    'poster_id': posterId,
+    'poster_name': posterName,
+    'title': title,
+    'company': company,
+    'country': country,
+    'province': province,
+    'location': location,
+    'job_type': type,
+    'salary_min': salaryMin,
+    'salary_max': salaryMax,
+    'currency': currency,
+    'description': description,
+    'requirements': requirements,
+    'category': category,
+    'contact_phone': contactPhone,
+    'company_logo_url': companyLogoUrl,
+    'is_active': isActive,
+    'status': status,
+    'post_type': postType,
+    'level': level,
+    'expires_at': expiresAt?.toIso8601String(),
+    'created_at': createdAt.toIso8601String(),
+    'salary_range': salaryRange,
+    'sabbath_friendly': sabbathFriendly,
+    'is_sda_institution': isSdaInstitution,
+    'contact_email': contactEmail,
+    'work_arrangement': workArrangement,
+    'apply_instructions': applyInstructions,
+    'apply_url': applyUrl,
+    'page_id': pageId,
+  };
 
   String formatSalary() {
     final typed = salaryRange;
@@ -263,31 +317,101 @@ class Job {
   }
 }
 
+/// Job categories — ONE list for posting and browsing, with the ids the
+/// database's jobs_category_check accepts.
+///
+/// The browse chips used to carry their own ids ('tech', 'education',
+/// 'sales'…) that the database never stores, so picking any of them always
+/// showed "no jobs".
 class JobCategory {
-  const JobCategory({required this.id, required this.label});
+  const JobCategory({
+    required this.id,
+    required this.label,
+    required this.icon,
+  });
   final String id;
   final String label;
+  final IconData icon;
 
   static const all = [
-    JobCategory(id: 'all', label: 'All jobs'),
-    JobCategory(id: 'tech', label: 'Tech'),
-    JobCategory(id: 'healthcare', label: 'Healthcare'),
-    JobCategory(id: 'education', label: 'Education'),
-    JobCategory(id: 'sales', label: 'Sales'),
-    JobCategory(id: 'engineering', label: 'Engineering'),
-    JobCategory(id: 'hospitality', label: 'Hospitality'),
-    JobCategory(id: 'other', label: 'Other'),
+    JobCategory(
+      id: 'teaching_education',
+      label: 'Teaching & Education',
+      icon: Icons.school_outlined,
+    ),
+    JobCategory(
+      id: 'healthcare',
+      label: 'Healthcare',
+      icon: Icons.local_hospital_outlined,
+    ),
+    JobCategory(
+      id: 'it_technology',
+      label: 'IT & Technology',
+      icon: Icons.computer_outlined,
+    ),
+    JobCategory(
+      id: 'business_admin',
+      label: 'Business & Admin',
+      icon: Icons.business_center_outlined,
+    ),
+    JobCategory(
+      id: 'ministry_church',
+      label: 'Ministry & Church',
+      icon: Icons.church_outlined,
+    ),
+    JobCategory(
+      id: 'construction_trades',
+      label: 'Construction & Trades',
+      icon: Icons.construction_outlined,
+    ),
+    JobCategory(
+      id: 'farming_agriculture',
+      label: 'Farming & Agriculture',
+      icon: Icons.agriculture_outlined,
+    ),
+    JobCategory(
+      id: 'driving_transport',
+      label: 'Driving & Transport',
+      icon: Icons.local_shipping_outlined,
+    ),
+    JobCategory(
+      id: 'domestic_caregiving',
+      label: 'Domestic & Caregiving',
+      icon: Icons.volunteer_activism_outlined,
+    ),
+    JobCategory(id: 'other', label: 'Other', icon: Icons.work_outline),
   ];
+
+  static JobCategory? byId(String? id) {
+    for (final c in all) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  static String labelFor(String? id) => byId(id)?.label ?? 'Other';
 }
+
+/// Employment types the database accepts (jobs_job_type_check).
+const jobTypes = <String, String>{
+  'full_time': 'Full-time',
+  'part_time': 'Part-time',
+  'contract': 'Contract',
+  'internship': 'Internship',
+  'volunteer': 'Volunteer',
+};
+
+/// Work arrangements (patch_278).
+const workArrangements = <String, String>{
+  'on_site': 'On-site',
+  'hybrid': 'Hybrid',
+  'remote': 'Remote',
+};
 
 /// Experience tier for a job posting. Drives the level filter on
 /// JobsScreen + the tier selector on PostJobScreen.
 class JobLevel {
-  const JobLevel({
-    required this.id,
-    required this.label,
-    required this.helper,
-  });
+  const JobLevel({required this.id, required this.label, required this.helper});
   final String id;
   final String label;
   final String helper;

@@ -407,7 +407,10 @@ see CLAUDE.md). Stage 4 = organization Pages (patch_275; see
 docs/REDESIGN_PLAN.md "Stage 4 notes" — churches deliberately not
 migrated). Stage 5 = marketplace ranking/filters/shelves + patch_276
 security guard. Stage 6 = product page, storefront, basket, real view
-counts + server medical-claims rule (patch_277). **Next: Stage 7 — Jobs.**
+counts + server medical-claims rule (patch_277). Stage 7 = Jobs landing,
+detail, stepped posting, saved jobs, My job posts + patch_278 (security:
+posters could self-publish). **Next: Stage 8 — premium foundations (no
+prices).**
 
 Older note, kept for the record:
 **Batch 2 is IN PROGRESS (awaiting owner device check). Next: Batch 3 — Library information architecture &
@@ -429,7 +432,8 @@ Batch 2 items that were planned (kept for the record):
 ## 5. Pending owner actions
 
 0. **Run patch_276 FIRST (security: sellers can currently self-approve /
-   self-verify / self-feature), then 270–275, then 277.** The app
+   self-verify / self-feature), then 270–275, then 277, then 278
+   (security: job posters can currently skip moderation).** The app
    degrades honestly without them (features say a database update is
    needed), but Save/Hide (273), moderation hide + appeal (272) and
    following/private accounts (274) and Pages (275) only work once they

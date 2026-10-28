@@ -71,7 +71,7 @@ to run in the SQL editor; app features depending on it say so until it runs
 | 4 | Organization Pages (create/manage/follow), church associations | **patch_275** pages, page_admins, page_follows, posts.page_id | code done (directory, Page view, create/edit, admins, follow, post as Page, moderation/verify for super admin); waits on patch_275 |
 | 5 | Marketplace discovery: sections, server-side search/filters/pagination, deterministic ranking + exploration, labelled sponsorship | **patch_276** (security: seller privilege guard) | code done |
 | 6 | Product detail, storefront, seller tools, product form, cart/checkout review | **patch_277** (view counts, server medical-claims rule) | code done |
-| 7 | Jobs: landing, detail, stepped posting form, saved jobs, applications, company profiles | **patch_27x** saved_jobs, job_applications, companies | |
+| 7 | Jobs: landing, detail, stepped posting form, saved jobs, company profiles (via Pages) | **patch_278** jobs guard, apply fields, page_id, saved_jobs | code done; in-app applications deliberately not built (see notes) |
 | 8 | Premium foundations: entitlements table, promotion records — **no prices** | **patch_27x** entitlements, promotions | |
 | 9 | QA: tests, analyze, renders of every redesigned screen | no | |
 
@@ -247,3 +247,44 @@ needs a schema change (a later stage), not invented values.
 - Tested with stand-in logos/covers: white-background leaf logo, black
   monogram, colourful logo, a cover photo, no logo; dark mode; 360 px;
   scrolled header.
+
+## Stage 7 notes (Jobs, 28 Oct 2026)
+
+- **Security first (patch_278).** `authenticated` could update every
+  column of its own job: insert straight to 'open' (skipping review), flip
+  'rejected' back to 'open', push expires_at years ahead. `jobs_guard()`
+  now allows only the real paths: open ⇄ filled, open → closed, renew
+  (expired → open with a fresh 30 days); editing the employer, contact,
+  apply link, pay or linked Page of a live job sends it back to 'pending'.
+- **Bug fixed:** the browse strip's category ids ('teaching', 'health'…)
+  never matched what the post form saved ('teaching_education',
+  'healthcare'…), so every category chip returned nothing. JobCategory now
+  uses the database ids.
+- **Landing:** search (role, employer, skill or town — title, company,
+  description, requirements, location, province), Shop/Jobs switch,
+  country scope, field chips, a Filters sheet (listing type, job type,
+  experience, arrangement once patch_278 exists, Sabbath-friendly,
+  Adventist institutions) applied in the query, a Saved rail, Latest list.
+  Empty state offers "Post a vacancy" and "I'm looking for work".
+- **No fake sections.** No "Recommended" or "Featured" — nothing here
+  personalises and nothing is paid for. A test checks neither word shows.
+- **Detail:** fact tiles, trust note ("written by the poster, not verified
+  by the app team — never pay to apply"), About / Requirements / How to
+  apply / About the employer. Verified only when the job is linked to a
+  verified Page (patch_275); otherwise it reads as the poster's claim.
+  Apply sheet lists only the routes the poster gave (link, email,
+  WhatsApp, call) plus message in app. Poster identity stays hidden (earlier
+  owner decision).
+- **Posting:** six steps — listing kind, the role (optionally post as one of
+  your Pages), type/experience/arrangement/location, details + pay +
+  Sabbath, how to apply (vacancies need at least one route), review. Ends
+  on "Waiting for review" with a link to My job posts. Local draft under a
+  user-scoped key (`job_post_draft_v1`, no `pref:`, so sign-out clears it).
+  Before patch_278 the new fields hide and posting retries without them.
+- **My job posts** (/jobs/mine): every listing with its real status — Live,
+  Waiting for review, Filled, Ended, Not approved.
+- **Not built, on purpose:** in-app applications/CV upload and applicant
+  tracking (needs storage for CVs, privacy rules and moderation — a
+  separate decision); view/applicant counts (jobs don't record them, so
+  showing any number would be invented); featured jobs and pricing.
+

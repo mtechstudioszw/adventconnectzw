@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../config/countries.dart';
 import '../../config/share_config.dart';
 import '../../models/job_model.dart';
 import '../../services/job_service.dart';
@@ -15,6 +16,14 @@ import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/home/report_sheet.dart';
+import '../../marketplace/market_ui.dart';
+import '../../models/org_page_model.dart';
+import '../../services/page_service.dart';
+import '../../widgets/expandable_text.dart';
+import '../../widgets/pages/page_tile.dart';
+import '../../widgets/profile/profile_header.dart' show websiteLabel;
+import '../../widgets/screen_shell.dart';
+import '../../widgets/verified_tick.dart';
 
 class JobDetailsScreen extends StatefulWidget {
   const JobDetailsScreen({super.key, required this.jobId, this.initialJob});
@@ -505,8 +514,16 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     // Try to deep-link into WhatsApp. If the device doesn't have
     // WhatsApp installed we fall back to copying the number so the
     // user can paste it into whichever messaging app they do have.
-    final digits = phone.replaceAll(RegExp(r'\D'), '');
-    final waUri = Uri.parse('https://wa.me/$digits');
+    // Normalised against the JOB's country — a local "077…" must become
+    // +263 (or +254…), not be dialled as-is.
+    final digits =
+        Countries.toWhatsAppDigits(phone, countryCode: job?.country) ??
+        phone.replaceAll(RegExp(r'\D'), '');
+    final message = Uri.encodeComponent(
+      'Hi, I saw "${job?.title ?? 'your listing'}" on Adventist Super App.'
+      '\n${jobShareUrl(job?.id ?? '')}',
+    );
+    final waUri = Uri.parse('https://wa.me/$digits?text=$message');
     try {
       final launched = await launchUrl(
         waUri,
@@ -527,14 +544,303 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     }
   }
 
+  // ---------------------------------------------------------------------
+  //  Redesign (28 Oct 2026): the marketplace's language for a job — a
+  //  flat header, the role and employer up top, key facts as tiles,
+  //  hairline sections (About, Requirements, How to apply), an honest
+  //  verification note, and one primary action ("Apply now") with every
+  //  real application route behind it. The poster's identity stays hidden
+  //  until a chat is opened (earlier owner decision).
+  // ---------------------------------------------------------------------
+
+  OrgPage? _employerPage;
+
+  Future<void> _loadEmployer(Job job) async {
+    final id = job.pageId;
+    if (id == null || _employerPage?.id == id) return;
+    try {
+      final page = await PageService.fetch(id);
+      if (mounted) setState(() => _employerPage = page);
+    } catch (_) {}
+  }
+
+  Future<void> _toggleSaved() async {
+    final job = _job;
+    if (job == null) return;
+    final saved = JobService.savedIds.value.contains(job.id);
+    try {
+      await JobService.setSaved(job.id, !saved);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(saved ? 'Removed from saved jobs.' : 'Job saved.'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            !JobService.savedAvailable
+                ? 'Saving jobs needs a database update (patch_278).'
+                : 'Sign in to save jobs.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _openApplySheet() async {
+    final job = _job;
+    if (job == null) return;
+    final palette = context.palette;
+    final hasPhone = (job.contactPhone ?? '').trim().isNotEmpty;
+    final hasEmail = (job.contactEmail ?? '').trim().isNotEmpty;
+    final hasUrl = (job.applyUrl ?? '').trim().isNotEmpty;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: palette.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                job.isSeeking
+                    ? 'Contact ${job.title}'
+                    : 'Apply for ${job.title}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.titleLarge.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if ((job.applyInstructions ?? '').isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  job.applyInstructions!,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: palette.textMuted,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              if (hasUrl) ...[
+                MarketContactOption(
+                  icon: Icons.open_in_new_rounded,
+                  title: 'Apply online',
+                  subtitle: websiteLabel(job.applyUrl!),
+                  onTap: () => Navigator.pop(ctx, 'url'),
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (hasEmail) ...[
+                MarketContactOption(
+                  icon: Icons.mail_outline,
+                  title: 'Email',
+                  subtitle: job.contactEmail!.trim(),
+                  onTap: () => Navigator.pop(ctx, 'email'),
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (hasPhone) ...[
+                MarketContactOption(
+                  icon: Icons.chat_rounded,
+                  title: 'WhatsApp',
+                  subtitle: 'Opens WhatsApp to ${job.contactPhone!.trim()}',
+                  onTap: () => Navigator.pop(ctx, 'whatsapp'),
+                ),
+                const SizedBox(height: 10),
+                MarketContactOption(
+                  icon: Icons.call_outlined,
+                  title: 'Call',
+                  subtitle: job.contactPhone!.trim(),
+                  onTap: () => Navigator.pop(ctx, 'call'),
+                ),
+                const SizedBox(height: 10),
+              ],
+              MarketContactOption(
+                icon: Icons.forum_rounded,
+                title: 'Message in the app',
+                subtitle: 'Ask a question before you apply',
+                onTap: () => Navigator.pop(ctx, 'chat'),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Never pay to apply for a job. Report listings that ask for '
+                'money.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: palette.textMuted,
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    switch (choice) {
+      case 'url':
+        await _openUrl(job.applyUrl!.trim());
+      case 'email':
+        await _emailPoster(job);
+      case 'whatsapp':
+        await _apply();
+      case 'call':
+        await _callPoster();
+      case 'chat':
+        await _messagePoster();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final job = _job;
+    if (job != null) _loadEmployer(job);
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: _buildBody(),
-      bottomNavigationBar: const SafeArea(
-        top: false,
-        child: AdBanner(padding: EdgeInsets.symmetric(vertical: 6)),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (job != null && !_gone && !_isPoster) _buildActionBar(job),
+          const SafeArea(
+            top: false,
+            child: AdBanner(padding: EdgeInsets.symmetric(vertical: 6)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionBar(Job job) {
+    final open = job.isOpen && !job.isExpired;
+    return ValueListenableBuilder<Set<String>>(
+      valueListenable: JobService.savedIds,
+      builder: (context, saved, _) {
+        final isSaved = saved.contains(job.id);
+        final palette = context.palette;
+        return MarketActionBar(
+          chat: Semantics(
+            button: true,
+            label: isSaved ? 'Remove from saved jobs' : 'Save job',
+            excludeSemantics: true,
+            child: GestureDetector(
+              onTap: _toggleSaved,
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: palette.scaffoldBg,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: palette.divider),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      isSaved
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded,
+                      size: 20,
+                      color: isSaved ? AppColors.primaryBlue : palette.text,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isSaved ? 'Saved' : 'Save',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: palette.text,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 10.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          primary: open
+              ? MarketPill(
+                  label: job.isSeeking ? 'Contact this person' : 'Apply now',
+                  trailing: const Icon(Icons.arrow_forward_rounded, size: 18),
+                  bg: AppColors.primaryBlue,
+                  fg: AppColors.white,
+                  raised: true,
+                  onTap: _openApplySheet,
+                )
+              : MarketPill(
+                  label: job.isFilled
+                      ? 'Position filled'
+                      : job.isExpired
+                      ? 'No longer accepting applications'
+                      : 'Not open yet',
+                  bg: palette.cardMuted,
+                  fg: palette.textMuted,
+                  onTap: null,
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTopBar(Job job) {
+    return FlatStatusBar(
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+          child: Row(
+            children: [
+              const ScreenHeroBackButton(fallbackRoute: 'jobs'),
+              const Spacer(),
+              HeaderIconButton(
+                icon: Icons.ios_share_rounded,
+                tooltip: 'Share job',
+                onTap: _shareJob,
+              ),
+              if (!_isPoster) ...[
+                const SizedBox(width: 8),
+                HeaderIconButton(
+                  icon: Icons.flag_outlined,
+                  tooltip: 'Report job',
+                  onTap: () => showReportSheet(
+                    context,
+                    contentType: 'job',
+                    contentId: job.id,
+                    contentLabel: job.title,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -545,297 +851,520 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
       return const Center(child: BrandSpinner(size: 30));
     }
     if (_error != null && _job == null) {
-      return _withBack(Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: AppColors.red),
-              const SizedBox(height: 12),
-              Text(_error!, style: AppTextStyles.bodyMedium),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () {
-                  setState(() {
-                    _loading = true;
-                    _error = null;
-                  });
-                  _bootstrap();
-                },
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-      ));
-    }
-    final job = _job!;
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _buildHero(job),
-          AnimatedBuilder(
-            animation: _entrance,
-            builder: (context, child) => Opacity(
-              opacity: _fade.value,
-              child: Transform.translate(
-                offset: Offset(0, _slide.value),
-                child: child,
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildSummary(job),
-                  _buildFaithBadges(job),
-                  const SizedBox(height: 16),
-                  _buildApplyButton(),
-                  const SizedBox(height: 20),
-                  if (job.description != null &&
-                      job.description!.isNotEmpty) ...[
-                    _buildDescription(job),
-                    const SizedBox(height: 16),
-                  ],
-                  if (job.requirements.isNotEmpty) ...[
-                    _buildRequirements(job),
-                    const SizedBox(height: 16),
-                  ],
-                  // Poster identity card intentionally removed — per
-                  // request, the job screen must not reveal who posted
-                  // the job. Their real identity is only surfaced when
-                  // the viewer taps "Contact poster" and opens a chat.
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHero(Job job) {
-    return ClipPath(
-      clipper: _HeroClipper(),
-      child: Container(
-        // Flat header (founder rule, 2026-07-28). Every foreground in here
-        // was white-on-navy and has been moved onto the palette — a
-        // background swap alone would have left white text invisible on
-        // light grey.
-        //
-        // Transparent rather than `scaffoldBg`: this hero is in the normal
-        // flow above the detail scroll view, so it occludes nothing, and an
-        // opaque fill stopped the app's ambient field dead across the top
-        // of the screen.
-        color: Colors.transparent,
-        child: SafeArea(
-          bottom: false,
+      return _withBack(
+        Center(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 36),
+            padding: const EdgeInsets.all(24),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    _CircleIconButton(
-                      icon: Icons.arrow_back,
-                      onTap: () => context.canPop()
-                          ? context.pop()
-                          : context.goNamed('jobs'),
-                    ),
-                    const Spacer(),
-                    // Jobs had no way to be reported (Apple 1.2).
-                    if (!_isPoster) ...[
-                      _CircleIconButton(
-                        icon: Icons.flag_outlined,
-                        onTap: () => showReportSheet(
-                          context,
-                          contentType: 'job',
-                          contentId: job.id,
-                          contentLabel: job.title,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    _CircleIconButton(
-                      icon: Icons.share_outlined,
-                      onTap: () => _shareJob(),
-                    ),
-                  ],
-                ),
+                const Icon(Icons.error_outline, size: 48, color: AppColors.red),
+                const SizedBox(height: 12),
+                Text(_error!, style: AppTextStyles.bodyMedium),
                 const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 56,
-                        height: 56,
-                        clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(
-                          color: context.palette.card,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: context.palette.divider),
-                        ),
-                        child:
-                            job.companyLogoUrl != null &&
-                                job.companyLogoUrl!.isNotEmpty
-                            ? CachedImage(
-                                job.companyLogoUrl!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    _logoFallback(job.company),
-                              )
-                            : _logoFallback(job.company),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              job.company,
-                              style: AppTextStyles.labelMedium.copyWith(
-                                color: context.palette.textMuted,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              job.title,
-                              style: AppTextStyles.displayMedium.copyWith(
-                                color: context.palette.text,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                                height: 1.2,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                FilledButton(
+                  onPressed: () {
+                    setState(() {
+                      _loading = true;
+                      _error = null;
+                    });
+                    _bootstrap();
+                  },
+                  child: const Text('Retry'),
                 ),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _logoFallback(String company) {
-    final parts = company
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((p) => p.isNotEmpty)
-        .toList();
-    final initials = parts.isEmpty
-        ? '?'
-        : parts.length == 1
-        ? parts.first.substring(0, 1).toUpperCase()
-        : (parts.first.substring(0, 1) + parts[1].substring(0, 1))
-              .toUpperCase();
-    return Container(
-      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-      alignment: Alignment.center,
-      child: Text(
-        initials,
-        style: AppTextStyles.titleMedium.copyWith(
-          color: AppColors.white,
-          fontWeight: FontWeight.w700,
-          fontSize: 18,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummary(Job job) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          _SummaryTile(
-            icon: Icons.attach_money,
-            label: 'Salary',
-            value: job.formatSalary(),
-          ),
-          _verticalDivider(),
-          _SummaryTile(
-            icon: Icons.work_outline,
-            label: 'Type',
-            value: job.formatType(),
-          ),
-          _verticalDivider(),
-          _SummaryTile(
-            icon: Icons.place_outlined,
-            label: 'Location',
-            value: (job.location ?? '').isEmpty ? 'TBD' : job.location!,
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Sabbath-friendly / SDA institution, when the poster said so. Saved
-  /// from day one and never shown.
-  Widget _buildFaithBadges(Job job) {
-    if (!job.sabbathFriendly && !job.isSdaInstitution) {
-      return const SizedBox.shrink();
+      );
     }
-    Widget badge(IconData icon, String label) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: AppColors.primaryBlue.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(20),
+    final job = _job!;
+    final palette = context.palette;
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        _buildTopBar(job),
+        AnimatedBuilder(
+          animation: _entrance,
+          builder: (context, child) => Opacity(
+            opacity: _fade.value,
+            child: Transform.translate(
+              offset: Offset(0, _slide.value),
+              child: child,
+            ),
           ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildIntro(job),
+                const SizedBox(height: 20),
+                _buildFacts(job),
+                const SizedBox(height: 16),
+                _buildTrustNote(),
+                if (_isPoster)
+                  MarketSection(
+                    title: 'Your listing',
+                    child: _buildOwnerTools(job),
+                  ),
+                if ((job.description ?? '').trim().isNotEmpty)
+                  MarketSection(
+                    title: job.isSeeking ? 'About me' : 'About the role',
+                    child: ExpandableText(
+                      text: job.description!.trim(),
+                      collapsedLines: 8,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: palette.text,
+                        height: 1.6,
+                      ),
+                    ),
+                  ),
+                if (job.requirements.isNotEmpty)
+                  MarketSection(
+                    title: job.isSeeking
+                        ? 'Skills & experience'
+                        : 'Requirements',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final r in job.requirements)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  margin: const EdgeInsets.only(
+                                    top: 8,
+                                    right: 12,
+                                  ),
+                                  width: 6,
+                                  height: 6,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.primaryBlue,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    r,
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      color: palette.text,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                if (!job.isSeeking)
+                  MarketSection(
+                    title: 'How to apply',
+                    child: _buildHowToApply(job),
+                  ),
+                if (_employerPage != null)
+                  MarketSection(
+                    title: 'About the employer',
+                    child: PageTile(
+                      page: _employerPage!,
+                      onTap: () => context.pushNamed(
+                        'page_details',
+                        pathParameters: {'id': _employerPage!.id},
+                        extra: _employerPage,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String get _employerName {
+    final job = _job!;
+    if (_employerPage != null) return _employerPage!.name;
+    return job.company.trim().isNotEmpty
+        ? job.company.trim()
+        : (job.isSeeking ? 'Looking for work' : 'Employer not named');
+  }
+
+  Widget _buildIntro(Job job) {
+    final palette = context.palette;
+    final cat = JobCategory.byId(job.category);
+    final logo = _employerPage?.logoUrl;
+    final initials = _employerName
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .take(2)
+        .map((w) => w[0].toUpperCase())
+        .join();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: SizedBox(
+                width: 64,
+                height: 64,
+                child: logo != null
+                    ? CachedImage(logo, fit: BoxFit.cover)
+                    : ColoredBox(
+                        color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                        child: Center(
+                          child: job.isSeeking
+                              ? const Icon(
+                                  Icons.person_search_outlined,
+                                  color: AppColors.primaryBlue,
+                                  size: 28,
+                                )
+                              : (job.company.trim().isEmpty
+                                    ? Icon(
+                                        cat?.icon ?? Icons.work_outline,
+                                        color: AppColors.primaryBlue,
+                                        size: 28,
+                                      )
+                                    : Text(
+                                        initials,
+                                        style: AppTextStyles.titleLarge
+                                            .copyWith(
+                                              color: AppColors.primaryBlue,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      )),
+                        ),
+                      ),
+              ),
+            ),
+            const Spacer(),
+            if (job.isSeeking)
+              const _Tag(text: 'Looking for work', color: AppColors.primaryBlue)
+            else if (job.isFilled)
+              const _Tag(text: 'Filled', color: AppColors.successGreen)
+            else if (job.isExpired)
+              const _Tag(text: 'Closed', color: AppColors.red)
+            else if (job.status == 'pending')
+              const _Tag(
+                text: 'Waiting for review',
+                color: AppColors.goldAccent,
+              )
+            else if (job.status == 'rejected')
+              const _Tag(text: 'Not approved', color: AppColors.red),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text(
+          job.title,
+          style: AppTextStyles.headlineSmall.copyWith(
+            color: palette.text,
+            fontWeight: FontWeight.w700,
+            fontSize: 24,
+            height: 1.25,
+            letterSpacing: -0.3,
+          ),
+        ),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: _employerPage == null
+              ? null
+              : () => context.pushNamed(
+                  'page_details',
+                  pathParameters: {'id': _employerPage!.id},
+                  extra: _employerPage,
+                ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 15, color: AppColors.primaryBlue),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: AppColors.primaryBlue,
-                  fontWeight: FontWeight.w600,
+              Flexible(
+                child: Text(
+                  _employerName,
+                  style: AppTextStyles.titleSmall.copyWith(
+                    color: _employerPage != null
+                        ? AppColors.primaryBlue
+                        : palette.text,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
+              if (_employerPage?.isVerified ?? false)
+                const VerifiedTick(size: 15),
             ],
           ),
-        );
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          [
+            job.place,
+            'Posted ${_ago(job.createdAt)}',
+          ].where((s) => s.isNotEmpty).join('  ·  '),
+          style: AppTextStyles.bodyMedium.copyWith(color: palette.textMuted),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFacts(Job job) {
+    final tiles = <(IconData, String, String)>[
+      (Icons.work_outline, 'Type', job.formatType()),
+      (Icons.trending_up_rounded, 'Experience', job.levelLabel()),
+      if (job.workArrangementLabel != null)
+        (Icons.home_work_outlined, 'Where', job.workArrangementLabel!),
+      if ((job.salaryRange ?? '').isNotEmpty)
+        (Icons.payments_outlined, 'Pay', job.salaryRange!),
+      (
+        JobCategory.byId(job.category)?.icon ?? Icons.category_outlined,
+        'Field',
+        JobCategory.labelFor(job.category),
+      ),
+      if (job.expiresAt != null && !job.isExpired)
+        (Icons.event_outlined, 'Closes', _date(job.expiresAt!)),
+    ];
+    final palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LayoutBuilder(
+          builder: (context, c) {
+            final w = (c.maxWidth - 10) / 2;
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final t in tiles)
+                  Container(
+                    width: w,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: palette.card,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: palette.divider),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(t.$1, size: 18, color: AppColors.primaryBlue),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                t.$2,
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: palette.textMuted,
+                                ),
+                              ),
+                              Text(
+                                t.$3,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.labelLarge.copyWith(
+                                  color: palette.text,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+        if (job.sabbathFriendly || job.isSdaInstitution) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (job.sabbathFriendly)
+                const _Tag(
+                  text: 'Sabbath-friendly hours',
+                  color: AppColors.primaryBlue,
+                  icon: Icons.brightness_3_outlined,
+                ),
+              if (job.isSdaInstitution)
+                const _Tag(
+                  text: 'Adventist institution',
+                  color: AppColors.primaryBlue,
+                  icon: Icons.church_outlined,
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Says plainly what has and hasn't been checked.
+  Widget _buildTrustNote() {
+    final palette = context.palette;
+    final verified = _employerPage?.isVerified ?? false;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: (verified ? AppColors.successGreen : AppColors.goldAccent)
+            .withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (job.sabbathFriendly)
-            badge(Icons.brightness_3_outlined, 'Sabbath-friendly'),
-          if (job.isSdaInstitution)
-            badge(Icons.church_outlined, 'SDA institution'),
+          Icon(
+            verified ? Icons.verified_outlined : Icons.info_outline_rounded,
+            size: 18,
+            color: verified ? AppColors.successGreen : AppColors.goldAccent,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              verified
+                  ? 'The employer is a verified organization. Job details are '
+                        'written by the employer.'
+                  : 'Details are written by the poster and haven\'t been '
+                        'verified by the app team. Never pay to apply.',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: palette.text,
+                height: 1.4,
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  /// The notices have no header of their own, so without this the only
-  /// way out was the system back gesture.
+  Widget _buildHowToApply(Job job) {
+    final palette = context.palette;
+    final routes = [
+      if ((job.applyUrl ?? '').isNotEmpty) 'online',
+      if ((job.contactEmail ?? '').trim().isNotEmpty) 'by email',
+      if ((job.contactPhone ?? '').trim().isNotEmpty) 'by WhatsApp or phone',
+      'by message in the app',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if ((job.applyInstructions ?? '').isNotEmpty) ...[
+          Text(
+            job.applyInstructions!,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: palette.text,
+              height: 1.55,
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        Text(
+          'Apply ${routes.join(', ')}.'
+          '${job.expiresAt != null && !job.isExpired ? ' Closes ${_date(job.expiresAt!)}.' : ''}',
+          style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOwnerTools(Job job) {
+    final palette = context.palette;
+    Widget action(
+      IconData icon,
+      String label,
+      VoidCallback? onTap, {
+      bool danger = false,
+    }) => OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: danger ? AppColors.red : palette.text,
+        side: BorderSide(color: palette.divider),
+        minimumSize: const Size(0, 44),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+    final statusText = switch (job.status) {
+      'pending' =>
+        'Waiting for review — it goes live once a moderator approves it.',
+      'rejected' =>
+        'Not approved by the moderators. Edit it and contact support if you think this is a mistake.',
+      'filled' => 'Marked as filled and hidden from new applicants.',
+      _ when job.isExpired => 'Expired and hidden from applicants.',
+      _ => 'Live — people can see and apply.',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          statusText,
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: palette.text,
+            height: 1.45,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildExpiryBanner(job),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            action(Icons.edit_outlined, 'Edit', _editJob),
+            if (job.isOpen && !job.isExpired)
+              action(
+                Icons.check_circle_outline,
+                _markingFilled ? 'Saving…' : 'Mark as filled',
+                _markingFilled ? null : _confirmMarkFilled,
+              ),
+            if (job.isFilled)
+              action(
+                Icons.replay_rounded,
+                _reopening ? 'Reopening…' : 'Reopen',
+                _reopening ? null : _confirmReopen,
+              ),
+            action(
+              Icons.delete_outline,
+              _deleting ? 'Deleting…' : 'Delete',
+              _deleting ? null : _confirmDelete,
+              danger: true,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static String _ago(DateTime d) {
+    final diff = DateTime.now().difference(d);
+    if (diff.inDays >= 1) return '${diff.inDays}d ago';
+    if (diff.inHours >= 1) return '${diff.inHours}h ago';
+    return 'just now';
+  }
+
+  static String _date(DateTime d) {
+    const m = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${d.day} ${m[d.month - 1]}';
+  }
+
   Widget _withBack(Widget child) {
     return SafeArea(
       child: Stack(
@@ -878,105 +1407,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
           ),
         ),
       ),
-    );
-  }
-
-  Widget _verticalDivider() {
-    return Container(width: 1, height: 40, color: context.palette.divider);
-  }
-
-  Widget _buildApplyButton() {
-    final job = _job!;
-    final hasPhone = (job.contactPhone ?? '').trim().isNotEmpty;
-
-    if (_isPoster) {
-      final ownerExtras = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildExpiryBanner(job),
-          const SizedBox(height: 10),
-          _SecondaryActionButton(
-            icon: Icons.edit_outlined,
-            label: 'Edit job',
-            onTap: _editJob,
-          ),
-          const SizedBox(height: 10),
-          _SecondaryActionButton(
-            icon: Icons.delete_outline,
-            label: _deleting ? 'Deleting…' : 'Delete job',
-            onTap: _deleting ? () {} : _confirmDelete,
-          ),
-        ],
-      );
-      if (job.isFilled) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _StatusPill(
-              icon: Icons.check_circle_outline,
-              label: 'Position filled',
-              background: AppColors.successGreen.withValues(alpha: 0.12),
-              foreground: AppColors.successGreen,
-            ),
-            const SizedBox(height: 10),
-            _ReopenButton(loading: _reopening, onTap: _confirmReopen),
-            ownerExtras,
-          ],
-        );
-      }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _MarkFilledButton(loading: _markingFilled, onTap: _confirmMarkFilled),
-          ownerExtras,
-        ],
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (job.isFilled) ...[
-          _StatusPill(
-            icon: Icons.check_circle_outline,
-            label: 'Position filled',
-            background: AppColors.successGreen.withValues(alpha: 0.12),
-            foreground: AppColors.successGreen,
-          ),
-          const SizedBox(height: 10),
-        ],
-        _PrimaryActionButton(
-          icon: Icons.chat_bubble_outline,
-          label: 'Contact poster',
-          onTap: _messagePoster,
-        ),
-        if (!job.isFilled && hasPhone) ...[
-          const SizedBox(height: 10),
-          _SecondaryActionButton(
-            icon: Icons.chat,
-            label: job.isSeeking
-                ? 'Contact via WhatsApp'
-                : 'Apply via WhatsApp',
-            onTap: _apply,
-          ),
-          const SizedBox(height: 10),
-          _SecondaryActionButton(
-            icon: Icons.call,
-            label: 'Call the poster',
-            onTap: _callPoster,
-          ),
-        ],
-        // The post form has always asked for an email; nothing ever used
-        // it, so a poster who gave only an email could not be reached.
-        if (!job.isFilled && (job.contactEmail ?? '').trim().isNotEmpty) ...[
-          const SizedBox(height: 10),
-          _SecondaryActionButton(
-            icon: Icons.email_outlined,
-            label: 'Email the poster',
-            onTap: () => _emailPoster(job),
-          ),
-        ],
-      ],
     );
   }
 
@@ -1024,441 +1454,36 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     }
   }
 
-  Widget _buildDescription(Job job) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'About the role',
-            style: AppTextStyles.titleLarge.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            job.description!,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: context.palette.text,
-              height: 1.55,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRequirements(Job job) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'What you\'ll need',
-            style: AppTextStyles.titleLarge.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          for (final req in job.requirements) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 6, right: 10),
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primaryBlue,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    req,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: context.palette.text,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (req != job.requirements.last) const SizedBox(height: 8),
-          ],
-        ],
-      ),
-    );
-  }
-
   // _buildEmployerCard removed — the job screen no longer reveals the
   // poster's identity. The poster is only reachable via "Contact
   // poster", which resolves their real name from their profile.
 }
 
-class _HeroClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.lineTo(0, size.height - 28);
-    path.quadraticBezierTo(
-      size.width / 2,
-      size.height,
-      size.width,
-      size.height - 28,
-    );
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}
-
-class _CircleIconButton extends StatelessWidget {
-  const _CircleIconButton({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            // Light-grey chip with a dark icon — the flat-header
-            // equivalent of the old translucent-white-on-navy circle.
-            color: Theme.of(context).brightness == Brightness.dark
-                ? context.palette.cardMuted
-                : const Color(0xFFE4E9F2),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: context.palette.divider),
-          ),
-          child: Icon(icon, color: context.palette.text, size: 18),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({
-    required this.icon,
-    required this.label,
-    required this.background,
-    required this.foreground,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color background;
-  final Color foreground;
+class _Tag extends StatelessWidget {
+  const _Tag({required this.text, required this.color, this.icon});
+  final String text;
+  final Color color;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: foreground.withValues(alpha: 0.35)),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: foreground, size: 18),
-          const SizedBox(width: 8),
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 5),
+          ],
           Text(
-            label,
-            style: AppTextStyles.buttonText.copyWith(
-              color: foreground,
-              fontSize: 15,
-              letterSpacing: 0.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MarkFilledButton extends StatelessWidget {
-  const _MarkFilledButton({required this.loading, required this.onTap});
-
-  final bool loading;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.primaryBlue, width: 1.5),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: loading ? null : onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (loading)
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.primaryBlue,
-                    ),
-                  )
-                else
-                  const Icon(
-                    Icons.check_circle_outline,
-                    color: AppColors.primaryBlue,
-                    size: 18,
-                  ),
-                const SizedBox(width: 8),
-                Text(
-                  loading ? 'Marking…' : 'Mark as filled',
-                  style: AppTextStyles.buttonText.copyWith(
-                    color: AppColors.primaryBlue,
-                    fontSize: 15,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PrimaryActionButton extends StatelessWidget {
-  const _PrimaryActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryBlue.withValues(alpha: 0.30),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: AppColors.white, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: AppTextStyles.buttonText.copyWith(
-                    fontSize: 15,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SecondaryActionButton extends StatelessWidget {
-  const _SecondaryActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.primaryBlue, width: 1.5),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: AppColors.primaryBlue, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: AppTextStyles.buttonText.copyWith(
-                    color: AppColors.primaryBlue,
-                    fontSize: 15,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ReopenButton extends StatelessWidget {
-  const _ReopenButton({required this.loading, required this.onTap});
-
-  final bool loading;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.primaryBlue, width: 1.5),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: loading ? null : onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (loading)
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.primaryBlue,
-                    ),
-                  )
-                else
-                  const Icon(
-                    Icons.refresh,
-                    color: AppColors.primaryBlue,
-                    size: 18,
-                  ),
-                const SizedBox(width: 8),
-                Text(
-                  loading ? 'Reopening…' : 'Reopen position',
-                  style: AppTextStyles.buttonText.copyWith(
-                    color: AppColors.primaryBlue,
-                    fontSize: 15,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SummaryTile extends StatelessWidget {
-  const _SummaryTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: [
-          Icon(icon, size: 18, color: AppColors.primaryBlue),
-          const SizedBox(height: 6),
-          Text(
-            label.toUpperCase(),
+            text,
             style: AppTextStyles.labelSmall.copyWith(
-              color: context.palette.textMuted,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.titleMedium.copyWith(
-              fontSize: 13.5,
+              color: color,
               fontWeight: FontWeight.w700,
             ),
           ),

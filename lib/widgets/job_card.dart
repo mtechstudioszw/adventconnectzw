@@ -1,306 +1,235 @@
 import 'package:flutter/material.dart';
+
 import '../models/job_model.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
-import 'cached_image.dart';
 import 'motion/pressable.dart';
 
+/// One job in a list (redesign, 28 Oct 2026).
+///
+/// Scannable in one look: the employer mark, the role, who and where, then
+/// the three facts people filter by — type, arrangement, pay — as quiet
+/// chips, and when it was posted. "Looking for work" posts are marked so
+/// they're never mistaken for vacancies. Pay shows only when the poster
+/// gave it; nothing says "Negotiable" on their behalf.
 class JobCard extends StatelessWidget {
-  const JobCard({super.key, required this.job, required this.onTap});
+  const JobCard({
+    super.key,
+    required this.job,
+    required this.onTap,
+    this.saved,
+    this.onToggleSave,
+  });
 
   final Job job;
   final VoidCallback onTap;
 
+  /// Null hides the bookmark (e.g. on Home's rail).
+  final bool? saved;
+  final VoidCallback? onToggleSave;
+
   @override
   Widget build(BuildContext context) {
-    return PressEffect(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: context.palette.card,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
+    final palette = context.palette;
+    final cat = JobCategory.byId(job.category);
+    final company = job.company.trim();
+    final place = job.place;
+    final chips = <String>[
+      job.formatType(),
+      ?job.workArrangementLabel,
+      if ((job.salaryRange ?? '').isNotEmpty) job.salaryRange!,
+    ];
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: palette.divider),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _CompanyLogo(
-                  logoUrl: job.companyLogoUrl,
-                  companyInitials: _initials(job.company),
-                ),
-                const SizedBox(width: 14),
+                _Mark(job: job, icon: cat?.icon ?? Icons.work_outline),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              job.company.isEmpty
-                                  ? (job.isSeeking
-                                        ? 'Looking for work'
-                                        : 'Member')
-                                  : job.company,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.labelMedium.copyWith(
-                                color: AppColors.textMuted,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
+                      if (job.isSeeking)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            'LOOKING FOR WORK',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.primaryBlue,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.1,
+                              fontSize: 10.5,
                             ),
                           ),
-                          if (job.isSeeking) ...[
-                            const SizedBox(width: 6),
-                            _SeekingPill(),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 2),
+                        ),
                       Text(
                         job.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.titleLarge.copyWith(
+                        style: AppTextStyles.titleSmall.copyWith(
+                          color: palette.text,
                           fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          height: 1.25,
+                          height: 1.3,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          _Chip(
-                            icon: Icons.place_outlined,
-                            label: (job.location ?? '').isEmpty
-                                ? 'Remote / TBD'
-                                : job.location!,
-                          ),
-                          _Chip(
-                            icon: Icons.work_outline,
-                            label: job.formatType(),
-                          ),
-                          _Chip(
-                            icon: Icons.signal_cellular_alt_rounded,
-                            label: job.levelLabel(),
-                          ),
-                          _SalaryChip(label: job.formatSalary()),
-                          // Saved by every poster who ticked them, never
-                          // shown until now — and for this community they
-                          // are often the deciding detail.
-                          if (job.sabbathFriendly)
-                            const _Chip(
-                              icon: Icons.brightness_3_outlined,
-                              label: 'Sabbath-friendly',
-                              highlight: true,
-                            ),
-                          if (job.isSdaInstitution)
-                            const _Chip(
-                              icon: Icons.church_outlined,
-                              label: 'SDA institution',
-                              highlight: true,
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.schedule,
-                            size: 12,
-                            color: AppColors.textMuted,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _timeAgo(job.createdAt),
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textMuted,
-                              fontSize: 11.5,
-                            ),
-                          ),
-                          const Spacer(),
-                          const Icon(
-                            Icons.arrow_forward,
-                            size: 16,
-                            color: AppColors.primaryBlue,
-                          ),
-                        ],
+                      const SizedBox(height: 3),
+                      Text(
+                        [
+                          if (company.isNotEmpty) company,
+                          if (place.isNotEmpty) place,
+                        ].join('  ·  '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: palette.textMuted,
+                        ),
                       ),
                     ],
                   ),
                 ),
+                if (saved != null)
+                  Semantics(
+                    button: true,
+                    label: saved! ? 'Remove from saved jobs' : 'Save job',
+                    child: InkResponse(
+                      onTap: onToggleSave,
+                      radius: 22,
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          saved!
+                              ? Icons.bookmark_rounded
+                              : Icons.bookmark_border_rounded,
+                          color: saved!
+                              ? AppColors.primaryBlue
+                              : palette.textMuted,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
-          ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final c in chips)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: palette.cardMuted,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            c,
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: palette.text,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      if (job.sabbathFriendly)
+                        Tooltip(
+                          message: 'Sabbath-friendly hours',
+                          child: Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryBlue.withValues(
+                                alpha: 0.10,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.brightness_3_outlined,
+                              size: 14,
+                              color: AppColors.primaryBlue,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _ago(job.createdAt),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: palette.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 
-  String _initials(String company) {
-    final parts = company
+  static String _ago(DateTime d) {
+    final diff = DateTime.now().difference(d);
+    if (diff.inDays >= 7) return '${diff.inDays ~/ 7}w ago';
+    if (diff.inDays >= 1) return '${diff.inDays}d ago';
+    if (diff.inHours >= 1) return '${diff.inHours}h ago';
+    return 'New';
+  }
+}
+
+class _Mark extends StatelessWidget {
+  const _Mark({required this.job, required this.icon});
+  final Job job;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final words = job.company
         .trim()
         .split(RegExp(r'\s+'))
-        .where((p) => p.isNotEmpty)
-        .toList();
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts[1].substring(0, 1))
-        .toUpperCase();
-  }
-
-  String _timeAgo(DateTime then) {
-    final diff = DateTime.now().difference(then);
-    if (diff.inMinutes < 60) return 'Posted just now';
-    if (diff.inHours < 24) return 'Posted ${diff.inHours}h ago';
-    if (diff.inDays < 7) return 'Posted ${diff.inDays}d ago';
-    return 'Posted ${(diff.inDays / 7).floor()}w ago';
-  }
-}
-
-class _SeekingPill extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
+        .where((w) => w.isNotEmpty)
+        .take(2)
+        .map((w) => w[0].toUpperCase())
+        .join();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(
         color: AppColors.primaryBlue.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        'SEEKING',
-        style: AppTextStyles.labelSmall.copyWith(
-          color: AppColors.primaryBlue,
-          fontSize: 9,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 1.2,
-        ),
-      ),
-    );
-  }
-}
-
-class _CompanyLogo extends StatelessWidget {
-  const _CompanyLogo({required this.logoUrl, required this.companyInitials});
-  final String? logoUrl;
-  final String companyInitials;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasLogo = logoUrl != null && logoUrl!.isNotEmpty;
-    return Container(
-      width: 52,
-      height: 52,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: context.palette.cardMuted,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.divider),
       ),
-      child: hasLogo
-          ? CachedImage(
-              logoUrl!,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => _initialsView(),
-            )
-          : _initialsView(),
-    );
-  }
-
-  Widget _initialsView() {
-    return Container(
-      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
       alignment: Alignment.center,
-      child: Text(
-        companyInitials,
-        style: AppTextStyles.titleMedium.copyWith(
-          color: AppColors.white,
-          fontWeight: FontWeight.w700,
-          fontSize: 16,
-        ),
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.icon,
-    required this.label,
-    this.highlight = false,
-  });
-  final IconData icon;
-  final String label;
-
-  /// Primary-blue tint for the faith-relevant badges.
-  final bool highlight;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = highlight ? AppColors.primaryBlue : AppColors.textMuted;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: highlight
-            ? AppColors.primaryBlue.withValues(alpha: 0.12)
-            : context.palette.chipBg,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 11, color: fg),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: fg,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+      child: job.isSeeking
+          ? const Icon(
+              Icons.person_search_outlined,
+              color: AppColors.primaryBlue,
+              size: 22,
+            )
+          : words.isEmpty
+          ? Icon(icon, color: AppColors.primaryBlue, size: 22)
+          : Text(
+              words,
+              style: AppTextStyles.titleSmall.copyWith(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SalaryChip extends StatelessWidget {
-  const _SalaryChip({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.primaryBlue.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.labelSmall.copyWith(
-          color: AppColors.primaryBlue,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
     );
   }
 }

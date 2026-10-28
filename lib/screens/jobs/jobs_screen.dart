@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import '../../widgets/screen_shell.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../config/countries.dart';
 import '../../models/job_model.dart';
 import '../../services/auth_service.dart';
@@ -16,16 +16,24 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/country_scope_toggle.dart';
 import '../../widgets/job_card.dart';
-import '../../widgets/last_updated_strip.dart';
-import '../../widgets/offline_inline_notice.dart';
-import '../widgets/post_form_widgets.dart';
+import '../../widgets/jobs/job_filter_sheet.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
-import '../../widgets/motion/content_reveal.dart';
 import '../../widgets/motion/hide_on_scroll.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
+import '../../widgets/offline_inline_notice.dart';
+import '../../widgets/screen_shell.dart';
 import '../../widgets/shimmer_loaders.dart';
+import '../widgets/post_form_widgets.dart';
 
+/// Jobs landing (redesign, 28 Oct 2026, brief §15).
+///
+/// One scroll, top to bottom: title with "My job posts", search (role,
+/// employer, skill or town), the Shop/Jobs switch, country scope, field
+/// chips, a Filters row (type, experience, arrangement, vacancies vs
+/// people looking, Sabbath-friendly, Adventist employers), the member's
+/// saved jobs, then the latest listings. No "recommended for you" —
+/// nothing here personalises, so nothing claims to.
 class JobsScreen extends StatefulWidget {
   const JobsScreen({super.key});
 
@@ -38,28 +46,40 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
   Timer? _debounce;
 
   List<Job> _jobs = [];
-  String _selectedCategory = 'all';
-
-  /// patch_039: 'all' | 'entry' | 'mid' | 'senior'. Second-row filter
-  /// strip under categories so applicants can self-select tier.
-  String _selectedLevel = 'all';
+  List<Job> _saved = const [];
+  String? _category;
+  JobFilters _filters = JobFilters.none;
 
   /// Jobs are scoped to the member's own country unless they ask for
-  /// worldwide. Off by default because almost every posting here is a
-  /// local role with a phone number attached.
+  /// worldwide: almost every posting is a local role with a phone number.
   bool _worldwide = false;
   final String _country = AuthService.currentCountry();
   bool _loading = true;
   String? _error;
+
+  static const _cacheKey = 'jobs_list';
+
+  bool get _browsing =>
+      _searchController.text.trim().isEmpty &&
+      _category == null &&
+      _filters.isEmpty;
 
   @override
   void initState() {
     super.initState();
     _hydrateFromCache();
     _loadJobs();
+    JobService.savedIds.addListener(_loadSavedJobs);
+    JobService.loadSaved();
   }
 
-  static const _cacheKey = 'jobs_list';
+  @override
+  void dispose() {
+    JobService.savedIds.removeListener(_loadSavedJobs);
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
 
   void _hydrateFromCache() {
     try {
@@ -73,23 +93,24 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
         _jobs = list;
         _loading = false;
       });
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) {}
   }
 
   Future<void> _writeCache(List<Job> list) async {
     try {
-      final payload = jsonEncode(list.map((e) => e.toJson()).toList());
-      await CacheService.writeString(_cacheKey, payload);
+      await CacheService.writeString(
+        _cacheKey,
+        jsonEncode(list.map((e) => e.toJson()).toList()),
+      );
     } catch (_) {}
   }
 
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _searchController.dispose();
-    super.dispose();
+  Future<void> _loadSavedJobs() async {
+    try {
+      final jobs = await JobService.fetchSavedJobs();
+      if (!mounted) return;
+      setState(() => _saved = jobs.where((j) => j.isOpen).toList());
+    } catch (_) {}
   }
 
   Future<void> _loadJobs() async {
@@ -100,8 +121,8 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
     try {
       final list = await JobService.fetchJobs(
         search: _searchController.text,
-        category: _selectedCategory,
-        level: _selectedLevel == 'all' ? null : _selectedLevel,
+        category: _category,
+        filters: _filters,
         country: _worldwide ? null : _country,
       );
       if (!mounted) return;
@@ -109,17 +130,9 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
         _jobs = list;
         _loading = false;
       });
-      // Cache the unfiltered list (no search, no category filter) so
-      // the cache represents the full feed users land on first. Scope is
-      // part of "unfiltered": caching a worldwide list would show the
-      // member another country's jobs on their next cold start, before
-      // the network reply lands.
-      if (_searchController.text.isEmpty &&
-          _selectedCategory == 'all' &&
-          _selectedLevel == 'all' &&
-          !_worldwide) {
-        unawaited(_writeCache(list));
-      }
+      // Only the default view is cached — a filtered or worldwide list
+      // would greet the member with the wrong jobs on the next cold start.
+      if (_browsing && !_worldwide) unawaited(_writeCache(list));
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -134,100 +147,147 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
     _debounce = Timer(const Duration(milliseconds: 350), _loadJobs);
   }
 
-  void _selectCategory(String id) {
-    setState(() => _selectedCategory = id);
+  Future<void> _openFilters() async {
+    final picked = await showJobFilterSheet(context, current: _filters);
+    if (picked == null || !mounted) return;
+    setState(() => _filters = picked);
     _loadJobs();
   }
 
-  void _selectLevel(String id) {
-    setState(() => _selectedLevel = id);
-    _loadJobs();
+  Future<void> _toggleSaved(Job job) async {
+    final saved = JobService.savedIds.value.contains(job.id);
+    try {
+      await JobService.setSaved(job.id, !saved);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            !JobService.savedAvailable
+                ? 'Saving jobs needs a database update (patch_278).'
+                : 'Sign in to save jobs.',
+          ),
+        ),
+      );
+    }
   }
+
+  void _open(Job j) =>
+      context.pushNamed('job_details', pathParameters: {'id': j.id}, extra: j);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      // No island: Jobs is pushed from Home, not a tab. It used to light
-      // the Marketplace pill — the same lie Prayer told with the Profile
-      // pill. Its ScreenHero already carries the back button.
       bottomNavigationBar: const SafeArea(top: false, child: AdBanner()),
-      floatingActionButton: PostFab(
-        routeName: 'post_job',
-        tooltip: 'Post a job',
-        onCreated: _loadJobs,
-      ),
+      // The empty state carries its own two post buttons; a FAB on top of
+      // them would cover the second.
+      floatingActionButton: !_loading && _jobs.isEmpty && _browsing
+          ? null
+          : PostFab(
+              routeName: 'post_job',
+              tooltip: 'Post a job',
+              onCreated: _loadJobs,
+            ),
       body: NotificationListener<UserScrollNotification>(
         onNotification: handleNavScroll,
-        child: SizedBox(
-          height: MediaQuery.of(context).size.height,
-          child: Column(
-            children: [
-              _buildHero(),
-              _buildSearchBar(),
-              const _ShopJobsSegment(active: _Section.jobs),
-              _buildCountryScope(),
-              _buildCategoryStrip(),
-              const SizedBox(height: 6),
-              _buildLevelStrip(),
-              Expanded(
-                child: BrandedRefreshIndicator(
-                  color: AppColors.primaryBlue,
-                  onRefresh: _loadJobs,
-                  // Entrance now happens per-card (StaggeredReveal below).
-                  child: _buildList(),
+        child: BrandedRefreshIndicator(
+          color: AppColors.primaryBlue,
+          onRefresh: () async {
+            await Future.wait([_loadJobs(), JobService.loadSaved()]);
+          },
+          child: ValueListenableBuilder<Set<String>>(
+            valueListenable: JobService.savedIds,
+            builder: (context, savedIds, _) => CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: ScreenHero(
+                    title: 'Jobs',
+                    tagline: 'MARKETPLACE',
+                    subtitle: 'Work and opportunities in the community',
+                    fallbackRoute: 'marketplace',
+                    trailing: AuthService.currentUser == null
+                        ? null
+                        : HeaderIconButton(
+                            icon: Icons.work_history_outlined,
+                            tooltip: 'My job posts',
+                            onTap: () => context.pushNamed('my_jobs'),
+                          ),
+                  ),
                 ),
-              ),
-            ],
+                SliverToBoxAdapter(child: _buildSearchBar()),
+                const SliverToBoxAdapter(
+                  child: _ShopJobsSegment(active: _Section.jobs),
+                ),
+                SliverToBoxAdapter(child: _buildScope()),
+                SliverToBoxAdapter(child: _buildCategoryStrip()),
+                SliverToBoxAdapter(child: _buildFilterRow()),
+                if (_browsing && _saved.isNotEmpty)
+                  SliverToBoxAdapter(child: _buildSavedRail(savedIds)),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+                    child: Text(
+                      _browsing ? 'Latest' : 'Results',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: context.palette.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                ..._buildListSlivers(savedIds),
+                const SliverToBoxAdapter(child: SizedBox(height: 96)),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildHero() {
-    return const ScreenHero(
-      title: 'Opportunities for the community',
-      tagline: 'Jobs',
-      fallbackRoute: 'home',
-    );
-  }
-
   Widget _buildSearchBar() {
+    final palette = context.palette;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: TextField(
         controller: _searchController,
         onChanged: _onSearchChanged,
         textInputAction: TextInputAction.search,
-        onSubmitted: (_) => _loadJobs(),
-        style: AppTextStyles.bodyLarge,
+        style: AppTextStyles.bodyMedium.copyWith(color: palette.text),
         decoration: InputDecoration(
-          hintText: 'Search jobs',
-          prefixIcon: const Icon(Icons.search, color: AppColors.primaryBlue),
+          hintText: 'Role, employer, skill or town',
+          prefixIcon: const Icon(Icons.search_rounded),
           suffixIcon: _searchController.text.isEmpty
               ? null
               : IconButton(
-                  icon: Icon(Icons.close, color: AppColors.textMuted),
+                  tooltip: 'Clear',
+                  icon: const Icon(Icons.close_rounded),
                   onPressed: () {
                     _searchController.clear();
                     _loadJobs();
                   },
                 ),
           filled: true,
-          fillColor: context.palette.inputFill,
-          contentPadding: const EdgeInsets.symmetric(vertical: 4),
+          fillColor: palette.card,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: palette.divider),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: palette.divider),
+          ),
         ),
       ),
     );
   }
 
-  /// Sits ABOVE the category chips on purpose: scope is a bigger decision
-  /// than category — it changes what the category counts even mean — and a
-  /// member seeing an empty Jobs list needs to find this first.
-  Widget _buildCountryScope() {
+  Widget _buildScope() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Align(
         alignment: Alignment.centerLeft,
         child: CountryScopeToggle(
@@ -245,211 +305,328 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
   Widget _buildCategoryStrip() {
     return SizedBox(
       height: 44,
-      child: ListView.separated(
+      child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: JobCategory.all.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final cat = JobCategory.all[i];
-          final selected = _selectedCategory == cat.id;
-          return _CategoryChip(
-            label: cat.label,
-            selected: selected,
-            onTap: () => _selectCategory(cat.id),
-          );
-        },
+        children: [
+          _Chip(
+            label: 'All fields',
+            selected: _category == null,
+            onTap: () {
+              setState(() => _category = null);
+              _loadJobs();
+            },
+          ),
+          for (final c in JobCategory.all)
+            _Chip(
+              label: c.label,
+              icon: c.icon,
+              selected: _category == c.id,
+              onTap: () {
+                setState(() => _category = c.id);
+                _loadJobs();
+              },
+            ),
+        ],
       ),
     );
   }
 
-  /// Tier filter strip — entry / mid / senior, with "All levels" as
-  /// the opt-out. Sits under the category row so the two filter
-  /// dimensions stack cleanly. patch_039.
-  Widget _buildLevelStrip() {
-    const items = <(String, String)>[
-      ('all', 'All levels'),
-      ('entry', 'Entry'),
-      ('mid', 'Mid'),
-      ('senior', 'Senior'),
-    ];
-    return SizedBox(
-      height: 40,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: items.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final (id, label) = items[i];
-          final selected = _selectedLevel == id;
-          return _CategoryChip(
-            label: label,
-            selected: selected,
-            onTap: () => _selectLevel(id),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildList() {
-    return ContentReveal(
-      loading: _loading && _jobs.isEmpty,
-      skeleton: ShimmerLoaders.cardList(count: 6),
-      child: _buildJobsListContent(),
-    );
-  }
-
-  Widget _buildJobsListContent() {
-    if (_error != null && _jobs.isEmpty) {
-      final isOffline = !ConnectivityService.isOnline;
-      if (isOffline) {
-        return ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            OfflineInlineNotice(onRetry: _loadJobs),
-            const SizedBox(height: 60),
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Text(
-                  'No jobs cached yet.',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.textMuted,
-                  ),
+  Widget _buildFilterRow() {
+    final palette = context.palette;
+    final n = _filters.activeCount;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: Row(
+        children: [
+          Material(
+            color: n > 0 ? AppColors.primaryBlue : palette.card,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              onTap: _openFilters,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: n > 0 ? null : Border.all(color: palette.divider),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.tune_rounded,
+                      size: 18,
+                      color: n > 0 ? AppColors.white : palette.text,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      n > 0 ? 'Filters · $n' : 'Filters',
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: n > 0 ? AppColors.white : palette.text,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ],
-        );
-      }
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: [
-          const SizedBox(height: 100),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.cloud_off_outlined,
-                    size: 56,
-                    color: AppColors.textMuted,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _error!,
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ],
+          ),
+          if (n > 0)
+            TextButton(
+              onPressed: () {
+                setState(() => _filters = JobFilters.none);
+                _loadJobs();
+              },
+              child: const Text('Clear'),
+            ),
+          const Spacer(),
+          if (!_loading)
+            Text(
+              '${_jobs.length} listing${_jobs.length == 1 ? '' : 's'}',
+              style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSavedRail(Set<String> savedIds) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 22, 20, 10),
+          child: Text(
+            'Saved',
+            style: AppTextStyles.titleMedium.copyWith(
+              color: context.palette.text,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 156,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: _saved.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
+            itemBuilder: (context, i) => SizedBox(
+              width: 290,
+              child: JobCard(
+                job: _saved[i],
+                onTap: () => _open(_saved[i]),
+                saved: true,
+                onToggleSave: () => _toggleSaved(_saved[i]),
               ),
             ),
           ),
-        ],
-      );
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildListSlivers(Set<String> savedIds) {
+    if (_loading && _jobs.isEmpty) {
+      return [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          // cardList is a ListView; a sliver gives it no height.
+          child: SizedBox(
+            height: 560,
+            child: ShimmerLoaders.cardList(count: 5),
+          ),
+        ),
+      ];
+    }
+    if (_error != null && _jobs.isEmpty) {
+      return [
+        SliverToBoxAdapter(
+          child: !ConnectivityService.isOnline
+              ? OfflineInlineNotice(onRetry: _loadJobs)
+              : Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: EmptyStateCard(
+                    icon: Icons.cloud_off_outlined,
+                    title: "Couldn't load jobs",
+                    message: _error!,
+                  ),
+                ),
+        ),
+      ];
     }
     if (_jobs.isEmpty) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
+      return [SliverToBoxAdapter(child: _buildEmpty())];
+    }
+    return [
+      SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        sliver: SliverList.separated(
+          itemCount: _jobs.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 12),
+          itemBuilder: (context, i) {
+            final j = _jobs[i];
+            final card = JobCard(
+              job: j,
+              onTap: () => _open(j),
+              saved: AuthService.currentUser == null
+                  ? null
+                  : savedIds.contains(j.id),
+              onToggleSave: () => _toggleSaved(j),
+            );
+            if (i >= 8) return card;
+            return StaggeredReveal(index: i, rise: 18, child: card);
+          },
+        ),
+      ),
+    ];
+  }
+
+  /// Nothing posted yet is the real state today — say so warmly, and give
+  /// both sides of the market a first step.
+  Widget _buildEmpty() {
+    final palette = context.palette;
+    final filtered = !_browsing;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+      child: Column(
         children: [
-          const SizedBox(height: 80),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(
-                children: [
-                  Container(
-                    width: 88,
-                    height: 88,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryBlue.withValues(alpha: 0.10),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.work_outline,
-                      color: AppColors.primaryBlue,
-                      size: 40,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    _worldwide
-                        ? 'No jobs posted yet'
-                        : 'No jobs in ${Countries.nameOf(_country)} yet',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.headlineMedium.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _worldwide
-                        ? 'Be the first to post an opportunity for the community.'
-                        // Otherwise the first member in a new country reads
-                        // an empty list as a broken app, when every posting
-                        // so far is simply in Zimbabwe.
-                        : 'Jobs show your country by default. Switch to '
-                              'Worldwide to see postings from everywhere.',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.textMuted,
-                      height: 1.5,
-                    ),
-                  ),
-                  if (!_worldwide) ...[
-                    const SizedBox(height: 20),
-                    TextButton.icon(
-                      onPressed: () {
-                        setState(() => _worldwide = true);
-                        _loadJobs();
-                      },
-                      icon: const Icon(Icons.public, size: 18),
-                      label: const Text('Browse worldwide'),
-                    ),
-                  ],
-                ],
-              ),
+          Container(
+            width: 88,
+            height: 88,
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Icon(
+              filtered ? Icons.search_off_rounded : Icons.work_outline,
+              color: AppColors.primaryBlue,
+              size: 40,
             ),
           ),
-        ],
-      );
-    }
-    final cachedAt = CacheService.cachedAt(_cacheKey);
-    return ListView.separated(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-      itemCount: _jobs.length + (cachedAt != null ? 1 : 0),
-      separatorBuilder: (_, i) {
-        if (cachedAt != null && i == 0) return const SizedBox(height: 6);
-        return const SizedBox(height: 12);
-      },
-      itemBuilder: (context, rawIndex) {
-        if (cachedAt != null && rawIndex == 0) {
-          return LastUpdatedStrip(
-            timestamp: cachedAt,
-            isOnline: ConnectivityService.isOnline,
-            onRefresh: _loadJobs,
-          );
-        }
-        final i = cachedAt != null ? rawIndex - 1 : rawIndex;
-        final j = _jobs[i];
-        final card = JobCard(
-          job: j,
-          onTap: () => context.pushNamed(
-            'job_details',
-            pathParameters: {'id': j.id},
-            extra: j,
+          const SizedBox(height: 20),
+          Text(
+            filtered
+                ? 'No jobs match'
+                : _worldwide
+                ? 'No jobs posted yet'
+                : 'No jobs in ${Countries.nameOf(_country)} yet',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.headlineSmall.copyWith(
+              color: palette.text,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        );
-        if (i >= 8) return card;
-        return StaggeredReveal(index: i, rise: 18, child: card);
-      },
+          const SizedBox(height: 8),
+          Text(
+            filtered
+                ? 'Try fewer filters or a different search.'
+                : 'Hiring? Post a vacancy for the community. Looking for '
+                      'work? Tell employers what you do.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: palette.textMuted,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 20),
+          if (!filtered) ...[
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () async {
+                  final made = await context.pushNamed<bool>('post_job');
+                  if (made == true) _loadJobs();
+                },
+                icon: const Icon(Icons.campaign_outlined),
+                label: const Text('Post a vacancy'),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final made = await context.pushNamed<bool>(
+                    'post_job',
+                    queryParameters: {'type': 'seeking'},
+                  );
+                  if (made == true) _loadJobs();
+                },
+                icon: const Icon(Icons.person_search_outlined),
+                label: const Text("I'm looking for work"),
+              ),
+            ),
+          ],
+          if (!_worldwide)
+            TextButton.icon(
+              onPressed: () {
+                setState(() => _worldwide = true);
+                _loadJobs();
+              },
+              icon: const Icon(Icons.public, size: 18),
+              label: const Text('Browse worldwide'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+  });
+  final String label;
+  final IconData? icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final fg = selected ? AppColors.white : palette.text;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: selected ? AppColors.primaryBlue : palette.card,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: selected ? null : Border.all(color: palette.divider),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 16, color: fg),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  label,
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: fg,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -554,61 +731,6 @@ class _SegmentButton extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressEffect(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: selected ? AppColors.primaryGradient : null,
-              color: selected ? null : context.palette.card,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: selected ? AppColors.primaryBlue : AppColors.divider,
-              ),
-              boxShadow: selected
-                  ? [
-                      BoxShadow(
-                        color: AppColors.primaryBlue.withValues(alpha: 0.25),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ]
-                  : [],
-            ),
-            child: Text(
-              label,
-              style: AppTextStyles.labelMedium.copyWith(
-                color: selected ? AppColors.white : AppColors.text,
-                fontWeight: FontWeight.w700,
-                fontSize: 12.5,
               ),
             ),
           ),

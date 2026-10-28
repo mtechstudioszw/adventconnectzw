@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/job_model.dart';
 import '../utils/postgrest_filter.dart';
@@ -16,6 +17,8 @@ class JobService {
     String? search,
     String? category,
     String? level,
+    JobFilters filters = JobFilters.none,
+
     /// ISO 3166-1 alpha-2. Null means worldwide.
     ///
     /// Jobs are country-scoped by default for the same reason as the
@@ -43,23 +46,39 @@ class JobService {
     if (level != null && level.isNotEmpty && level != 'all') {
       query = query.eq('level', level);
     }
+    if (filters.jobType != null) query = query.eq('job_type', filters.jobType!);
+    if (filters.level != null) query = query.eq('level', filters.level!);
+    if (filters.postType != null) {
+      query = query.eq('post_type', filters.postType!);
+    }
+    if (filters.workArrangement != null) {
+      query = query.eq('work_arrangement', filters.workArrangement!);
+    }
+    if (filters.sabbathFriendly) query = query.eq('sabbath_friendly', true);
+    if (filters.sdaInstitution) query = query.eq('is_sda_institution', true);
     if (search != null && search.trim().isNotEmpty) {
+      // Role, employer, skill (description/requirements) or place.
       final term = orFilterValue('%${search.trim()}%');
       query = query.or(
-        'title.ilike.$term,company.ilike.$term,description.ilike.$term',
+        'title.ilike.$term,company.ilike.$term,description.ilike.$term,'
+        'requirements.ilike.$term,location.ilike.$term,province.ilike.$term',
       );
     }
 
-    final response =
-        await query.order('created_at', ascending: false).limit(200);
+    final response = await query
+        .order('created_at', ascending: false)
+        .limit(200);
     return (response as List)
         .map((row) => Job.fromJson(row as Map<String, dynamic>))
         .toList();
   }
 
   static Future<Job?> fetchJobById(String id) async {
-    final response =
-        await _client.from(_table).select().eq('id', id).maybeSingle();
+    final response = await _client
+        .from(_table)
+        .select()
+        .eq('id', id)
+        .maybeSingle();
     if (response == null) return null;
     return Job.fromJson(response);
   }
@@ -69,9 +88,11 @@ class JobService {
     required String description,
     required String category,
     required String location,
+
     /// ISO 3166-1 alpha-2 (patch_213). Always send it — the column DEFAULTs
     /// to 'ZW', so a Nairobi vacancy posted without it reads as Zimbabwean.
     String? country,
+
     /// Province for ZW, free-text region elsewhere. Optional as of
     /// patch_213, which dropped the NOT NULL that made every non-Zimbabwean
     /// job listing impossible to insert.
@@ -86,14 +107,25 @@ class JobService {
     bool isSdaInstitution = false,
     String? contactPhone,
     String? contactEmail,
+    String? workArrangement,
+    String? applyInstructions,
+    String? applyUrl,
+    String? pageId,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
       throw const AuthException('Sign in to post a job.');
     }
+    final extra = <String, dynamic>{
+      'work_arrangement': ?workArrangement,
+      'apply_instructions': ?applyInstructions?.trim(),
+      'apply_url': ?applyUrl?.trim(),
+      'page_id': ?pageId,
+    };
     final inserted = await PostLimitError.guard(
       PostSection.job,
-      () => _client.from(_table).insert({
+      () => _insertWithFallback({
+        if (_hasRedesignColumns) ...extra,
         'poster_id': user.id,
         'title': title.trim(),
         'company': company?.trim(),
@@ -111,15 +143,48 @@ class JobService {
         'is_sda_institution': isSdaInstitution,
         'contact_phone': contactPhone?.trim(),
         'contact_email': contactEmail?.trim(),
-      }).select('id').single(),
+      }, extra.keys),
     );
     AnalyticsService.jobPosted(category);
     return inserted['id'].toString();
   }
 
+  /// False once patch_278's columns turn out to be missing; forms then
+  /// stop sending them (and say so) instead of failing every post.
+  static bool _hasRedesignColumns = true;
+  static bool get redesignAvailable => _hasRedesignColumns;
+
+  static bool _missingColumn(Object e) {
+    final s = e.toString();
+    return s.contains('PGRST204') ||
+        s.contains('42703') ||
+        s.contains('work_arrangement') ||
+        s.contains('apply_instructions') ||
+        s.contains('apply_url') ||
+        s.contains("'page_id'");
+  }
+
+  /// Insert; if the new columns don't exist yet, retry once without them.
+  /// Safe to retry: PostgREST refuses an unknown column before writing.
+  static Future<Map<String, dynamic>> _insertWithFallback(
+    Map<String, dynamic> row,
+    Iterable<String> newKeys,
+  ) async {
+    try {
+      return await _client.from(_table).insert(row).select('id').single();
+    } catch (e) {
+      if (!_hasRedesignColumns || !_missingColumn(e)) rethrow;
+      _hasRedesignColumns = false;
+      final trimmed = {...row}..removeWhere((k, _) => newKeys.contains(k));
+      return _client.from(_table).insert(trimmed).select('id').single();
+    }
+  }
+
   /// Owner-only edit. Touches the same writable fields as the post
   /// form. RLS limits the row to the poster; the `.eq('poster_id')`
   /// is belt-and-braces.
+  static String? _blankToNull(String v) => v.trim().isEmpty ? null : v.trim();
+
   static Future<void> updateJob({
     required String jobId,
     String? title,
@@ -128,11 +193,13 @@ class JobService {
     String? requirements,
     String? category,
     String? jobType,
+
     /// 'hiring' or 'seeking'. The edit form has the toggle; without this
     /// parameter switching it was silently discarded.
     String? postType,
     String? level,
     String? salaryRange,
+
     /// ISO 3166-1 alpha-2 (patch_213). Travels with [province].
     String? country,
     String? province,
@@ -141,12 +208,25 @@ class JobService {
     bool? isSdaInstitution,
     String? contactPhone,
     String? contactEmail,
+    String? workArrangement,
+    String? applyInstructions,
+    String? applyUrl,
+    String? pageId,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
       throw const AuthException('Sign in to update a job.');
     }
     final updates = <String, dynamic>{
+      if (_hasRedesignColumns) ...{
+        'work_arrangement': ?workArrangement,
+        // '' clears these: an empty apply_url would fail its http check
+        // and an empty page_id isn't a uuid.
+        if (applyInstructions != null)
+          'apply_instructions': _blankToNull(applyInstructions),
+        if (applyUrl != null) 'apply_url': _blankToNull(applyUrl),
+        if (pageId != null) 'page_id': _blankToNull(pageId),
+      },
       'title': ?title?.trim(),
       'company': ?company?.trim(),
       'description': ?description?.trim(),
@@ -247,4 +327,116 @@ class JobService {
       'job $jobId',
     );
   }
+
+  /// The poster's own listings, every status — pending, open, filled,
+  /// expired, rejected — newest first. RLS lets you read your own pending
+  /// and rejected rows.
+  static Future<List<Job>> fetchMyJobs() async {
+    final me = _client.auth.currentUser?.id;
+    if (me == null) return const [];
+    final rows = await _client
+        .from(_table)
+        .select()
+        .eq('poster_id', me)
+        .order('created_at', ascending: false);
+    return [
+      for (final r in rows as List) Job.fromJson(r as Map<String, dynamic>),
+    ];
+  }
+
+  // ---- Saved jobs (patch_278) ----------------------------------------
+
+  static final ValueNotifier<Set<String>> savedIds = ValueNotifier(const {});
+  static bool savedAvailable = true;
+
+  static Future<void> loadSaved() async {
+    final me = _client.auth.currentUser?.id;
+    if (me == null) return;
+    try {
+      final rows = await _client
+          .from('saved_jobs')
+          .select('job_id')
+          .eq('user_id', me);
+      savedAvailable = true;
+      savedIds.value = {
+        for (final r in rows as List) (r as Map)['job_id'].toString(),
+      };
+    } catch (e) {
+      if (e.toString().contains('saved_jobs') ||
+          e.toString().contains('PGRST205') ||
+          e.toString().contains('42P01')) {
+        savedAvailable = false;
+      }
+    }
+  }
+
+  static Future<void> setSaved(String jobId, bool saved) async {
+    final me = _client.auth.currentUser?.id;
+    if (me == null) throw const AuthException('Sign in to save jobs.');
+    final before = savedIds.value;
+    savedIds.value = saved ? {...before, jobId} : ({...before}..remove(jobId));
+    try {
+      if (saved) {
+        await _client.from('saved_jobs').insert({
+          'user_id': me,
+          'job_id': int.parse(jobId),
+        });
+      } else {
+        await _client
+            .from('saved_jobs')
+            .delete()
+            .eq('user_id', me)
+            .eq('job_id', int.parse(jobId));
+      }
+    } catch (e) {
+      savedIds.value = before;
+      if (e.toString().contains('saved_jobs') ||
+          e.toString().contains('PGRST205')) {
+        savedAvailable = false;
+      }
+      rethrow;
+    }
+  }
+
+  static Future<List<Job>> fetchSavedJobs() async {
+    final ids = savedIds.value.map(int.parse).toList();
+    if (ids.isEmpty) return const [];
+    final rows = await _client.from(_table).select().inFilter('id', ids);
+    return [
+      for (final r in rows as List) Job.fromJson(r as Map<String, dynamic>),
+    ];
+  }
+}
+
+/// Filters on the Jobs landing (applied in the query).
+class JobFilters {
+  const JobFilters({
+    this.jobType,
+    this.level,
+    this.workArrangement,
+    this.postType,
+    this.sabbathFriendly = false,
+    this.sdaInstitution = false,
+  });
+  final String? jobType;
+  final String? level;
+  final String? workArrangement;
+
+  /// 'hiring' (vacancies) or 'seeking' (people looking for work).
+  final String? postType;
+  final bool sabbathFriendly;
+  final bool sdaInstitution;
+
+  static const none = JobFilters();
+
+  int get activeCount => [
+    jobType != null,
+    level != null,
+    workArrangement != null,
+    postType != null,
+    sabbathFriendly,
+    sdaInstitution,
+  ].where((b) => b).length;
+
+  bool get isEmpty => activeCount == 0;
 }

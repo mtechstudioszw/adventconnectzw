@@ -238,6 +238,14 @@ Owner decisions taken in this session:
   now "Couldn't load products". Error card had a fixed "Seller not found"
   title for every failure. Offline save no longer says "Sign in".
   Test: `test/seller_profile_states_test.dart`. Full suite: **786 passed**.
+- **Checkout duplicate-order bug (fixed):** `place_order` and the read-back
+  `fetchById` shared one try, so a signal drop between them reported a
+  placed order as failed and kept it in the basket → tapping again sent a
+  duplicate. And a null read-back cleared the basket but said "Could not
+  place the order". Now the basket clears as soon as the create succeeds;
+  an order that can't be read back gets a "saved — open My orders" snackbar.
+  Offline failure says offline. Test: `test/checkout_duplicate_order_test.dart`
+  (fails on the original code). Full suite: **787 passed**.
 - **Marketplace findings NOT fixed (need a decision):**
   - `fetchProducts` sends every approved seller id in the URL
     (`inFilter('seller_id', …)`). Fine now; at a few hundred sellers the

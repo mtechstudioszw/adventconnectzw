@@ -5,6 +5,7 @@ import '../../models/cart_item_model.dart';
 import '../../models/order_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/cart_service.dart';
+import '../../services/connectivity_service.dart';
 import '../../services/order_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -172,34 +173,53 @@ class _CartScreenState extends State<CartScreen> {
     final placed = <MarketOrder>[];
     final failed = <String>[];
 
+    /// Orders the server created, whether or not they could be read back.
+    /// The read-back used to sit in the same try as the create, so a
+    /// signal drop between the two reported a placed order as failed and
+    /// left its items in the basket — tapping again sent the shop a
+    /// duplicate order.
+    var created = 0;
+
     // One order per shop. Each is committed independently, so a shop
     // whose item just sold out doesn't cost the buyer the rest of the
     // basket — the successful shops are cleared, the failed one stays.
     for (final basket in CartService.baskets) {
+      final String id;
       try {
-        final id = await OrderService.placeBasket(
+        id = await OrderService.placeBasket(
           basket,
           note: details.note,
           buyerName: details.name,
           buyerPhone: details.phone,
         );
-        final order = await OrderService.fetchById(id);
-        if (order != null) placed.add(order);
-        await CartService.removeBasket(basket);
       } catch (e) {
         failed.add(basket.sellerName);
+        continue;
+      }
+      // Created: out of the basket before anything else can fail.
+      created++;
+      await CartService.removeBasket(basket);
+      try {
+        final order = await OrderService.fetchById(id);
+        if (order != null) placed.add(order);
+      } catch (_) {
+        // The order exists; it is in My orders even if not shown below.
       }
     }
 
     if (!mounted) return;
     setState(() => _placing = false);
 
-    if (placed.isEmpty) {
+    if (created == 0) {
+      final offline = !ConnectivityService.isOnline;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppColors.red,
           content: Text(
-            failed.isEmpty
+            offline
+                ? "You're offline. Your basket is saved — try again when "
+                      'you have a connection.'
+                : failed.isEmpty
                 ? 'Could not place the order. Try again.'
                 : 'Could not place the order — some items may no longer be available.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
@@ -207,6 +227,30 @@ class _CartScreenState extends State<CartScreen> {
         ),
       );
       return;
+    }
+
+    // Created but not read back: say so plainly and point at the place
+    // the order can be sent from, rather than staying silent about it.
+    final unseen = created - placed.length;
+    if (unseen > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 6),
+          content: Text(
+            unseen == 1
+                ? 'Order request saved. Open My orders to send it to the shop.'
+                : '$unseen order requests saved. Open My orders to send them '
+                      'to the shops.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+          ),
+          action: SnackBarAction(
+            label: 'My orders',
+            textColor: AppColors.white,
+            onPressed: () => context.pushNamed('my_orders'),
+          ),
+        ),
+      );
+      if (placed.isEmpty) return;
     }
 
     await Navigator.of(context).push(

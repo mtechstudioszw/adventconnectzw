@@ -1,4 +1,4 @@
-/// Shared date formatting helpers.
+// Shared date formatting helpers.
 
 const List<String> _months = [
   'January', 'February', 'March', 'April', 'May', 'June',

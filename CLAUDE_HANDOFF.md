@@ -26,7 +26,7 @@ Read this file, then `CLAUDE.md`, then the master prompt, before touching code.
 ### Batch order (from the master prompt file — note it differs from an
 earlier chat version; the FILE wins)
 1. Audit, bug fixes, Advent AI cleanup — **DONE**
-2. Core app shell, Home, Marketplace, Profile — **IN PROGRESS**
+2. Core app shell, Home, Marketplace, Profile — **DONE** (report: `docs/BATCH_2_REPORT.md`)
 3. Library information architecture & design
 4. Bible app experience
 5. Sabbath School experience & date bug
@@ -280,19 +280,17 @@ Owner decisions taken in this session:
   - `CategoryScreen` (`/marketplace/categories`) is unreachable — nothing
     links to it — and it ignores the country scope. Remove or relink.
 
-### Resume point (exact)
-**Batch 2 → Profile (D), continued:** audit edit profile (country rules
-are Batch 12 — don't change them here), avatar quality on Profile,
-profile → chat (keep as fixed in Batch 1). Then the end-of-batch report
-+ full `flutter analyze`.
-- **Done:** Home left open overnight kept yesterday's devotion and
-  hymn/track/book. Home now has an `AppLifecycleListener`; on resume, if the
-  UTC day changed (devotion RPC and TodayCard picks both roll on UTC), it
-  runs `_refresh()`, which also refetches the devotion and bumps
-  `TodayCard.refreshTick`. Pull-to-refresh refreshes them too now.
-  Not unit-tested (Home/TodayCard need Supabase) — check on device.
+- Profile + Edit Profile avatars now request the circle's pixel size.
+- End of batch: `flutter analyze` → **No issues found**; `flutter test` →
+  **790 passed**. Report: `docs/BATCH_2_REPORT.md`.
 
-Then, still Batch 2:
+### Resume point (exact)
+**Batch 2 is DONE. Next: Batch 3 — Library information architecture &
+design** (see the master prompt). Owner items from the Batch 2 report
+(patch_270 review, Supabase region, repo missing the orders schema) are
+waiting on the owner, not on code.
+
+Batch 2 items that were planned (kept for the record):
 1. Home polish: card visual pass (states done)
    (keep CLAUDE.md colours, Poppins, flat headers, transparent scaffolds).
 2. Marketplace audit + redesign (listing cards, categories, search/filters,

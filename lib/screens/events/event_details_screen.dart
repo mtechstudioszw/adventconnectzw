@@ -961,10 +961,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
 
   String _formatPastAgo(DateTime then) {
     final diff = DateTime.now().difference(then);
-    if (diff.inDays >= 1)
+    if (diff.inDays >= 1) {
       return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
-    if (diff.inHours >= 1)
+    }
+    if (diff.inHours >= 1) {
       return '${diff.inHours} hour${diff.inHours > 1 ? 's' : ''} ago';
+    }
     return '${diff.inMinutes} minute${diff.inMinutes != 1 ? 's' : ''} ago';
   }
 }

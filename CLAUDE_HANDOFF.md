@@ -352,6 +352,22 @@ Owner decisions taken in this session:
   - Posts on other people's profiles had no menu → now Report (+ admin).
   - `Post.copyWith` was dropping `country` — fixed.
   - Test: `moderation_appeal_test`. Full suite **812 passed**.
+- **Redesign pass 1 (28 Oct 2026), checked with renders from
+  `test_screens/` (`flutter test test_screens/<x>_shot.dart`, PNGs to
+  $SHOT_DIR; outside test/, not in CI):**
+  - Marketplace: compact horizontal shop cards; product tiles as cards with
+    square photos (CLAUDE.md rule); Material-icon chips, selected = blue;
+    skeleton matches. Ambient field: `AmbientPainter(ghosts: false)` behind
+    real screens (CLAUDE.md updated).
+  - Profile: 3 numeric stats, church line under the name, one "How you
+    serve" invitation, blue completion ring (one gold per screen).
+  - Jobs: model read salary_min/max + list requirements but DB has
+    `salary_range` text + text requirements → every job "Negotiable", no
+    requirements; flags/email never read and wiped by edits. All fixed;
+    cards show level + Sabbath/SDA badges; details has Email the poster.
+  - Home: Quick stats "Prayers" tile was hard-coded '0' (fake) → removed;
+    Quick stats hidden when empty; Stories lost its "Prayer" link; end-of-
+    feed buttons no longer run edge to edge.
 - Plain data writes via execute_sql go through; DDL (patch 270/272) asks
   for approval, which times out.
 - Supabase `apply_migration` approval prompts timed out 3× (never reached

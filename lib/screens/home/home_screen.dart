@@ -1437,9 +1437,9 @@ class _HomeScreenState extends State<HomeScreen>
             child: StaggeredReveal(
               index: 1,
               child: HomeSection(
+                // No action link: it said "Prayer" and opened Prayer from
+                // the Stories heading, one row under the Prayer chip.
                 title: 'Stories',
-                action: 'Prayer',
-                onAction: () => context.pushNamed('prayer'),
                 child: StoriesRail(
                   stories: _stories,
                   viewerId: AuthService.currentUser?.id ?? '',
@@ -1644,19 +1644,19 @@ class _HomeScreenState extends State<HomeScreen>
               onTap: () => context.pushNamed('events'),
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _CompactStatTile(
-              icon: Icons.volunteer_activism_outlined,
-              value: '0',
-              label: 'Prayers',
-              onTap: () => context.pushNamed('prayer'),
-            ),
-          ),
+          // A "Prayers" tile stood here with its value hard-coded to '0'
+          // — every member was told they had no prayers. Removed rather
+          // than faked (28 Oct 2026); Home loads no prayer count.
         ],
       ),
     );
   }
+
+  /// Quick stats only when there is something real in it. With no home
+  /// church and no RSVPs it was a card of "Set home church" and "0".
+  bool get _hasQuickStats =>
+      _homeChurchName != null ||
+      _events.any((e) => _rsvpedEventIds.contains(e.id));
 
   Widget _buildEventsRow() {
     // Skeleton crossfades into content — no pop-in from blank.
@@ -2024,12 +2024,15 @@ class _HomeScreenState extends State<HomeScreen>
             // within one scroll, and a feed caught recycling reads as a feed
             // with nothing in it. What the end of the feed can honestly do
             // is point somewhere there IS more.
-            Wrap(
-              spacing: AppSpace.sm,
-              runSpacing: AppSpace.sm,
-              alignment: WrapAlignment.center,
-              children: [
-                OutlinedButton.icon(
+            // A Row of Expanded, not a Wrap: the theme makes outlined
+            // buttons full-width, so in a Wrap each one burst past the
+            // page padding and ran edge to edge, stacked.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
                   // NOT member_directory. That screen predates this card
                   // and does not work; sending people to a dead end at the
                   // exact moment they have run out of feed is the worst
@@ -2039,13 +2042,18 @@ class _HomeScreenState extends State<HomeScreen>
                   onPressed: () => context.pushNamed('new_chat', extra: true),
                   icon: const Icon(Icons.people_outline_rounded, size: 18),
                   label: const Text('Meet people'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () => context.pushNamed('events'),
-                  icon: const Icon(Icons.event_outlined, size: 18),
-                  label: const Text('Events'),
-                ),
-              ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpace.sm),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => context.pushNamed('events'),
+                      icon: const Icon(Icons.event_outlined, size: 18),
+                      label: const Text('Events'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -2500,7 +2508,8 @@ class _HomeScreenState extends State<HomeScreen>
         padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
         child: InviteFriendsCard(),
       ),
-      _discoverySection(title: 'Quick stats', child: _buildQuickStats()),
+      if (_hasQuickStats)
+        _discoverySection(title: 'Quick stats', child: _buildQuickStats()),
     ];
   }
 

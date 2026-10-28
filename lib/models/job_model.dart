@@ -33,6 +33,11 @@ class Job {
     this.applyInstructions,
     this.applyUrl,
     this.pageId,
+    this.payMin,
+    this.payMax,
+    this.payPeriod,
+    this.payCurrency,
+    this.isUrgent = false,
   });
 
   final String id;
@@ -102,6 +107,64 @@ class Job {
   /// The employer's organization Page — its company profile (patch_278).
   final String? pageId;
 
+  /// Structured pay (patch_278): the numbers, the period ('hour', 'day',
+  /// 'week', 'month', 'year', 'job') and an ISO currency.
+  final double? payMin;
+  final double? payMax;
+  final String? payPeriod;
+  final String? payCurrency;
+
+  /// "Start now" — the poster needs someone urgently (patch_278).
+  final bool isUrgent;
+
+  /// "\$15 / day", "\$400–550 / month", or what the poster typed in the
+  /// old free-text box. Null when no pay was given.
+  String? get payLabel {
+    if (payMin != null || payMax != null) {
+      return formatPay(
+        min: payMin,
+        max: payMax,
+        period: payPeriod,
+        currency: payCurrency ?? 'USD',
+      );
+    }
+    final typed = salaryRange?.trim();
+    return (typed == null || typed.isEmpty) ? null : typed;
+  }
+
+  /// Shared by the card, the details page and the post form's preview.
+  static String formatPay({
+    double? min,
+    double? max,
+    String? period,
+    String currency = 'USD',
+  }) {
+    final symbol = switch (currency) {
+      'USD' => r'$',
+      'GBP' => '£',
+      'EUR' => '€',
+      'ZAR' => 'R',
+      _ => '$currency ',
+    };
+    String fmt(double v) {
+      final whole = v == v.roundToDouble();
+      final s = whole ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+      // 12500 → 12,500
+      final parts = s.split('.');
+      final digits = parts[0].replaceAllMapped(
+        RegExp(r'\B(?=(\d{3})+(?!\d))'),
+        (_) => ',',
+      );
+      return parts.length > 1 ? '$digits.${parts[1]}' : digits;
+    }
+
+    final amount = (min != null && max != null && max != min)
+        ? '$symbol${fmt(min)}–${fmt(max)}'
+        : '$symbol${fmt((min ?? max)!)}';
+    final per = payPeriods[period];
+    return per == null ? amount : '$amount / ${per.short}';
+  }
+
   String? get workArrangementLabel => switch (workArrangement) {
     'on_site' => 'On-site',
     'remote' => 'Remote',
@@ -144,6 +207,11 @@ class Job {
     applyInstructions: applyInstructions,
     applyUrl: applyUrl,
     pageId: pageId,
+    payMin: payMin,
+    payMax: payMax,
+    payPeriod: payPeriod,
+    payCurrency: payCurrency,
+    isUrgent: isUrgent,
   );
 
   /// "Town, Province", without saying "Harare, Harare" twice.
@@ -247,6 +315,11 @@ class Job {
       applyInstructions: (json['apply_instructions'] as String?)?.trim(),
       applyUrl: (json['apply_url'] as String?)?.trim(),
       pageId: json['page_id']?.toString(),
+      payMin: _readNullableDouble(json['pay_min']),
+      payMax: _readNullableDouble(json['pay_max']),
+      payPeriod: json['pay_period'] as String?,
+      payCurrency: json['pay_currency'] as String?,
+      isUrgent: json['is_urgent'] == true,
     );
   }
 
@@ -284,6 +357,11 @@ class Job {
     'apply_instructions': applyInstructions,
     'apply_url': applyUrl,
     'page_id': pageId,
+    'pay_min': payMin,
+    'pay_max': payMax,
+    'pay_period': payPeriod,
+    'pay_currency': payCurrency,
+    'is_urgent': isUrgent,
   };
 
   String formatSalary() {
@@ -302,6 +380,8 @@ class Job {
 
   String formatType() {
     if (type == null || type!.isEmpty) return 'Full-time';
+    final known = jobTypes[type];
+    if (known != null) return known;
     // DB values are snake_case ("full_time"); splitting only on '-' showed
     // "Full_time" on every card.
     final words = type!.split(RegExp('[-_]')).join('-');
@@ -317,6 +397,44 @@ class Job {
   }
 }
 
+/// The three kinds of work the landing groups fields into, so a gardener
+/// and a doctor both find their place in one tap (owner, 28 Oct 2026:
+/// "it should accommodate everyone").
+enum JobKind { everyday, skilled, professional }
+
+extension JobKindX on JobKind {
+  String get label => switch (this) {
+    JobKind.everyday => 'Everyday work',
+    JobKind.skilled => 'Skilled & medical',
+    JobKind.professional => 'Professional',
+  };
+
+  String get blurb => switch (this) {
+    JobKind.everyday => 'Home, garden, building, driving, shops',
+    JobKind.skilled => 'Health, teaching, farming',
+    JobKind.professional => 'Office, tech, media, ministry',
+  };
+}
+
+/// A ready-made starting point for a post: picking "Gardener" fills the
+/// title, field, type and a first draft of the description.
+class JobRole {
+  const JobRole(
+    this.title, {
+    this.type = 'full_time',
+    this.level = 'entry',
+    this.period = 'month',
+    this.description = '',
+    this.requirements = '',
+  });
+  final String title;
+  final String type;
+  final String level;
+  final String period;
+  final String description;
+  final String requirements;
+}
+
 /// Job categories — ONE list for posting and browsing, with the ids the
 /// database's jobs_category_check accepts.
 ///
@@ -328,58 +446,214 @@ class JobCategory {
     required this.id,
     required this.label,
     required this.icon,
+    required this.kind,
+    this.roles = const [],
+    this.needsPatch = false,
   });
   final String id;
   final String label;
   final IconData icon;
+  final JobKind kind;
+  final List<JobRole> roles;
+
+  /// Added by patch_278; hidden from the post form until it runs.
+  final bool needsPatch;
 
   static const all = [
     JobCategory(
-      id: 'teaching_education',
-      label: 'Teaching & Education',
-      icon: Icons.school_outlined,
-    ),
-    JobCategory(
-      id: 'healthcare',
-      label: 'Healthcare',
-      icon: Icons.local_hospital_outlined,
-    ),
-    JobCategory(
-      id: 'it_technology',
-      label: 'IT & Technology',
-      icon: Icons.computer_outlined,
-    ),
-    JobCategory(
-      id: 'business_admin',
-      label: 'Business & Admin',
-      icon: Icons.business_center_outlined,
-    ),
-    JobCategory(
-      id: 'ministry_church',
-      label: 'Ministry & Church',
-      icon: Icons.church_outlined,
+      id: 'domestic_caregiving',
+      label: 'Home & family',
+      icon: Icons.home_outlined,
+      kind: JobKind.everyday,
+      roles: [
+        JobRole(
+          'Housekeeper',
+          description:
+              'Cleaning, laundry and ironing for a family home. Some cooking.',
+          requirements: 'Honest and reliable\nReferences from past employers',
+        ),
+        JobRole(
+          'Gardener',
+          description:
+              'Keep the garden tidy: mowing, weeding, watering and general '
+              'yard work.',
+          requirements: 'Experience with garden tools\nReliable and punctual',
+        ),
+        JobRole(
+          'Nanny',
+          description: 'Care for the children: meals, school runs, play.',
+          requirements: 'Experience with children\nReferences',
+        ),
+        JobRole(
+          'Caregiver',
+          description: 'Daily care and company for an elderly family member.',
+          requirements: 'Patient and kind\nFirst aid is a plus',
+        ),
+        JobRole(
+          'Cook',
+          description: 'Prepare healthy meals for a household.',
+          requirements: 'Experience cooking for a family',
+        ),
+      ],
     ),
     JobCategory(
       id: 'construction_trades',
-      label: 'Construction & Trades',
+      label: 'Building & trades',
       icon: Icons.construction_outlined,
-    ),
-    JobCategory(
-      id: 'farming_agriculture',
-      label: 'Farming & Agriculture',
-      icon: Icons.agriculture_outlined,
+      kind: JobKind.everyday,
+      roles: [
+        JobRole(
+          'Builder',
+          type: 'contract',
+          period: 'job',
+          description: 'Building work — describe the job, size and timeline.',
+          requirements: 'Own tools\nPhotos of past work',
+        ),
+        JobRole('Electrician', type: 'contract', period: 'job'),
+        JobRole('Plumber', type: 'contract', period: 'job'),
+        JobRole('Carpenter', type: 'contract', period: 'job'),
+        JobRole('Welder', type: 'contract', period: 'job'),
+        JobRole('Painter', type: 'contract', period: 'job'),
+        JobRole('General hand', type: 'casual', period: 'day'),
+      ],
     ),
     JobCategory(
       id: 'driving_transport',
-      label: 'Driving & Transport',
+      label: 'Driving & delivery',
       icon: Icons.local_shipping_outlined,
+      kind: JobKind.everyday,
+      roles: [
+        JobRole(
+          'Driver',
+          level: 'mid',
+          requirements: "Valid driver's licence\nClean record",
+        ),
+        JobRole('Delivery rider', type: 'casual', period: 'day'),
+        JobRole('Truck driver', level: 'mid'),
+      ],
     ),
     JobCategory(
-      id: 'domestic_caregiving',
-      label: 'Domestic & Caregiving',
-      icon: Icons.volunteer_activism_outlined,
+      id: 'cleaning_security',
+      label: 'Cleaning & security',
+      icon: Icons.shield_outlined,
+      kind: JobKind.everyday,
+      needsPatch: true,
+      roles: [
+        JobRole('Cleaner'),
+        JobRole('Security guard'),
+        JobRole('Office cleaner', type: 'part_time'),
+      ],
     ),
-    JobCategory(id: 'other', label: 'Other', icon: Icons.work_outline),
+    JobCategory(
+      id: 'hospitality_retail',
+      label: 'Shops & hospitality',
+      icon: Icons.storefront_outlined,
+      kind: JobKind.everyday,
+      needsPatch: true,
+      roles: [
+        JobRole('Shop assistant'),
+        JobRole('Cashier'),
+        JobRole('Waiter'),
+        JobRole('Chef', level: 'mid'),
+      ],
+    ),
+    JobCategory(
+      id: 'healthcare',
+      label: 'Health & medical',
+      icon: Icons.local_hospital_outlined,
+      kind: JobKind.skilled,
+      roles: [
+        JobRole(
+          'Registered nurse',
+          level: 'mid',
+          requirements: 'Nursing diploma or degree\nCurrent practising licence',
+        ),
+        JobRole('Doctor', level: 'senior'),
+        JobRole('Nurse aide'),
+        JobRole('Pharmacist', level: 'mid'),
+        JobRole('Lab scientist', level: 'mid'),
+      ],
+    ),
+    JobCategory(
+      id: 'teaching_education',
+      label: 'Teaching',
+      icon: Icons.school_outlined,
+      kind: JobKind.skilled,
+      roles: [
+        JobRole(
+          'Teacher',
+          level: 'mid',
+          requirements: 'Teaching qualification\nSubject specialism',
+        ),
+        JobRole('Tutor', type: 'part_time', period: 'hour'),
+        JobRole('ECD teacher'),
+        JobRole('Lecturer', level: 'senior'),
+      ],
+    ),
+    JobCategory(
+      id: 'farming_agriculture',
+      label: 'Farming',
+      icon: Icons.agriculture_outlined,
+      kind: JobKind.skilled,
+      roles: [
+        JobRole('Farm worker', type: 'casual', period: 'day'),
+        JobRole('Herdsman'),
+        JobRole('Farm manager', level: 'senior'),
+      ],
+    ),
+    JobCategory(
+      id: 'business_admin',
+      label: 'Office & finance',
+      icon: Icons.business_center_outlined,
+      kind: JobKind.professional,
+      roles: [
+        JobRole('Accountant', level: 'mid'),
+        JobRole('Admin assistant'),
+        JobRole('Receptionist'),
+        JobRole('HR officer', level: 'mid'),
+        JobRole('Sales representative'),
+      ],
+    ),
+    JobCategory(
+      id: 'it_technology',
+      label: 'Tech & digital',
+      icon: Icons.computer_outlined,
+      kind: JobKind.professional,
+      roles: [
+        JobRole('Software developer', level: 'mid'),
+        JobRole('IT support'),
+        JobRole('Data analyst', level: 'mid'),
+      ],
+    ),
+    JobCategory(
+      id: 'creative_media',
+      label: 'Media & creative',
+      icon: Icons.palette_outlined,
+      kind: JobKind.professional,
+      needsPatch: true,
+      roles: [
+        JobRole('Graphic designer', type: 'contract', period: 'job'),
+        JobRole('Videographer', type: 'contract', period: 'job'),
+        JobRole('Musician', type: 'contract', period: 'job'),
+      ],
+    ),
+    JobCategory(
+      id: 'ministry_church',
+      label: 'Church & ministry',
+      icon: Icons.church_outlined,
+      kind: JobKind.professional,
+      roles: [
+        JobRole('Pastor', level: 'senior'),
+        JobRole('Bible worker'),
+        JobRole('Church secretary', type: 'part_time'),
+      ],
+    ),
+    JobCategory(
+      id: 'other',
+      label: 'Other',
+      icon: Icons.work_outline,
+      kind: JobKind.professional,
+    ),
   ];
 
   static JobCategory? byId(String? id) {
@@ -390,15 +664,38 @@ class JobCategory {
   }
 
   static String labelFor(String? id) => byId(id)?.label ?? 'Other';
+
+  static List<JobCategory> ofKind(JobKind k) => [
+    for (final c in all)
+      if (c.kind == k && c.id != 'other') c,
+  ];
 }
 
 /// Employment types the database accepts (jobs_job_type_check).
+/// 'casual' arrives with patch_278.
 const jobTypes = <String, String>{
   'full_time': 'Full-time',
   'part_time': 'Part-time',
   'contract': 'Contract',
+  'casual': 'Casual / day work',
   'internship': 'Internship',
   'volunteer': 'Volunteer',
+};
+
+class PayPeriod {
+  const PayPeriod(this.label, this.short);
+  final String label;
+  final String short;
+}
+
+/// Pay periods (patch_278).
+const payPeriods = <String, PayPeriod>{
+  'hour': PayPeriod('Per hour', 'hour'),
+  'day': PayPeriod('Per day', 'day'),
+  'week': PayPeriod('Per week', 'week'),
+  'month': PayPeriod('Per month', 'month'),
+  'year': PayPeriod('Per year', 'year'),
+  'job': PayPeriod('For the job', 'job'),
 };
 
 /// Work arrangements (patch_278).

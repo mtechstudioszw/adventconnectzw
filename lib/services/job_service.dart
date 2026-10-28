@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show ValueNotifier;
+import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/job_model.dart';
 import '../utils/postgrest_filter.dart';
@@ -16,6 +16,9 @@ class JobService {
   static Future<List<Job>> fetchJobs({
     String? search,
     String? category,
+
+    /// Any of these fields — the landing's "Everyday work" etc.
+    List<String>? categories,
     String? level,
     JobFilters filters = JobFilters.none,
 
@@ -43,7 +46,10 @@ class JobService {
     if (category != null && category.isNotEmpty && category != 'all') {
       query = query.eq('category', category);
     }
-    if (level != null && level.isNotEmpty && level != 'all') {
+    if (categories != null && categories.isNotEmpty) {
+      query = query.inFilter('category', categories);
+    }
+        if (level != null && level.isNotEmpty && level != 'all') {
       query = query.eq('level', level);
     }
     if (filters.jobType != null) query = query.eq('job_type', filters.jobType!);
@@ -54,6 +60,7 @@ class JobService {
     if (filters.workArrangement != null) {
       query = query.eq('work_arrangement', filters.workArrangement!);
     }
+    if (filters.urgent) query = query.eq('is_urgent', true);
     if (filters.sabbathFriendly) query = query.eq('sabbath_friendly', true);
     if (filters.sdaInstitution) query = query.eq('is_sda_institution', true);
     if (search != null && search.trim().isNotEmpty) {
@@ -111,6 +118,11 @@ class JobService {
     String? applyInstructions,
     String? applyUrl,
     String? pageId,
+    double? payMin,
+    double? payMax,
+    String? payPeriod,
+    String? payCurrency,
+    bool isUrgent = false,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -121,6 +133,11 @@ class JobService {
       'apply_instructions': ?applyInstructions?.trim(),
       'apply_url': ?applyUrl?.trim(),
       'page_id': ?pageId,
+      'pay_min': ?payMin,
+      'pay_max': ?payMax,
+      'pay_period': ?payPeriod,
+      'pay_currency': ?payCurrency,
+      if (isUrgent) 'is_urgent': true,
     };
     final inserted = await PostLimitError.guard(
       PostSection.job,
@@ -161,7 +178,35 @@ class JobService {
         s.contains('work_arrangement') ||
         s.contains('apply_instructions') ||
         s.contains('apply_url') ||
-        s.contains("'page_id'");
+        s.contains("'page_id'") ||
+        s.contains('pay_') ||
+        s.contains('is_urgent');
+  }
+
+  /// Asks the server once whether patch_278 has run, so forms can offer
+  /// its choices (casual work, the new fields, structured pay) only when
+  /// the database will accept them.
+  static Future<bool> probeRedesign() async {
+    if (_probed) return _hasRedesignColumns;
+    try {
+      await _client.from(_table).select('id, is_urgent').limit(1);
+      _hasRedesignColumns = true;
+      _probed = true;
+    } catch (e) {
+      if (_missingColumn(e)) {
+        _hasRedesignColumns = false;
+        _probed = true;
+      }
+    }
+    return _hasRedesignColumns;
+  }
+
+  static bool _probed = false;
+
+  @visibleForTesting
+  static void debugResetRedesign() {
+    _probed = false;
+    _hasRedesignColumns = true;
   }
 
   /// Insert; if the new columns don't exist yet, retry once without them.
@@ -212,6 +257,14 @@ class JobService {
     String? applyInstructions,
     String? applyUrl,
     String? pageId,
+
+    /// Pay is written as a set whenever [payPeriod] is passed, so clearing
+    /// the amount clears it (null) rather than leaving the old number.
+    double? payMin,
+    double? payMax,
+    String? payPeriod,
+    String? payCurrency,
+    bool? isUrgent,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -226,6 +279,13 @@ class JobService {
           'apply_instructions': _blankToNull(applyInstructions),
         if (applyUrl != null) 'apply_url': _blankToNull(applyUrl),
         if (pageId != null) 'page_id': _blankToNull(pageId),
+        if (payPeriod != null) ...{
+          'pay_min': payMin,
+          'pay_max': payMax,
+          'pay_period': _blankToNull(payPeriod),
+          'pay_currency': payCurrency,
+        },
+        'is_urgent': ?isUrgent,
       },
       'title': ?title?.trim(),
       'company': ?company?.trim(),
@@ -417,6 +477,7 @@ class JobFilters {
     this.postType,
     this.sabbathFriendly = false,
     this.sdaInstitution = false,
+    this.urgent = false,
   });
   final String? jobType;
   final String? level;
@@ -427,7 +488,32 @@ class JobFilters {
   final bool sabbathFriendly;
   final bool sdaInstitution;
 
+  /// "Start now" (patch_278).
+  final bool urgent;
+
   static const none = JobFilters();
+
+  JobFilters copyWith({
+    Object? jobType = _keep,
+    Object? level = _keep,
+    Object? workArrangement = _keep,
+    Object? postType = _keep,
+    bool? sabbathFriendly,
+    bool? sdaInstitution,
+    bool? urgent,
+  }) => JobFilters(
+    jobType: jobType == _keep ? this.jobType : jobType as String?,
+    level: level == _keep ? this.level : level as String?,
+    workArrangement: workArrangement == _keep
+        ? this.workArrangement
+        : workArrangement as String?,
+    postType: postType == _keep ? this.postType : postType as String?,
+    sabbathFriendly: sabbathFriendly ?? this.sabbathFriendly,
+    sdaInstitution: sdaInstitution ?? this.sdaInstitution,
+    urgent: urgent ?? this.urgent,
+  );
+
+  static const _keep = Object();
 
   int get activeCount => [
     jobType != null,
@@ -436,6 +522,7 @@ class JobFilters {
     postType != null,
     sabbathFriendly,
     sdaInstitution,
+    urgent,
   ].where((b) => b).length;
 
   bool get isEmpty => activeCount == 0;

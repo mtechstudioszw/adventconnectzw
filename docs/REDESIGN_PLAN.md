@@ -71,7 +71,7 @@ to run in the SQL editor; app features depending on it say so until it runs
 | 4 | Organization Pages (create/manage/follow), church associations | **patch_275** pages, page_admins, page_follows, posts.page_id | code done (directory, Page view, create/edit, admins, follow, post as Page, moderation/verify for super admin); waits on patch_275 |
 | 5 | Marketplace discovery: sections, server-side search/filters/pagination, deterministic ranking + exploration, labelled sponsorship | **patch_276** (security: seller privilege guard) | code done |
 | 6 | Product detail, storefront, seller tools, product form, cart/checkout review | **patch_277** (view counts, server medical-claims rule) | code done |
-| 7 | Jobs: landing, detail, stepped posting form, saved jobs, company profiles (via Pages) | **patch_278** jobs guard, apply fields, page_id, saved_jobs | code done; in-app applications deliberately not built (see notes) |
+| 7 | Jobs: landing, detail, stepped posting form, saved jobs, company profiles (via Pages) | **patch_278** jobs guard, apply fields, page_id, saved_jobs, pay, applications, alerts | code done (v2: every kind of work, Quick apply, alerts) |
 | 8 | Premium foundations: entitlements table, promotion records — **no prices** | **patch_27x** entitlements, promotions | |
 | 9 | QA: tests, analyze, renders of every redesigned screen | no | |
 
@@ -287,4 +287,48 @@ needs a schema change (a later stage), not invented values.
   tracking (needs storage for CVs, privacy rules and moderation — a
   separate decision); view/applicant counts (jobs don't record them, so
   showing any number would be invented); featured jobs and pricing.
+
+### Jobs v2 — "accommodate everyone" (28 Oct 2026, owner request)
+
+Owner: the board wasn't used because it was "not effective… generic", and
+it should serve "garden boys, house girls … medical … professional".
+Honest note given at the time: there are 0 live jobs; design helps trust
+and posting, but supply still has to come from people posting.
+
+- **Find work / Hire someone** switch. Hire mode lists members available
+  for work (SeekerCard) and one-tap role templates to post a vacancy.
+- **Three kinds of work** — Everyday (home & family, building & trades,
+  driving, cleaning & security, shops & hospitality), Skilled & medical,
+  Professional — narrowing to fields; counts are the jobs actually loaded.
+- Quick chips: Start now, Day & casual work, Part-time, Sabbath-friendly,
+  Adventist employers, No experience needed, Remote.
+- **Structured pay** (amount or range, per hour/day/week/month/year/job,
+  currency) — "$15 / day"; also written to salary_range for old builds.
+  Pay leads every card; "Pay not stated" when absent (never "Negotiable").
+- **Start now** (is_urgent) — the one red chip; its own rail.
+- **Quick apply** (job_applications): message + phone; poster notified,
+  Applicants screen (Call / WhatsApp / Message / Shortlist / Not selected);
+  applicant notified on shortlist only; opening marks "Seen". Real
+  applicant count on the job. Max 30 applications/day.
+- **Job alerts** (job_alerts): per field + country (+ keyword); one push
+  per job when a moderator approves a match. Max 10.
+- **My jobs** hub: Applied / Saved / My posts (+ Applicants) / Alerts.
+- Posting: role templates (Gardener, Nanny, Nurse, Accountant…) prefill the
+  form; live card preview on Review.
+- Bug fixed in passing: renew_job set status 'active' (not allowed) so
+  renewing an expired job always failed.
+- Palette: blue/navy marks, green only for status badges, red only for
+  Start now, gold left for the verified tick.
+
+### Reports you can act on (patch_279, 28 Oct 2026, owner request)
+
+Report already existed on jobs, products and stores and reached the
+dashboard, but showed only a type + id and offered Ban only for reports
+about a person. patch_279: server fills who's behind every report; one
+open report per member per item; the queue shows title, preview, current
+state, owner and how many open reports; **Remove** (job → rejected,
+product → hidden with appeal, store → closed with its listings, Page →
+hidden, post → hidden) and **Remove & ban** (also bans and takes down
+everything else they have live). Both dashboards (admin/ and admin-web/)
+updated; they fall back to the old buttons until the patch runs.
 

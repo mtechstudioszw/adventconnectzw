@@ -76,6 +76,7 @@ import '../screens/events/events_screen.dart';
 import '../screens/events/post_event_screen.dart';
 import '../screens/jobs/job_details_screen.dart';
 import '../screens/jobs/jobs_screen.dart';
+import '../screens/jobs/job_applicants_screen.dart';
 import '../screens/jobs/my_jobs_screen.dart';
 import '../screens/jobs/post_job_screen.dart';
 import '../screens/legal/guidelines_screen.dart';
@@ -823,12 +824,23 @@ final GoRouter appRouter = GoRouter(
           name: 'post_job',
           builder: (context, state) => PostJobScreen(
             initialPostType: state.uri.queryParameters['type'],
+            initialCategory: state.uri.queryParameters['category'],
+            initialRole: state.uri.queryParameters['role'],
           ),
         ),
         GoRoute(
           path: 'mine',
           name: 'my_jobs',
-          builder: (context, state) => const MyJobsScreen(),
+          builder: (context, state) =>
+              MyJobsScreen(initialTab: state.uri.queryParameters['tab']),
+        ),
+        GoRoute(
+          path: 'applicants/:id',
+          name: 'job_applicants',
+          builder: (context, state) => JobApplicantsScreen(
+            jobId: state.pathParameters['id'] ?? '',
+            job: state.extra is Job ? state.extra as Job : null,
+          ),
         ),
         GoRoute(
           path: 'edit',

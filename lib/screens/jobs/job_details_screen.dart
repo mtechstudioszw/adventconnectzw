@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../config/countries.dart';
 import '../../config/share_config.dart';
 import '../../models/job_model.dart';
+import '../../services/job_application_service.dart';
 import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -23,6 +24,8 @@ import '../../widgets/expandable_text.dart';
 import '../../widgets/pages/page_tile.dart';
 import '../../widgets/profile/profile_header.dart' show websiteLabel;
 import '../../widgets/screen_shell.dart';
+import '../../widgets/job_card.dart';
+import '../../widgets/jobs/quick_apply_sheet.dart';
 import '../../widgets/verified_tick.dart';
 
 class JobDetailsScreen extends StatefulWidget {
@@ -49,6 +52,11 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   bool _reopening = false;
   bool _renewing = false;
   bool _deleting = false;
+
+  /// The real number of Quick applications (patch_278), null when unknown.
+  int? _applicantCount;
+  List<Job> _similar = const [];
+  String? _extrasFor;
 
   late final AnimationController _entrance;
   late final Animation<double> _fade;
@@ -93,6 +101,110 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
         _loading = false;
       });
     }
+  }
+
+  /// Applicant count and similar jobs, once per job.
+  Future<void> _loadExtras(Job job) async {
+    if (_extrasFor == job.id) return;
+    _extrasFor = job.id;
+    JobApplicationService.loadApplied();
+    final count = await JobApplicationService.count(job.id);
+    List<Job> similar = const [];
+    try {
+      final list = await JobService.fetchJobs(
+        category: job.category,
+        country: job.country,
+        filters: JobFilters(postType: job.postType),
+      );
+      similar = [
+        for (final j in list)
+          if (j.id != job.id) j,
+      ].take(8).toList();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _applicantCount = count;
+      _similar = similar;
+    });
+  }
+
+  bool get _quickApply =>
+      _job != null &&
+      _job!.isHiring &&
+      JobApplicationService.available &&
+      Supabase.instance.client.auth.currentUser != null;
+
+  /// The poster's own routes, for "Or apply directly".
+  List<ApplyRoute> _directRoutes(Job job) => [
+    if ((job.applyUrl ?? '').trim().isNotEmpty)
+      ApplyRoute(
+        'url',
+        Icons.open_in_new_rounded,
+        'Apply online',
+        websiteLabel(job.applyUrl!),
+      ),
+    if ((job.contactEmail ?? '').trim().isNotEmpty)
+      ApplyRoute(
+        'email',
+        Icons.mail_outline,
+        'Email',
+        job.contactEmail!.trim(),
+      ),
+    if ((job.contactPhone ?? '').trim().isNotEmpty) ...[
+      ApplyRoute(
+        'whatsapp',
+        Icons.chat_rounded,
+        'WhatsApp',
+        job.contactPhone!.trim(),
+      ),
+      ApplyRoute('call', Icons.call_outlined, 'Call', job.contactPhone!.trim()),
+    ],
+    const ApplyRoute(
+      'chat',
+      Icons.forum_rounded,
+      'Message in the app',
+      'Ask a question first',
+    ),
+  ];
+
+  Future<void> _runRoute(Job job, String? choice) async {
+    switch (choice) {
+      case 'url':
+        await _openUrl(job.applyUrl!.trim());
+      case 'email':
+        await _emailPoster(job);
+      case 'whatsapp':
+        await _apply();
+      case 'call':
+        await _callPoster();
+      case 'chat':
+        await _messagePoster();
+    }
+  }
+
+  /// Quick apply when it's available, otherwise the poster's own routes.
+  Future<void> _openApplySheet() async {
+    final job = _job;
+    if (job == null) return;
+    if (!_quickApply) return _openContactSheet();
+    final choice = await showQuickApplySheet(
+      context,
+      job: job,
+      routes: _directRoutes(job),
+    );
+    if (!mounted) return;
+    if (choice == 'sent') {
+      setState(() => _applicantCount = (_applicantCount ?? 0) + 1);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Application sent. You'll be notified if you're shortlisted.",
+          ),
+        ),
+      );
+      return;
+    }
+    await _runRoute(job, choice);
   }
 
   bool get _isPoster {
@@ -596,7 +708,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  Future<void> _openApplySheet() async {
+  Future<void> _openContactSheet() async {
     final job = _job;
     if (job == null) return;
     final palette = context.palette;
@@ -706,24 +818,16 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
       ),
     );
     if (!mounted) return;
-    switch (choice) {
-      case 'url':
-        await _openUrl(job.applyUrl!.trim());
-      case 'email':
-        await _emailPoster(job);
-      case 'whatsapp':
-        await _apply();
-      case 'call':
-        await _callPoster();
-      case 'chat':
-        await _messagePoster();
-    }
+    await _runRoute(job, choice);
   }
 
   @override
   Widget build(BuildContext context) {
     final job = _job;
-    if (job != null) _loadEmployer(job);
+    if (job != null) {
+      _loadEmployer(job);
+      _loadExtras(job);
+    }
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: _buildBody(),
@@ -742,9 +846,16 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
 
   Widget _buildActionBar(Job job) {
     final open = job.isOpen && !job.isExpired;
-    return ValueListenableBuilder<Set<String>>(
-      valueListenable: JobService.savedIds,
-      builder: (context, saved, _) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([
+        JobService.savedIds,
+        JobApplicationService.appliedJobIds,
+      ]),
+      builder: (context, _) {
+        final saved = JobService.savedIds.value;
+        final applied = JobApplicationService.appliedJobIds.value.contains(
+          job.id,
+        );
         final isSaved = saved.contains(job.id);
         final palette = context.palette;
         return MarketActionBar(
@@ -786,9 +897,24 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
               ),
             ),
           ),
-          primary: open
+          primary: open && applied
               ? MarketPill(
-                  label: job.isSeeking ? 'Contact this person' : 'Apply now',
+                  label: 'Applied',
+                  leading: Icons.check_circle_rounded,
+                  bg: AppColors.successGreen.withValues(alpha: 0.12),
+                  fg: AppColors.successGreen,
+                  onTap: () => context.pushNamed(
+                    'my_jobs',
+                    queryParameters: {'tab': 'applied'},
+                  ),
+                )
+              : open
+              ? MarketPill(
+                  label: job.isSeeking
+                      ? 'Contact this person'
+                      : _quickApply
+                      ? 'Quick apply'
+                      : 'Apply now',
                   trailing: const Icon(Icons.arrow_forward_rounded, size: 18),
                   bg: AppColors.primaryBlue,
                   fg: AppColors.white,
@@ -978,6 +1104,34 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                       ),
                     ),
                   ),
+                if (_similar.isNotEmpty)
+                  MarketSection(
+                    title: job.isSeeking ? 'Others available' : 'Similar jobs',
+                    child: SizedBox(
+                      height: 156,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        clipBehavior: Clip.none,
+                        itemCount: _similar.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 12),
+                        itemBuilder: (context, i) {
+                          final j = _similar[i];
+                          return SizedBox(
+                            width: 280,
+                            child: JobCard(
+                              job: j,
+                              compact: true,
+                              onTap: () => context.pushReplacementNamed(
+                                'job_details',
+                                pathParameters: {'id': j.id},
+                                extra: j,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1106,6 +1260,53 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
           ].where((s) => s.isNotEmpty).join('  ·  '),
           style: AppTextStyles.bodyMedium.copyWith(color: palette.textMuted),
         ),
+        if (job.payLabel != null || job.isUrgent) ...[
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              if (job.payLabel != null)
+                Flexible(
+                  child: Text(
+                    job.payLabel!,
+                    style: AppTextStyles.headlineSmall.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 22,
+                    ),
+                  ),
+                ),
+              if (job.payLabel != null && job.isUrgent)
+                const SizedBox(width: 10),
+              if (job.isUrgent)
+                job.isSeeking
+                    ? const StatusBadge('Available now')
+                    : const JobChip.urgent(),
+            ],
+          ),
+        ],
+        if (job.isHiring && job.isOpen && _applicantCount != null) ...[
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(
+                Icons.people_outline_rounded,
+                size: 16,
+                color: palette.textMuted,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _applicantCount == 0
+                    ? 'Be one of the first to apply'
+                    : _applicantCount == 1
+                    ? '1 person has applied'
+                    : '$_applicantCount people have applied',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: palette.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -1116,8 +1317,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
       (Icons.trending_up_rounded, 'Experience', job.levelLabel()),
       if (job.workArrangementLabel != null)
         (Icons.home_work_outlined, 'Where', job.workArrangementLabel!),
-      if ((job.salaryRange ?? '').isNotEmpty)
-        (Icons.payments_outlined, 'Pay', job.salaryRange!),
+      // Pay leads the page in large type above these tiles.
       (
         JobCategory.byId(job.category)?.icon ?? Icons.category_outlined,
         'Field',
@@ -1245,6 +1445,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   Widget _buildHowToApply(Job job) {
     final palette = context.palette;
     final routes = [
+      if (_quickApply) 'with Quick apply here',
       if ((job.applyUrl ?? '').isNotEmpty) 'online',
       if ((job.contactEmail ?? '').trim().isNotEmpty) 'by email',
       if ((job.contactPhone ?? '').trim().isNotEmpty) 'by WhatsApp or phone',
@@ -1315,6 +1516,27 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
           spacing: 8,
           runSpacing: 8,
           children: [
+            if (job.isHiring && JobApplicationService.available)
+              FilledButton.icon(
+                onPressed: () => context.pushNamed(
+                  'job_applicants',
+                  pathParameters: {'id': job.id},
+                  extra: job,
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  minimumSize: const Size(0, 44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.people_alt_outlined, size: 18),
+                label: Text(
+                  _applicantCount == null || _applicantCount == 0
+                      ? 'Applicants'
+                      : 'Applicants · $_applicantCount',
+                ),
+              ),
             action(Icons.edit_outlined, 'Edit', _editJob),
             if (job.isOpen && !job.isExpired)
               action(

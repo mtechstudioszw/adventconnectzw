@@ -22,12 +22,19 @@ class ReportService {
     if (user == null) {
       throw const AuthException('Sign in to report content.');
     }
-    await _client.from(_table).insert({
-      'reported_by': user.id,
-      'content_type': contentType,
-      'content_id': contentId,
-      'reason': reason,
-      'details': ?details?.trim(),
-    });
+    try {
+      await _client.from(_table).insert({
+        'reported_by': user.id,
+        'content_type': contentType,
+        'content_id': contentId,
+        'reason': reason,
+        'details': ?details?.trim(),
+      });
+    } on PostgrestException catch (e) {
+      // patch_279 keeps one open report per member per item. Reporting it
+      // again is already done, not a failure.
+      if (e.code == '23505') return;
+      rethrow;
+    }
   }
 }

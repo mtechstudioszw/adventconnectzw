@@ -17,6 +17,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/country_picker_sheet.dart';
+import '../../widgets/job_card.dart';
 import '../../widgets/pages/page_tile.dart';
 import '../widgets/post_form_widgets.dart';
 
@@ -33,7 +34,13 @@ import '../widgets/post_form_widgets.dart';
 /// New posts keep a local draft as they go (user-scoped key, so sign-out
 /// clears it — CLAUDE.md). Edits don't: the job itself is the record.
 class PostJobScreen extends StatefulWidget {
-  const PostJobScreen({super.key, this.existing, this.initialPostType});
+  const PostJobScreen({
+    super.key,
+    this.existing,
+    this.initialPostType,
+    this.initialCategory,
+    this.initialRole,
+  });
 
   /// When non-null, the flow edits [existing] and saves with
   /// JobService.updateJob.
@@ -41,6 +48,11 @@ class PostJobScreen extends StatefulWidget {
 
   /// 'hiring' or 'seeking' — preselected from the Jobs empty state.
   final String? initialPostType;
+
+  /// A role template picked on the Jobs screen ("Gardener" under
+  /// domestic_caregiving) — the flow opens with it filled in.
+  final String? initialCategory;
+  final String? initialRole;
 
   @override
   State<PostJobScreen> createState() => _PostJobScreenState();
@@ -63,6 +75,8 @@ class _PostJobScreenState extends State<PostJobScreen> {
   final _descriptionController = TextEditingController();
   final _requirementsController = TextEditingController();
   final _salaryController = TextEditingController();
+  final _payMinController = TextEditingController();
+  final _payMaxController = TextEditingController();
   final _locationController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
@@ -74,6 +88,14 @@ class _PostJobScreenState extends State<PostJobScreen> {
   final _regionController = TextEditingController();
 
   int _step = 0;
+  String _payPeriod = 'month';
+  String _payCurrency = 'USD';
+  bool _urgent = false;
+  JobKind _templateKind = JobKind.everyday;
+
+  /// patch_278 has run: casual work, the new fields, structured pay and
+  /// "Start now" are offered. Before it, the form is what it was.
+  bool _redesign = JobService.redesignAvailable;
   String _category = 'other';
   String _jobType = 'full_time';
   String _postType = 'hiring';
@@ -115,6 +137,8 @@ class _PostJobScreenState extends State<PostJobScreen> {
     _descriptionController,
     _requirementsController,
     _salaryController,
+    _payMinController,
+    _payMaxController,
     _locationController,
     _phoneController,
     _emailController,
@@ -152,11 +176,30 @@ class _PostJobScreenState extends State<PostJobScreen> {
       _level = ex.level;
       _arrangement = ex.workArrangement;
       _pageId = ex.pageId;
+      _urgent = ex.isUrgent;
+      _payPeriod = ex.payPeriod ?? 'month';
+      _payCurrency = ex.payCurrency ?? 'USD';
+      if (ex.payMin != null || ex.payMax != null) {
+        _payMinController.text = _num(ex.payMin ?? ex.payMax);
+        if (ex.payMax != null && ex.payMax != ex.payMin) {
+          _payMaxController.text = _num(ex.payMax);
+        }
+      } else {
+        _seedPayFromText(ex.salaryRange);
+      }
       // Edits open on the role; the listing kind rarely changes.
       _step = 1;
     } else {
       if (widget.initialPostType == 'seeking') _postType = 'seeking';
       _restoreDraft();
+      final cat = JobCategory.byId(widget.initialCategory);
+      final role = cat?.roles
+          .where((r) => r.title == widget.initialRole)
+          .firstOrNull;
+      if (cat != null && role != null && !_draftRestored) {
+        _applyRole(cat, role);
+        _step = 1;
+      }
     }
     // Country first, then the province/region hanging off it.
     _country ??= ex?.country ?? AuthService.currentCountry();
@@ -167,8 +210,80 @@ class _PostJobScreenState extends State<PostJobScreen> {
         _regionController.text = ex.province ?? '';
       }
     }
+    final local = Countries.currencyOf(_country);
+    if (ex == null && !_draftRestored && local != null) {
+      // USD leads where it's what people are paid in (ZW); else local.
+      _payCurrency = Countries.currencyChoices(_country).first;
+    }
     _loadPages();
+    JobService.probeRedesign().then((ok) {
+      if (mounted && ok != _redesign) setState(() => _redesign = ok);
+    });
   }
+
+  static String _num(double? v) {
+    if (v == null) return '';
+    return v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
+  }
+
+  /// An older job's free-text pay ("\$400 – \$550 / month") pre-fills the
+  /// amount boxes when the numbers are clear; otherwise it stays as typed.
+  void _seedPayFromText(String? text) {
+    final t = (text ?? '').toLowerCase();
+    final nums = RegExp(r'\d[\d,]*(?:\.\d+)?')
+        .allMatches(t)
+        .map((m) => double.tryParse(m.group(0)!.replaceAll(',', '')))
+        .whereType<double>()
+        .toList();
+    if (nums.isEmpty || nums.length > 2) return;
+    _payMinController.text = _num(nums.first);
+    if (nums.length == 2) _payMaxController.text = _num(nums.last);
+    for (final e in payPeriods.keys) {
+      if (t.contains(e)) _payPeriod = e;
+    }
+    if (t.contains('/ hr') || t.contains('/hr')) _payPeriod = 'hour';
+  }
+
+  /// Fills the form from a role template. Never overwrites what the poster
+  /// already wrote.
+  void _applyRole(JobCategory cat, JobRole role) {
+    _category = cat.id;
+    _titleController.text = role.title;
+    _jobType = role.type == 'casual' && !_redesign ? 'contract' : role.type;
+    _level = role.level;
+    _payPeriod = role.period;
+    if (_descriptionController.text.trim().isEmpty &&
+        role.description.isNotEmpty) {
+      _descriptionController.text = _hiring
+          ? role.description
+          : 'I am looking for work as a ${role.title.toLowerCase()}. ';
+    }
+    if (_requirementsController.text.trim().isEmpty &&
+        role.requirements.isNotEmpty &&
+        _hiring) {
+      _requirementsController.text = role.requirements;
+    }
+  }
+
+  double? _parse(TextEditingController c) =>
+      double.tryParse(c.text.trim().replaceAll(',', ''));
+
+  double? get _payMin => _parse(_payMinController);
+  double? get _payMax => _parse(_payMaxController) ?? _payMin;
+  bool get _hasPay => _payMin != null;
+
+  /// What the pay reads as — also written to salary_range so older app
+  /// versions still show it.
+  String? get _payText => _redesign
+      ? (_hasPay
+            ? Job.formatPay(
+                min: _payMin,
+                max: _payMax,
+                period: _payPeriod,
+                currency: _payCurrency,
+              )
+            : null)
+      : _orNull(_salaryController);
 
   Future<void> _loadPages() async {
     try {
@@ -196,6 +311,11 @@ class _PostJobScreenState extends State<PostJobScreen> {
     'description': _descriptionController.text,
     'requirements': _requirementsController.text,
     'salary': _salaryController.text,
+    'pay_min': _payMinController.text,
+    'pay_max': _payMaxController.text,
+    'pay_period': _payPeriod,
+    'pay_currency': _payCurrency,
+    'urgent': _urgent,
     'location': _locationController.text,
     'phone': _phoneController.text,
     'email': _emailController.text,
@@ -233,6 +353,13 @@ class _PostJobScreenState extends State<PostJobScreen> {
       _descriptionController.text = t('description');
       _requirementsController.text = t('requirements');
       _salaryController.text = t('salary');
+      _payMinController.text = t('pay_min');
+      _payMaxController.text = t('pay_max');
+      _payPeriod = payPeriods.containsKey(d['pay_period'])
+          ? d['pay_period'] as String
+          : 'month';
+      _payCurrency = d['pay_currency'] as String? ?? 'USD';
+      _urgent = d['urgent'] == true;
       _locationController.text = t('location');
       _phoneController.text = t('phone');
       _emailController.text = t('email');
@@ -273,6 +400,8 @@ class _PostJobScreenState extends State<PostJobScreen> {
       _country = AuthService.currentCountry();
       _sabbathFriendly = false;
       _isSdaInstitution = false;
+      _urgent = false;
+      _payPeriod = 'month';
       _draftRestored = false;
     });
   }
@@ -308,6 +437,22 @@ class _PostJobScreenState extends State<PostJobScreen> {
     switch (_step) {
       case 2:
         if (_isZimbabwe && _province == null) return 'Select a province.';
+      case 3:
+        if (_redesign) {
+          final min = _parse(_payMinController);
+          final max = _parse(_payMaxController);
+          final minText = _payMinController.text.trim();
+          if (minText.isNotEmpty && min == null) {
+            return 'Enter pay as a number.';
+          }
+          if (_payMaxController.text.trim().isNotEmpty && max == null) {
+            return 'Enter the top of the range as a number.';
+          }
+          if (min == null && max != null) return 'Add the starting amount.';
+          if (min != null && max != null && max < min) {
+            return 'The top of the range is lower than the start.';
+          }
+        }
       case 4:
         final any = [
           _phoneController,
@@ -372,7 +517,12 @@ class _PostJobScreenState extends State<PostJobScreen> {
           jobType: _jobType,
           postType: _postType,
           level: _level,
-          salaryRange: _orNull(_salaryController),
+          salaryRange: _payText,
+          payMin: _redesign && _hasPay ? _payMin : null,
+          payMax: _redesign && _hasPay ? _payMax : null,
+          payPeriod: _redesign && _hasPay ? _payPeriod : null,
+          payCurrency: _redesign && _hasPay ? _payCurrency : null,
+          isUrgent: _redesign && _urgent,
           sabbathFriendly: _sabbathFriendly,
           isSdaInstitution: _isSdaInstitution,
           contactPhone: _orNull(_phoneController),
@@ -403,7 +553,12 @@ class _PostJobScreenState extends State<PostJobScreen> {
         jobType: _jobType,
         postType: _postType,
         level: _level,
-        salaryRange: _salaryController.text,
+        salaryRange: _payText ?? '',
+        payMin: _hasPay ? _payMin : null,
+        payMax: _hasPay ? _payMax : null,
+        payPeriod: _redesign ? (_hasPay ? _payPeriod : '') : null,
+        payCurrency: _hasPay ? _payCurrency : null,
+        isUrgent: _redesign ? _urgent : null,
         country: _country,
         province: _regionValue,
         location: _locationController.text,
@@ -426,7 +581,7 @@ class _PostJobScreenState extends State<PostJobScreen> {
           (ex.contactPhone ?? '') != _phoneController.text.trim() ||
           (ex.contactEmail ?? '') != _emailController.text.trim() ||
           (ex.applyUrl ?? '') != _applyUrlController.text.trim() ||
-          (ex.salaryRange ?? '') != _salaryController.text.trim() ||
+          (ex.payLabel ?? '') != (_payText ?? '') ||
           ex.pageId != _pageId;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -668,8 +823,98 @@ class _PostJobScreenState extends State<PostJobScreen> {
           selected: !_hiring,
           onTap: () => setState(() => _postType = 'seeking'),
         ),
+        if (!_isEdit) ..._buildTemplates(),
       ],
     );
+  }
+
+  /// "Start from a common role" — one tap fills the title, field, type and
+  /// a first draft, then moves on. Covers a gardener as well as a doctor.
+  List<Widget> _buildTemplates() {
+    final palette = context.palette;
+    final cats = [
+      for (final c in JobCategory.ofKind(_templateKind))
+        if (c.roles.isNotEmpty && (_redesign || !c.needsPatch)) c,
+    ];
+    return [
+      const SizedBox(height: 26),
+      Text(
+        _hiring ? 'Start from a common role' : 'What work do you do?',
+        style: AppTextStyles.titleMedium.copyWith(
+          color: palette.text,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        'Tap one and we fill in the basics — you can change anything.',
+        style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+      ),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          for (final k in JobKind.values) ...[
+            if (k != JobKind.everyday) const SizedBox(width: 8),
+            Expanded(
+              child: _choice(
+                label: switch (k) {
+                  JobKind.everyday => 'Everyday',
+                  JobKind.skilled => 'Skilled',
+                  JobKind.professional => 'Professional',
+                },
+                selected: _templateKind == k,
+                onTap: () => setState(() => _templateKind = k),
+                expand: true,
+              ),
+            ),
+          ],
+        ],
+      ),
+      const SizedBox(height: 14),
+      for (final c in cats) ...[
+        Row(
+          children: [
+            Icon(c.icon, size: 16, color: AppColors.primaryBlue),
+            const SizedBox(width: 6),
+            Text(
+              c.label,
+              style: AppTextStyles.labelLarge.copyWith(
+                color: palette.textMuted,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final r in c.roles)
+              ActionChip(
+                label: Text(r.title),
+                onPressed: () {
+                  setState(() {
+                    _applyRole(c, r);
+                    _step = 1;
+                  });
+                  _saveDraft();
+                },
+                labelStyle: AppTextStyles.labelMedium.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w600,
+                ),
+                backgroundColor: palette.card,
+                side: BorderSide(color: palette.divider),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+      ],
+    ];
   }
 
   Widget _buildRoleStep() {
@@ -719,17 +964,39 @@ class _PostJobScreenState extends State<PostJobScreen> {
           const SizedBox(height: 18),
           PostFormLabeledField(
             label: 'Field',
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final c in JobCategory.all)
-                  _choice(
-                    label: c.label,
-                    icon: c.icon,
-                    selected: _category == c.id,
-                    onTap: () => setState(() => _category = c.id),
+                for (final k in JobKind.values) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, bottom: 8),
+                    child: Text(
+                      k.label,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.palette.textMuted,
+                      ),
+                    ),
                   ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final c in [
+                        ...JobCategory.ofKind(k),
+                        if (k == JobKind.professional)
+                          JobCategory.byId('other')!,
+                      ])
+                        if (_redesign || !c.needsPatch || _category == c.id)
+                          _choice(
+                            label: c.label,
+                            icon: c.icon,
+                            selected: _category == c.id,
+                            onTap: () => setState(() => _category = c.id),
+                          ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
               ],
             ),
           ),
@@ -822,8 +1089,38 @@ class _PostJobScreenState extends State<PostJobScreen> {
     required bool selected,
     required VoidCallback onTap,
     IconData? icon,
+    bool expand = false,
   }) {
     final palette = context.palette;
+    if (expand) {
+      return Material(
+        color: selected
+            ? AppColors.primaryBlue.withValues(alpha: 0.12)
+            : palette.card,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected ? AppColors.primaryBlue : palette.divider,
+              ),
+            ),
+            child: Text(
+              label,
+              style: AppTextStyles.labelMedium.copyWith(
+                color: selected ? AppColors.primaryBlue : palette.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return ChoiceChip(
       avatar: icon == null
           ? null
@@ -865,11 +1162,12 @@ class _PostJobScreenState extends State<PostJobScreen> {
                   runSpacing: 8,
                   children: [
                     for (final e in jobTypes.entries)
-                      _choice(
-                        label: e.value,
-                        selected: _jobType == e.key,
-                        onTap: () => setState(() => _jobType = e.key),
-                      ),
+                      if (e.key != 'casual' || _redesign || _jobType == e.key)
+                        _choice(
+                          label: e.value,
+                          selected: _jobType == e.key,
+                          onTap: () => setState(() => _jobType = e.key),
+                        ),
                   ],
                 ),
               ),
@@ -928,6 +1226,22 @@ class _PostJobScreenState extends State<PostJobScreen> {
             ],
           ),
         ),
+        if (_redesign) ...[
+          const SizedBox(height: 16),
+          PostFormCard(
+            child: _ToggleRow(
+              icon: Icons.bolt_rounded,
+              iconColor: AppColors.red,
+              iconBg: AppColors.red.withValues(alpha: 0.10),
+              title: _hiring ? 'Start now' : 'Available now',
+              subtitle: _hiring
+                  ? 'You need someone urgently. Shown in the "Start now" row.'
+                  : 'You can start straight away.',
+              value: _urgent,
+              onChanged: (v) => setState(() => _urgent = v),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         _buildLocationCard(),
       ],
@@ -1053,15 +1367,17 @@ class _PostJobScreenState extends State<PostJobScreen> {
               const SizedBox(height: 18),
               PostFormLabeledField(
                 label: _hiring ? 'Pay (optional)' : 'Rate you ask (optional)',
-                child: TextFormField(
-                  controller: _salaryController,
-                  maxLength: 60,
-                  style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
-                  decoration: postFormFilledDecoration(
-                    icon: Icons.payments_outlined,
-                    hint: 'e.g. USD 600–900 / month',
-                  ),
-                ),
+                child: _redesign
+                    ? _buildPayFields()
+                    : TextFormField(
+                        controller: _salaryController,
+                        maxLength: 60,
+                        style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                        decoration: postFormFilledDecoration(
+                          icon: Icons.payments_outlined,
+                          hint: 'e.g. USD 600–900 / month',
+                        ),
+                      ),
               ),
             ],
           ),
@@ -1099,6 +1415,129 @@ class _PostJobScreenState extends State<PostJobScreen> {
       ],
     );
   }
+
+  /// Amount (or a range), the period and the currency — so a day's work
+  /// reads "\$15 / day" and a salary "\$900–1,200 / month".
+  Widget _buildPayFields() {
+    final palette = context.palette;
+    final currencies = {
+      ...Countries.currencyChoices(_country),
+      _payCurrency,
+    }.toList();
+    InputDecoration dec(String hint) => postFormFilledDecoration(
+      icon: Icons.payments_outlined,
+      hint: hint,
+    ).copyWith(counterText: '');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _payMinController,
+                maxLength: 12,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                onChanged: (_) => setState(() {}),
+                style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                decoration: dec('Amount'),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text('–', style: TextStyle(color: palette.textMuted)),
+            ),
+            Expanded(
+              child: TextFormField(
+                controller: _payMaxController,
+                maxLength: 12,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                onChanged: (_) => setState(() {}),
+                style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                decoration: dec('Up to (optional)'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final e in payPeriods.entries)
+              _choice(
+                label: e.value.label,
+                selected: _payPeriod == e.key,
+                onTap: () => setState(() => _payPeriod = e.key),
+              ),
+          ],
+        ),
+        if (currencies.length > 1) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final c in currencies)
+                _choice(
+                  label: c,
+                  selected: _payCurrency == c,
+                  onTap: () => setState(() => _payCurrency = c),
+                ),
+            ],
+          ),
+        ],
+        if (_payText != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Shows as  ${_payText!}',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: AppColors.primaryBlue,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ] else ...[
+          const SizedBox(height: 8),
+          Text(
+            'Jobs that show pay get more replies. Leave blank to agree it '
+            'with the person.',
+            style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// What the listing will look like in the list, from the form as it is.
+  Job _previewJob() => Job(
+    id: 'preview',
+    posterId: '',
+    title: _titleController.text.trim().isEmpty
+        ? 'Job title'
+        : _titleController.text.trim(),
+    company: _companyController.text.trim(),
+    createdAt: DateTime.now(),
+    country: _country,
+    province: _regionValue,
+    location: _locationController.text.trim(),
+    type: _jobType,
+    description: _descriptionController.text.trim(),
+    category: _category,
+    postType: _postType,
+    level: _level,
+    salaryRange: _redesign ? null : _orNull(_salaryController),
+    payMin: _redesign && _hasPay ? _payMin : null,
+    payMax: _redesign && _hasPay ? _payMax : null,
+    payPeriod: _payPeriod,
+    payCurrency: _payCurrency,
+    isUrgent: _redesign && _urgent,
+    sabbathFriendly: _sabbathFriendly,
+    isSdaInstitution: _isSdaInstitution,
+    workArrangement: _arrangement,
+  );
 
   Widget _buildApplyStep() {
     return Column(
@@ -1221,8 +1660,8 @@ class _PostJobScreenState extends State<PostJobScreen> {
       if (_arrangement != null)
         ('Arrangement', workArrangements[_arrangement] ?? '', 2),
       ('Location', place, 2),
-      if (_salaryController.text.trim().isNotEmpty)
-        ('Pay', _salaryController.text.trim(), 3),
+      if (_payText != null) ('Pay', _payText!, 3),
+      if (_redesign && _urgent) (_hiring ? 'Start' : 'Available', 'Now', 2),
       if (_sabbathFriendly) ('Sabbath', 'Sabbath-friendly', 3),
       if (_hiring && _isSdaInstitution) ('Employer type', 'Adventist', 3),
       if (_phoneController.text.trim().isNotEmpty)
@@ -1232,9 +1671,24 @@ class _PostJobScreenState extends State<PostJobScreen> {
       if (_applyUrlController.text.trim().isNotEmpty && _hiring)
         ('Apply link', _applyUrlController.text.trim(), 4),
     ];
+    final preview = _previewJob();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Text(
+          'How it will look',
+          style: AppTextStyles.labelLarge.copyWith(
+            color: palette.textMuted,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        IgnorePointer(
+          child: preview.isSeeking
+              ? SeekerCard(job: preview, onTap: () {})
+              : JobCard(job: preview, onTap: () {}),
+        ),
+        const SizedBox(height: 18),
         _hint(
           _isEdit
               ? 'Check your changes. Editing the employer, contact details '

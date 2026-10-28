@@ -6,11 +6,13 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
-/// Jobs filters (applied in the query): listing type, employment type,
+/// Jobs filters (applied in the query): start now, employment type,
 /// experience, work arrangement, Sabbath-friendly, Adventist employers.
+/// [hire] words it for an employer browsing people available for work.
 Future<JobFilters?> showJobFilterSheet(
   BuildContext context, {
   required JobFilters current,
+  bool hire = false,
 }) {
   return showModalBottomSheet<JobFilters>(
     context: context,
@@ -19,20 +21,21 @@ Future<JobFilters?> showJobFilterSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (_) => _JobFilterSheet(current: current),
+    builder: (_) => _JobFilterSheet(current: current, hire: hire),
   );
 }
 
 class _JobFilterSheet extends StatefulWidget {
-  const _JobFilterSheet({required this.current});
+  const _JobFilterSheet({required this.current, required this.hire});
   final JobFilters current;
+  final bool hire;
 
   @override
   State<_JobFilterSheet> createState() => _JobFilterSheetState();
 }
 
 class _JobFilterSheetState extends State<_JobFilterSheet> {
-  late String? _postType = widget.current.postType;
+  late bool _urgent = widget.current.urgent;
   late String? _jobType = widget.current.jobType;
   late String? _level = widget.current.level;
   late String? _arrangement = widget.current.workArrangement;
@@ -108,23 +111,18 @@ class _JobFilterSheetState extends State<_JobFilterSheet> {
                   ),
                 ],
               ),
-              _label('Show'),
-              _choices(
-                const {
-                  null: 'Everything',
-                  'hiring': 'Vacancies',
-                  'seeking': 'People looking for work',
-                },
-                _postType,
-                (v) => setState(() => _postType = v),
-              ),
               _label('Type'),
               _choices(
-                {null: 'Any', ...jobTypes},
+                {
+                  null: 'Any',
+                  for (final e in jobTypes.entries)
+                    if (e.key != 'casual' || JobService.redesignAvailable)
+                      e.key: e.value,
+                },
                 _jobType,
                 (v) => setState(() => _jobType = v),
               ),
-              _label('Experience'),
+              _label(widget.hire ? 'Experience' : 'Experience needed'),
               _choices(
                 {null: 'Any', for (final l in JobLevel.all) l.id: l.label},
                 _level,
@@ -140,20 +138,31 @@ class _JobFilterSheetState extends State<_JobFilterSheet> {
                 ),
               ],
               const SizedBox(height: 8),
+              if (JobService.redesignAvailable)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  activeThumbColor: AppColors.primaryBlue,
+                  value: _urgent,
+                  onChanged: (v) => setState(() => _urgent = v),
+                  title: Text(widget.hire ? 'Available now' : 'Start now'),
+                ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 activeThumbColor: AppColors.primaryBlue,
                 value: _sabbath,
                 onChanged: (v) => setState(() => _sabbath = v),
-                title: const Text('Sabbath-friendly hours'),
+                title: Text(
+                  widget.hire ? 'Keeps the Sabbath' : 'Sabbath-friendly hours',
+                ),
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                activeThumbColor: AppColors.primaryBlue,
-                value: _sda,
-                onChanged: (v) => setState(() => _sda = v),
-                title: const Text('Adventist institutions'),
-              ),
+              if (!widget.hire)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  activeThumbColor: AppColors.primaryBlue,
+                  value: _sda,
+                  onChanged: (v) => setState(() => _sda = v),
+                  title: const Text('Adventist institutions'),
+                ),
               const SizedBox(height: 12),
               SizedBox(
                 height: 50,
@@ -161,7 +170,7 @@ class _JobFilterSheetState extends State<_JobFilterSheet> {
                   onPressed: () => Navigator.pop(
                     context,
                     JobFilters(
-                      postType: _postType,
+                      urgent: _urgent,
                       jobType: _jobType,
                       level: _level,
                       workArrangement: _arrangement,
@@ -175,7 +184,7 @@ class _JobFilterSheetState extends State<_JobFilterSheet> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: const Text('Show jobs'),
+                  child: Text(widget.hire ? 'Show people' : 'Show jobs'),
                 ),
               ),
             ],

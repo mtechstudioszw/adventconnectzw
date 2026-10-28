@@ -1780,7 +1780,7 @@ class _HomeScreenState extends State<HomeScreen>
   /// Horizontal rail of open job listings for the mixed home feed.
   Widget _buildJobsRow() {
     return SizedBox(
-      height: 150,
+      height: 156,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1791,6 +1791,7 @@ class _HomeScreenState extends State<HomeScreen>
           return SizedBox(
             width: 290,
             child: JobCard(
+              compact: true,
               job: j,
               onTap: () => context.pushNamed(
                 'job_details',

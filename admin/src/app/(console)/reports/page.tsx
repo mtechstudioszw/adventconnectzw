@@ -17,7 +17,35 @@ type Report = {
   status: string;
   action_taken: string | null;
   created_at: string;
+  // patch_279 — what was reported and who is behind it. Absent (undefined)
+  // until the patch runs; the page then falls back to the bare id.
+  content_title?: string | null;
+  content_preview?: string | null;
+  content_state?: string | null;
+  reported_user_id?: string | null;
+  reported_user_name?: string | null;
+  reported_user_banned?: boolean;
+  open_reports_on_content?: number;
 };
+
+const TYPE_LABEL: Record<string, string> = {
+  job: "Job",
+  product: "Product",
+  seller: "Store",
+  page: "Page",
+  post: "Post",
+  user: "Member",
+  profile: "Member",
+  message: "Message",
+  comment: "Comment",
+  event: "Event",
+  prayer: "Prayer",
+  news: "News",
+  story: "Story",
+};
+
+// Types patch_279 can take down (people are handled by the ban).
+const REMOVABLE = new Set(["job", "product", "seller", "page", "post"]);
 
 const FILTERS = ["pending", "actioned", "dismissed", "all"] as const;
 
@@ -30,8 +58,8 @@ export default function ReportsPage() {
       rpcName="admin_list_reports"
       rpcArgs={{ p_status: filter }}
       title="Reports"
-      sub="Reported posts, messages and accounts. Replying tells the reporter it was looked at."
-      columns={["Reported", "Reason", "Reporter", "Status", ""]}
+      sub="Reported jobs, products, stores, posts and accounts. Remove takes the item down; Remove & ban also bans whoever posted it and takes down everything else they have live."
+      columns={["Reported", "Reason", "Posted by", "Reporter", "Status", ""]}
       emptyTitle={filter === "pending" ? "No open reports" : "Nothing here"}
       emptySub={
         filter === "pending" ? "Nothing is waiting to be looked at." : undefined
@@ -42,18 +70,36 @@ export default function ReportsPage() {
         // actioned and the account banned in one step rather than copying an
         // id across to the Members screen.
         const banId =
-          r.content_type === "user" || r.content_type === "profile" ? r.content_id : "";
+          r.content_type === "user" || r.content_type === "profile"
+            ? r.content_id
+            : (r.reported_user_id ?? "");
         const open = r.status === "pending";
+        const enriched = r.content_title !== undefined;
+        const removable = enriched && REMOVABLE.has(r.content_type);
+        const many = (r.open_reports_on_content ?? 0) > 1;
+
 
         return (
           <tr key={r.id}>
-            <td>
-              <b>{r.content_type}</b>
-              <div className="meta mono">{r.content_id}</div>
+            <td style={{ maxWidth: 320 }}>
+              <div className="meta">{TYPE_LABEL[r.content_type] ?? r.content_type}</div>
+              <b>{r.content_title || r.content_id}</b>
+              {r.content_preview ? (
+                <div className="meta">{r.content_preview}</div>
+              ) : null}
+              <div className="meta">
+                {r.content_state ? <>Now: {r.content_state} · </> : null}
+                <span className="mono">#{r.content_id}</span>
+                {many ? <> · <b>{r.open_reports_on_content} open reports</b></> : null}
+              </div>
             </td>
             <td>
               {r.reason}
               {r.details ? <div className="meta">{r.details}</div> : null}
+            </td>
+            <td>
+              {r.reported_user_name ?? (banId ? "Member" : "—")}
+              {r.reported_user_banned ? <div className="meta">Banned</div> : null}
             </td>
             <td>
               {r.reporter_name}
@@ -112,7 +158,61 @@ export default function ReportsPage() {
                     Resolve
                   </BusyButton>
 
-                  {banId && can("owner") ? (
+                  {removable ? (
+                    <BusyButton
+                      className="btn red sm"
+                      onClick={async () => {
+                        const reason = await ask({
+                          title: `Remove this ${(TYPE_LABEL[r.content_type] ?? "item").toLowerCase()}`,
+                          sub: "It comes down for everyone and the person who posted it is told why. Every open report on it is closed.",
+                          input: { placeholder: "Reason they will see, e.g. Asked applicants for money", required: true },
+                          confirmLabel: "Remove",
+                          tone: "red",
+                        });
+                        if (!reason) return;
+                        await act(
+                          () =>
+                            rpc("admin_takedown_report", {
+                              p_report_id: r.id,
+                              p_reason: reason,
+                              p_ban: false,
+                            }),
+                          "Removed and report closed.",
+                        );
+                      }}
+                    >
+                      Remove
+                    </BusyButton>
+                  ) : null}
+
+                  {enriched && banId && !r.reported_user_banned && can("owner") ? (
+                    <BusyButton
+                      className="btn red sm"
+                      onClick={async () => {
+                        const reason = await ask({
+                          title: "Remove and ban",
+                          sub: `Bans ${r.reported_user_name ?? "this member"} and takes down everything they have live — jobs, store and listings. They are notified.`,
+                          input: { placeholder: "Reason (recorded and shown to them)", required: true },
+                          confirmLabel: "Remove & ban",
+                          tone: "red",
+                        });
+                        if (!reason) return;
+                        await act(
+                          () =>
+                            rpc("admin_takedown_report", {
+                              p_report_id: r.id,
+                              p_reason: reason,
+                              p_ban: true,
+                            }),
+                          "Removed, account banned, report closed.",
+                        );
+                      }}
+                    >
+                      Remove &amp; ban
+                    </BusyButton>
+                  ) : null}
+
+                  {!enriched && banId && can("owner") ? (
                     <BusyButton
                       className="btn red sm"
                       onClick={async () => {

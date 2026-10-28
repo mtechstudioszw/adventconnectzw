@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../config/countries.dart';
+import '../../models/job_application_model.dart';
 import '../../models/job_model.dart';
+import '../../services/auth_service.dart';
+import '../../services/job_application_service.dart';
 import '../../services/job_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -11,11 +15,19 @@ import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/shimmer_loaders.dart';
 
-/// The poster's own listings with their real moderation status (brief
-/// §15, employer tools). Nothing here is estimated: the status is the
-/// row's, and views/applicants aren't shown because jobs don't record them.
+/// My jobs — one place for both sides (jobs redesign v2):
+///   * Applied — every Quick application and where it stands (Sent, Seen
+///     by employer, Shortlisted, Not selected); withdraw.
+///   * Saved — bookmarked jobs.
+///   * My posts — each listing with its real moderation status and its
+///     Applicants.
+///   * Alerts — "tell me when…" subscriptions.
+/// Nothing is estimated: every status is the row's own.
 class MyJobsScreen extends StatefulWidget {
-  const MyJobsScreen({super.key});
+  const MyJobsScreen({super.key, this.initialTab});
+
+  /// 'applied' | 'saved' | 'posts' | 'alerts'.
+  final String? initialTab;
 
   @override
   State<MyJobsScreen> createState() => _MyJobsScreenState();
@@ -49,10 +61,24 @@ extension JobPostStateX on JobPostState {
   };
 }
 
-class _MyJobsScreenState extends State<MyJobsScreen> {
-  List<Job>? _jobs;
+const _tabs = ['applied', 'saved', 'posts', 'alerts'];
+
+class _MyJobsScreenState extends State<MyJobsScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tab = TabController(
+    length: _tabs.length,
+    vsync: this,
+    initialIndex: _tabs.contains(widget.initialTab)
+        ? _tabs.indexOf(widget.initialTab!)
+        : 0,
+  );
+
+  List<JobApplication>? _applied;
+  List<Job>? _saved;
+  List<Job>? _posts;
+  final Map<String, int?> _counts = {};
   String? _error;
-  JobPostState? _filter;
+  JobPostState? _postFilter;
 
   @override
   void initState() {
@@ -60,13 +86,35 @@ class _MyJobsScreenState extends State<MyJobsScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _tab.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     setState(() => _error = null);
-    try {
-      final jobs = await JobService.fetchMyJobs();
-      if (mounted) setState(() => _jobs = jobs);
-    } catch (_) {
-      if (mounted) setState(() => _error = "Couldn't load your job posts.");
+    await Future.wait([
+      JobApplicationService.mine()
+          .then((v) => _applied = v)
+          .catchError((_) => _applied = const <JobApplication>[]),
+      JobService.loadSaved()
+          .then((_) => JobService.fetchSavedJobs())
+          .then((v) => _saved = v)
+          .catchError((_) => _saved = const <Job>[]),
+      JobService.fetchMyJobs().then((v) => _posts = v).catchError((_) {
+        _error = "Couldn't load your job posts.";
+        return _posts = const <Job>[];
+      }),
+      JobAlertService.load(),
+    ]);
+    if (!mounted) return;
+    setState(() {});
+    for (final j in _posts ?? const <Job>[]) {
+      if (!j.isHiring) continue;
+      JobApplicationService.count(j.id).then((n) {
+        if (mounted) setState(() => _counts[j.id] = n);
+      });
     }
   }
 
@@ -84,143 +132,543 @@ class _MyJobsScreenState extends State<MyJobsScreen> {
     if (made == true && mounted) _load();
   }
 
+  Future<void> _withdraw(JobApplication a) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Withdraw application?'),
+        content: const Text(
+          'The employer will no longer see it. You can apply again while '
+          'the job is open.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Withdraw'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await JobApplicationService.withdraw(a.id, a.jobId);
+      await _load();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't withdraw. Try again.")),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final jobs = _jobs;
-    final counts = <JobPostState, int>{};
-    for (final j in jobs ?? const <Job>[]) {
-      counts.update(jobPostState(j), (n) => n + 1, ifAbsent: () => 1);
-    }
-    final shown = jobs == null
-        ? const <Job>[]
-        : _filter == null
-        ? jobs
-        : jobs.where((j) => jobPostState(j) == _filter).toList();
-
+    final palette = context.palette;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
-        child: BrandedRefreshIndicator(
-          color: AppColors.primaryBlue,
-          onRefresh: _load,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(
-                child: ScreenHero(
-                  title: 'My job posts',
-                  tagline: 'JOBS',
-                  subtitle: 'Every listing you posted, and where it stands',
-                  fallbackRoute: 'jobs',
-                  trailing: HeaderIconButton(
-                    icon: Icons.add_rounded,
-                    tooltip: 'Post a job',
-                    onTap: _post,
+        child: NestedScrollView(
+          headerSliverBuilder: (context, _) => [
+            SliverToBoxAdapter(
+              child: ScreenHero(
+                title: 'My jobs',
+                tagline: 'JOBS',
+                subtitle: 'Applications, saved jobs, your posts and alerts',
+                fallbackRoute: 'jobs',
+                trailing: HeaderIconButton(
+                  icon: Icons.add_rounded,
+                  tooltip: 'Post a job',
+                  onTap: _post,
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  height: 44,
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: palette.cardMuted,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: TabBar(
+                    controller: _tab,
+                    dividerColor: Colors.transparent,
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    indicator: BoxDecoration(
+                      color: palette.card,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    labelColor: palette.text,
+                    unselectedLabelColor: palette.textMuted,
+                    labelStyle: AppTextStyles.labelMedium.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                    unselectedLabelStyle: AppTextStyles.labelMedium,
+                    labelPadding: EdgeInsets.zero,
+                    tabs: const [
+                      Tab(text: 'Applied'),
+                      Tab(text: 'Saved'),
+                      Tab(text: 'My posts'),
+                      Tab(text: 'Alerts'),
+                    ],
                   ),
                 ),
               ),
-              if (jobs != null && jobs.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 44,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      children: [
-                        _StateChip(
-                          label: 'All · ${jobs.length}',
-                          selected: _filter == null,
-                          onTap: () => setState(() => _filter = null),
-                        ),
-                        for (final s in JobPostState.values)
-                          if ((counts[s] ?? 0) > 0)
-                            _StateChip(
-                              label: '${s.label} · ${counts[s]}',
-                              selected: _filter == s,
-                              onTap: () => setState(() => _filter = s),
-                            ),
-                      ],
-                    ),
-                  ),
+            ),
+          ],
+          body: TabBarView(
+            controller: _tab,
+            children: [
+              _refreshable(_buildApplied()),
+              _refreshable(_buildSaved()),
+              _refreshable(_buildPosts()),
+              _refreshable(_buildAlerts()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _refreshable(List<Widget> children) => BrandedRefreshIndicator(
+    color: AppColors.primaryBlue,
+    onRefresh: _load,
+    child: ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+      children: children,
+    ),
+  );
+
+  Widget _loader() =>
+      SizedBox(height: 480, child: ShimmerLoaders.cardList(count: 3));
+
+  Widget _empty(
+    IconData icon,
+    String title,
+    String message, {
+    String? action,
+    VoidCallback? onAction,
+  }) => Padding(
+    padding: const EdgeInsets.only(top: 12),
+    child: EmptyStateCard(
+      icon: icon,
+      title: title,
+      message: message,
+      action: action == null
+          ? null
+          : FilledButton(onPressed: onAction, child: Text(action)),
+    ),
+  );
+
+  Widget _statusLine(String label, Color color) => Padding(
+    padding: const EdgeInsets.only(left: 4, bottom: 6),
+    child: Row(
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            style: AppTextStyles.labelMedium.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  List<Widget> _buildApplied() {
+    final apps = _applied;
+    if (apps == null) return [_loader()];
+    if (!JobApplicationService.available) {
+      return [
+        _empty(
+          Icons.send_outlined,
+          'Quick apply is coming',
+          'Applying inside the app needs a database update (patch_278). '
+              'Until then, apply with the contact details on each job.',
+        ),
+      ];
+    }
+    if (apps.isEmpty) {
+      return [
+        _empty(
+          Icons.send_outlined,
+          'No applications yet',
+          'Use Quick apply on a job and you can follow it here — seen, '
+              'shortlisted or not selected.',
+          action: 'Browse jobs',
+          onAction: () => context.goNamed('jobs'),
+        ),
+      ];
+    }
+    final palette = context.palette;
+    return [
+      for (final a in apps) ...[
+        _statusLine(a.applicantStatusLabel, switch (a.status) {
+          'shortlisted' => AppColors.successGreen,
+          'declined' => palette.textMuted,
+          _ => AppColors.primaryBlue,
+        }),
+        if (a.job != null)
+          JobCard(job: a.job!, onTap: () => _open(a.job!))
+        else
+          Text(
+            'This job was removed.',
+            style: AppTextStyles.bodyMedium.copyWith(color: palette.textMuted),
+          ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => _withdraw(a),
+            child: Text('Withdraw', style: TextStyle(color: palette.textMuted)),
+          ),
+        ),
+        const SizedBox(height: 4),
+      ],
+    ];
+  }
+
+  List<Widget> _buildSaved() {
+    final saved = _saved;
+    if (saved == null) return [_loader()];
+    if (saved.isEmpty) {
+      return [
+        _empty(
+          Icons.bookmark_border_rounded,
+          'Nothing saved',
+          'Tap the bookmark on any job to keep it here for later.',
+        ),
+      ];
+    }
+    return [
+      for (final j in saved) ...[
+        if (!j.isOpen || j.isExpired)
+          _statusLine('No longer open', context.palette.textMuted),
+        j.isSeeking
+            ? SeekerCard(job: j, onTap: () => _open(j))
+            : JobCard(job: j, onTap: () => _open(j)),
+        const SizedBox(height: 12),
+      ],
+    ];
+  }
+
+  List<Widget> _buildPosts() {
+    final jobs = _posts;
+    if (jobs == null) return [_loader()];
+    if (_error != null && jobs.isEmpty) {
+      return [_empty(Icons.cloud_off_outlined, _error!, 'Pull down to retry.')];
+    }
+    if (jobs.isEmpty) {
+      return [
+        _empty(
+          Icons.work_outline,
+          'No job posts yet',
+          'Post a vacancy, or tell employers you are looking for work. '
+              'Listings are reviewed before they go live.',
+          action: 'Post a job',
+          onAction: _post,
+        ),
+      ];
+    }
+    final counts = <JobPostState, int>{};
+    for (final j in jobs) {
+      counts.update(jobPostState(j), (n) => n + 1, ifAbsent: () => 1);
+    }
+    final shown = _postFilter == null
+        ? jobs
+        : jobs.where((j) => jobPostState(j) == _postFilter).toList();
+    return [
+      SizedBox(
+        height: 40,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          children: [
+            _StateChip(
+              label: 'All · ${jobs.length}',
+              selected: _postFilter == null,
+              onTap: () => setState(() => _postFilter = null),
+            ),
+            for (final st in JobPostState.values)
+              if ((counts[st] ?? 0) > 0)
+                _StateChip(
+                  label: '${st.label} · ${counts[st]}',
+                  selected: _postFilter == st,
+                  onTap: () => setState(() => _postFilter = st),
                 ),
-              if (jobs == null && _error == null)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  // cardList is a ListView; a sliver gives it no height.
-                  child: SizedBox(
-                    height: 560,
-                    child: ShimmerLoaders.cardList(count: 4),
-                  ),
-                )
-              else if (_error != null && jobs == null)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: EmptyStateCard(
-                      icon: Icons.cloud_off_outlined,
-                      title: _error!,
-                      message: 'Pull down to try again.',
-                    ),
-                  ),
-                )
-              else if (jobs!.isEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: EmptyStateCard(
-                      icon: Icons.work_outline,
-                      title: 'No job posts yet',
-                      message:
-                          'Post a vacancy, or tell employers you are looking '
-                          'for work. Listings are reviewed before they go live.',
-                      action: FilledButton(
-                        onPressed: _post,
-                        child: const Text('Post a job'),
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
+      for (final j in shown) ...[
+        _statusLine(jobPostState(j).label, jobPostState(j).color),
+        j.isSeeking
+            ? SeekerCard(job: j, onTap: () => _open(j))
+            : JobCard(job: j, onTap: () => _open(j)),
+        if (j.isHiring && JobApplicationService.available)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () async {
+                await context.pushNamed(
+                  'job_applicants',
+                  pathParameters: {'id': j.id},
+                  extra: j,
+                );
+                if (mounted) _load();
+              },
+              icon: const Icon(Icons.people_alt_outlined, size: 18),
+              label: Text(
+                (_counts[j.id] ?? 0) == 0
+                    ? 'Applicants'
+                    : 'Applicants · ${_counts[j.id]}',
+              ),
+            ),
+          ),
+        const SizedBox(height: 10),
+      ],
+    ];
+  }
+
+  List<Widget> _buildAlerts() {
+    final palette = context.palette;
+    final alerts = JobAlertService.alerts.value;
+    if (!JobAlertService.available) {
+      return [
+        _empty(
+          Icons.notifications_none_rounded,
+          'Job alerts are coming',
+          'Alerts need a database update (patch_278).',
+        ),
+      ];
+    }
+    return [
+      Text(
+        "We'll notify you when a matching job is approved. Up to 10 alerts.",
+        style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+      ),
+      const SizedBox(height: 12),
+      for (final a in alerts)
+        Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
+          decoration: jobCardDecoration(context),
+          child: Row(
+            children: [
+              JobMark(category: a.category, size: 40),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      [
+                        a.category == null
+                            ? 'Any field'
+                            : JobCategory.labelFor(a.category),
+                        if (a.keyword != null) '"${a.keyword}"',
+                      ].join(' · '),
+                      style: AppTextStyles.titleSmall.copyWith(
+                        color: palette.text,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-                  sliver: SliverList.separated(
-                    itemCount: shown.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 14),
-                    itemBuilder: (context, i) {
-                      final j = shown[i];
-                      final s = jobPostState(j);
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(left: 4, bottom: 6),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: s.color,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  s.label,
-                                  style: AppTextStyles.labelMedium.copyWith(
-                                    color: s.color,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          JobCard(job: j, onTap: () => _open(j)),
-                        ],
-                      );
-                    },
-                  ),
+                    Text(
+                      [
+                        a.country == null
+                            ? 'Worldwide'
+                            : Countries.nameOf(a.country),
+                        if (a.jobType != null) jobTypes[a.jobType] ?? '',
+                      ].join(' · '),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: palette.textMuted,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              IconButton(
+                tooltip: 'Remove alert',
+                icon: Icon(Icons.close_rounded, color: palette.textMuted),
+                onPressed: () async {
+                  try {
+                    await JobAlertService.delete(a.id);
+                    if (mounted) setState(() {});
+                  } catch (_) {}
+                },
+              ),
+            ],
+          ),
+        ),
+      if (alerts.length < 10)
+        OutlinedButton.icon(
+          onPressed: _addAlert,
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(0, 48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          icon: const Icon(Icons.add_alert_outlined),
+          label: const Text('New alert'),
+        ),
+    ];
+  }
+
+  Future<void> _addAlert() async {
+    final picked = await showModalBottomSheet<(String?, bool, String)>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => const _NewAlertSheet(),
+    );
+    if (picked == null || !mounted) return;
+    final (category, worldwide, keyword) = picked;
+    try {
+      await JobAlertService.create(
+        category: category,
+        country: worldwide ? null : AuthService.currentCountry(),
+        keyword: keyword,
+      );
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().contains('10 job alerts')
+                ? 'You can have up to 10 job alerts.'
+                : "Couldn't add the alert. Try again.",
+          ),
+        ),
+      );
+    }
+  }
+}
+
+class _NewAlertSheet extends StatefulWidget {
+  const _NewAlertSheet();
+
+  @override
+  State<_NewAlertSheet> createState() => _NewAlertSheetState();
+}
+
+class _NewAlertSheetState extends State<_NewAlertSheet> {
+  String? _category;
+  bool _worldwide = false;
+  final _keyword = TextEditingController();
+
+  @override
+  void dispose() {
+    _keyword.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'New job alert',
+                style: AppTextStyles.titleLarge.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Field',
+                style: AppTextStyles.labelLarge.copyWith(color: palette.text),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: const Text('Any field'),
+                    selected: _category == null,
+                    onSelected: (_) => setState(() => _category = null),
+                  ),
+                  for (final c in JobCategory.all)
+                    if (!c.needsPatch || JobService.redesignAvailable)
+                      ChoiceChip(
+                        avatar: Icon(c.icon, size: 16),
+                        label: Text(c.label),
+                        selected: _category == c.id,
+                        onSelected: (_) => setState(() => _category = c.id),
+                      ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _keyword,
+                maxLength: 60,
+                decoration: const InputDecoration(
+                  labelText: 'Keyword (optional)',
+                  hintText: 'e.g. nurse, driver, Harare',
+                ),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _worldwide,
+                onChanged: (v) => setState(() => _worldwide = v),
+                title: const Text('Worldwide'),
+                subtitle: Text(
+                  _worldwide
+                      ? 'Jobs in any country'
+                      : 'Only ${Countries.nameOf(AuthService.currentCountry())}',
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 50,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context, (
+                    _category,
+                    _worldwide,
+                    _keyword.text.trim(),
+                  )),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primaryBlue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text('Create alert'),
+                ),
+              ),
             ],
           ),
         ),

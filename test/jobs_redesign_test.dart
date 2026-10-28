@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:advent_connect_zw/models/job_model.dart';
 import 'package:advent_connect_zw/screens/jobs/jobs_screen.dart';
 import 'package:advent_connect_zw/screens/jobs/my_jobs_screen.dart';
+import 'package:advent_connect_zw/services/job_application_service.dart';
 import 'package:advent_connect_zw/services/job_service.dart';
 import 'package:advent_connect_zw/theme/app_theme.dart';
 
@@ -140,10 +141,144 @@ void main() {
     expect(t.takeException(), isNull);
     expect(find.text('Post a vacancy'), findsOneWidget);
     expect(find.text("I'm looking for work"), findsOneWidget);
-    expect(find.text('Filters'), findsOneWidget);
+    expect(find.byTooltip('Filters'), findsOneWidget);
+    expect(find.text('Find work'), findsOneWidget);
+    expect(find.text('Hire someone'), findsOneWidget);
+    // Every kind of work has a door.
+    expect(find.text('Everyday work'), findsOneWidget);
+    expect(find.text('Skilled & medical'), findsOneWidget);
+    expect(find.text('Professional'), findsOneWidget);
     // Nothing pretends to be personalised or paid for.
     expect(find.textContaining('Recommended'), findsNothing);
     expect(find.textContaining('Featured'), findsNothing);
+    await t.pump(const Duration(seconds: 2));
+  });
+
+  test('pay reads the way people say it', () {
+    expect(Job.formatPay(min: 15, period: 'day'), r'$15 / day');
+    expect(
+      Job.formatPay(min: 900, max: 1200, period: 'month'),
+      r'$900–1,200 / month',
+    );
+    expect(
+      Job.formatPay(min: 25000, period: 'month', currency: 'KES'),
+      'KES 25,000 / month',
+    );
+    expect(Job.formatPay(min: 200, max: 200, period: 'job'), r'$200 / job');
+    final structured = Job.fromJson({
+      'id': 1,
+      'title': 'Gardener',
+      'pay_min': 15,
+      'pay_period': 'day',
+      'pay_currency': 'USD',
+      'salary_range': 'old text',
+      'is_urgent': true,
+    });
+    expect(structured.payLabel, r'$15 / day');
+    expect(structured.isUrgent, isTrue);
+    // Older rows keep what the poster typed.
+    expect(
+      Job.fromJson({'id': 2, 'title': 'x', 'salary_range': r'$400'}).payLabel,
+      r'$400',
+    );
+    expect(Job.fromJson({'id': 3, 'title': 'x'}).payLabel, isNull);
+    expect(structured.toJson()['pay_period'], 'day');
+  });
+
+  test('every field belongs to a kind of work, everyday work has roles', () {
+    for (final c in JobCategory.all) {
+      expect(JobKind.values, contains(c.kind));
+    }
+    final everyday = JobCategory.ofKind(JobKind.everyday).map((c) => c.id);
+    expect(everyday, contains('domestic_caregiving'));
+    final home = JobCategory.byId('domestic_caregiving')!;
+    expect(home.roles.map((r) => r.title), containsAll(['Gardener', 'Nanny']));
+    expect(jobTypes['casual'], 'Casual / day work');
+  });
+
+  test('quick apply sends the job, message and phone', () async {
+    Map<String, dynamic>? sent;
+    setFakeSupabaseHandler((req) {
+      if (req.method == 'POST' && req.url.path.endsWith('/job_applications')) {
+        sent = jsonDecode(req.body) as Map<String, dynamic>;
+        return const <Object>[];
+      }
+      return null;
+    });
+    await JobApplicationService.apply(
+      jobId: '7',
+      message: '  I have 3 years experience  ',
+      phone: '0771234567',
+    );
+    expect(sent!['job_id'], 7);
+    expect(sent!['applicant_id'], 'poster-1');
+    expect(sent!['message'], 'I have 3 years experience');
+    expect(sent!['phone'], '0771234567');
+    expect(JobApplicationService.appliedJobIds.value, contains('7'));
+  });
+
+  test('applicant count is the server number, null when unknown', () async {
+    setFakeSupabaseHandler((req) {
+      if (req.url.path.endsWith('/rpc/job_applicant_count')) return 4;
+      return null;
+    });
+    expect(await JobApplicationService.count('7'), 4);
+    setFakeSupabaseHandler(
+      (_) => const FakeError(404, {'code': 'PGRST202', 'message': 'nope'}),
+    );
+    expect(await JobApplicationService.count('7'), isNull);
+  });
+
+  test('alerts save the field and country', () async {
+    Map<String, dynamic>? sent;
+    setFakeSupabaseHandler((req) {
+      if (req.method == 'POST' && req.url.path.endsWith('/job_alerts')) {
+        sent = jsonDecode(req.body) as Map<String, dynamic>;
+        return {'id': 1, ...sent!};
+      }
+      return null;
+    });
+    await JobAlertService.create(category: 'healthcare', country: 'ZW');
+    expect(sent!['category'], 'healthcare');
+    expect(sent!['country'], 'ZW');
+    expect(
+      JobAlertService.alerts.value.single.matches(
+        category: 'healthcare',
+        jobType: null,
+        country: 'ZW',
+      ),
+      isTrue,
+    );
+  });
+
+  testWidgets('hire mode offers one-tap role templates', (t) async {
+    setFakeSupabaseHandler((_) => const <Object>[]);
+    t.view.physicalSize = const Size(390, 1600);
+    t.view.devicePixelRatio = 1.0;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(
+      MaterialApp(theme: AppTheme.light, home: const JobsScreen()),
+    );
+    for (var i = 0; i < 4; i++) {
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await t.pump(const Duration(milliseconds: 50));
+    }
+    await t.tap(find.text('Hire someone'));
+    for (var i = 0; i < 4; i++) {
+      await t.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await t.pump(const Duration(milliseconds: 50));
+    }
+    expect(t.takeException(), isNull);
+    expect(find.text('Hiring? Post in two minutes'), findsOneWidget);
+    expect(find.text('Gardener'), findsOneWidget);
+    expect(find.text('Housekeeper'), findsOneWidget);
+    expect(find.text('Registered nurse'), findsOneWidget);
+    final q = Uri.decodeFull(fakeSupabaseRequests.last.url.query);
+    expect(q, contains('post_type=eq.seeking'));
     await t.pump(const Duration(seconds: 2));
   });
 

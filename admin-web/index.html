@@ -376,26 +376,37 @@ async function sellers() {
 }
 
 let reportFilter = "pending";
+const REPORT_TYPE = { job: "Job", product: "Product", seller: "Store", page: "Page", post: "Post", user: "Member", profile: "Member", message: "Message", comment: "Comment", event: "Event", prayer: "Prayer", news: "News", story: "Story" };
+const REPORT_REMOVABLE = ["job", "product", "seller", "page", "post"];
 async function reports() {
-  view().innerHTML = head("Reports", "Review reported content and take action.") +
+  view().innerHTML = head("Reports", "Reported jobs, products, stores, posts and accounts. Remove takes the item down; Remove & ban also bans whoever posted it and takes down everything else they have live.") +
     `<div class="toolbar">${statusSelect("rf", ["pending","actioned","dismissed","all"], reportFilter)}</div>` + loading();
   $("rf").onchange = (e) => { reportFilter = e.target.value; reports(); };
   try {
     const rows = await rpc("admin_list_reports", { p_status: reportFilter });
     const table = !rows.length ? empty("No reports.") : `<table><thead><tr>
-        <th>Content</th><th>Reason</th><th>Reporter</th><th>Status</th><th></th></tr></thead><tbody>` +
+        <th>Reported</th><th>Reason</th><th>Posted by</th><th>Reporter</th><th>Status</th><th></th></tr></thead><tbody>` +
       rows.map(r => {
-        // user/profile reports → content_id is the reported account, so we
-        // can ban them directly.
-        const banId = (r.content_type === "user" || r.content_type === "profile") ? r.content_id : "";
+        // patch_279 adds what/who (content_title, reported_user_id…). Until
+        // it runs those are undefined and only the old buttons show.
+        const enriched = r.content_title !== undefined;
+        const banId = (r.content_type === "user" || r.content_type === "profile") ? r.content_id : (r.reported_user_id || "");
+        const removable = enriched && REPORT_REMOVABLE.includes(r.content_type);
+        const many = (r.open_reports_on_content || 0) > 1;
         return `<tr>
-        <td><b>${esc(r.content_type)}</b><div class="meta">id: ${esc(r.content_id)}</div></td>
+        <td style="max-width:320px"><div class="meta">${esc(REPORT_TYPE[r.content_type] || r.content_type)}</div>
+          <b>${esc(r.content_title || r.content_id)}</b>
+          ${r.content_preview ? `<div class="meta">${esc(r.content_preview)}</div>` : ""}
+          <div class="meta">${r.content_state ? `Now: ${esc(r.content_state)} · ` : ""}#${esc(r.content_id)}${many ? ` · <b>${r.open_reports_on_content} open reports</b>` : ""}</div></td>
         <td>${esc(r.reason)}${r.details ? `<div class="meta">${esc(r.details)}</div>` : ""}</td>
+        <td>${esc(r.reported_user_name || (banId ? "Member" : "—"))}${r.reported_user_banned ? `<div class="meta">Banned</div>` : ""}</td>
         <td>${esc(r.reporter_name)}<div class="meta">${fmtDate(r.created_at)}</div></td>
         <td>${statusChip(r.status)}${r.action_taken ? `<div class="meta">${esc(r.action_taken)}</div>` : ""}</td>
         <td style="white-space:nowrap">${r.status === "pending" ? `
           <button class="btn primary" data-reply="${r.id}">Reply</button>
-          ${banId ? `<button class="btn red" data-banreport="${r.id}" data-banuser="${esc(banId)}">Ban &amp; resolve</button>` : ""}
+          ${removable ? `<button class="btn red" data-takedown="${r.id}" data-kind="${esc(REPORT_TYPE[r.content_type] || "item")}">Remove</button>` : ""}
+          ${enriched && banId && !r.reported_user_banned ? `<button class="btn red" data-takeban="${r.id}" data-who="${esc(r.reported_user_name || "this member")}">Remove &amp; ban</button>` : ""}
+          ${!enriched && banId ? `<button class="btn red" data-banreport="${r.id}" data-banuser="${esc(banId)}">Ban &amp; resolve</button>` : ""}
           <button class="btn green" data-resolve="${r.id}">Resolve</button>
           <button class="btn ghost" data-dismiss="${r.id}">Dismiss</button>` : "—"}</td>
       </tr>`; }).join("") + `</tbody></table>`;
@@ -415,6 +426,18 @@ async function reports() {
       const reply = await ask({ title: "Reply to reporter", sub: "Sent to the reporter as an in-app notification.", placeholder: "Type your reply…", okLabel: "Send reply" });
       if (!reply) return;
       try { await rpc("admin_reply_report", { p_report_id: Number(b.dataset.reply), p_reply: reply }); alert("Reply sent."); }
+      catch (e) { alert(e.message); }
+    });
+    view().querySelectorAll("[data-takedown]").forEach(b => b.onclick = async () => {
+      const reason = await ask({ title: "Remove this " + b.dataset.kind.toLowerCase(), sub: "It comes down for everyone and the person who posted it is told why. Every open report on it is closed.", placeholder: "Reason they will see, e.g. Asked applicants for money", okLabel: "Remove", okClass: "red" });
+      if (!reason) return;
+      try { await rpc("admin_takedown_report", { p_report_id: Number(b.dataset.takedown), p_reason: reason, p_ban: false }); reports(); refreshBadges(); }
+      catch (e) { alert(e.message); }
+    });
+    view().querySelectorAll("[data-takeban]").forEach(b => b.onclick = async () => {
+      const reason = await ask({ title: "Remove and ban", sub: "Bans " + b.dataset.who + " and takes down everything they have live — jobs, store and listings. They are notified.", placeholder: "Reason (recorded and shown to them)", okLabel: "Remove & ban", okClass: "red" });
+      if (!reason) return;
+      try { await rpc("admin_takedown_report", { p_report_id: Number(b.dataset.takeban), p_reason: reason, p_ban: true }); reports(); refreshBadges(); }
       catch (e) { alert(e.message); }
     });
     view().querySelectorAll("[data-banreport]").forEach(b => b.onclick = async () => {

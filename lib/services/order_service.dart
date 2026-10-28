@@ -92,7 +92,17 @@ class OrderService {
     if (!MarketOrder.statuses.contains(status)) {
       throw ArgumentError('unknown order status: $status');
     }
-    await _client.from(_table).update({'status': status}).eq('id', orderId);
+    // `.select()` so a blocked update is an error, not a success: when RLS
+    // refuses, PostgREST updates zero rows and returns no error, and the
+    // screen showed the new status for an order that never changed.
+    final rows = await _client
+        .from(_table)
+        .update({'status': status})
+        .eq('id', orderId)
+        .select('id');
+    if ((rows as List).isEmpty) {
+      throw StateError('order $orderId was not updated');
+    }
   }
 
   /// Attach seller display fields. `orders` stores only `seller_id`; the

@@ -74,6 +74,36 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   bool get _isSeller =>
       _order != null && AuthService.currentUser?.id == _order!.sellerId;
 
+  /// Cancelling can't be undone — there is no way back from `cancelled` in
+  /// the UI — and both parties' buttons fired on a single tap (the
+  /// seller's sat one stray tap below "Confirm order").
+  Future<void> _confirmCancel() async {
+    final seller = _isSeller;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(seller ? 'Decline this order?' : 'Cancel this order?'),
+        content: Text(
+          seller
+              ? "The buyer will see it as cancelled. This can't be undone."
+              : "The shop will see it as cancelled. This can't be undone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep order'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.red),
+            child: Text(seller ? 'Decline' : 'Cancel order'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && mounted) await _setStatus('cancelled');
+  }
+
   Future<void> _setStatus(String status) async {
     final order = _order;
     if (order == null) return;
@@ -228,7 +258,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           label: 'Decline order',
           icon: Icons.close_rounded,
           color: AppColors.red,
-          onTap: () => _setStatus('cancelled'),
+          onTap: _confirmCancel,
         ),
       ];
     }
@@ -251,7 +281,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         label: 'Cancel this order',
         icon: Icons.close_rounded,
         color: AppColors.red,
-        onTap: () => _setStatus('cancelled'),
+        onTap: _confirmCancel,
       ),
     ];
   }

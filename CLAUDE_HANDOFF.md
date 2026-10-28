@@ -246,6 +246,22 @@ Owner decisions taken in this session:
   an order that can't be read back gets a "saved — open My orders" snackbar.
   Offline failure says offline. Test: `test/checkout_duplicate_order_test.dart`
   (fails on the original code). Full suite: **787 passed**.
+- **Orders (fixed in app):** `OrderService.updateStatus` treated an
+  RLS-refused update (0 rows, no error) as success → now `.select('id')`
+  and throws on empty. Seller "Decline" and buyer "Cancel" now confirm
+  first (irreversible, was one tap). Test: `test/order_status_update_test.dart`.
+- **Orders (needs owner): `database/patch_270_order_status_transitions.sql`
+  — DRAFT, NOT RUN.** Live DB check: `orders_update_party` lets either
+  party set ANY status; a buyer can mark their own order confirmed /
+  completed via the API, and closed orders can be reopened. The patch adds
+  a transition guard matching the app's buttons. Review, then run.
+- **Live DB facts that disagree with the docs (28 Oct 2026, read-only):**
+  - Supabase project `adventconnectzw` is in **eu-central-1 (Frankfurt)**,
+    not Africa (Cape Town) as CLAUDE.md says. Not changed — moving region
+    means a new project + migration; owner's call.
+  - `orders`, `order_items`, `place_order` and `orders_freeze_financials`
+    exist live but are **not in `database/`**. The repo can't rebuild the
+    DB as it is.
 - **Marketplace findings NOT fixed (need a decision):**
   - `fetchProducts` sends every approved seller id in the URL
     (`inFilter('seller_id', …)`). Fine now; at a few hundred sellers the

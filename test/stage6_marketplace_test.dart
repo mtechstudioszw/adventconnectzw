@@ -95,13 +95,14 @@ void main() {
     expect(find.text('More from this shop'), findsOneWidget);
     expect(find.text('Moringa Powder'), findsOneWidget);
     expect(find.text('Add to basket'), findsOneWidget);
-    expect(find.text('Contact'), findsOneWidget);
+    expect(find.text('Chat'), findsOneWidget);
     // Adding morphs the primary action instead of a toast.
     await t.tap(find.text('Add to basket'));
     await _settle(t);
-    expect(find.text('In basket · View'), findsOneWidget);
+    expect(find.text('In basket'), findsOneWidget);
+    expect(find.text('View'), findsOneWidget);
     // Both contact routes sit behind Contact.
-    await t.tap(find.text('Contact'));
+    await t.tap(find.text('Chat'));
     await _settle(t);
     expect(find.text('Message in the app'), findsOneWidget);
     expect(find.text('WhatsApp'), findsNothing); // no phone on this shop row

@@ -31,7 +31,8 @@ import '../../widgets/moderation_appeal_sheet.dart';
 import '../../widgets/offline_toast.dart';
 import '../../widgets/expandable_text.dart';
 import '../../widgets/verified_tick.dart';
-import '../../utils/photo_tint.dart';
+import '../../marketplace/product_image_source.dart';
+import '../../marketplace/product_theme.dart';
 
 /// Product detail.
 ///
@@ -87,19 +88,30 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   /// The same shop's other listings for sale.
   List<Product> _moreFromShop = const [];
 
-  /// Adaptive colour from the product's first photo (see the sheet).
-  Color? _tint;
-  String? _tintFor;
+  /// The adaptive presentation (lib/marketplace/product_theme.dart):
+  /// stage colour, accent, seamless vs framed photo. Starts as the
+  /// category preset so the first frame never waits on image analysis,
+  /// then eases to the photo-derived theme.
+  ProductTheme? _theme;
+  String? _themeFor;
 
-  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+  Brightness get _brightness => Theme.of(context).brightness;
 
-  Future<void> _loadTint(Product p) async {
-    final url = p.firstImage;
-    if (url.isEmpty || url == _tintFor) return;
-    _tintFor = url;
-    final tint = await PhotoTint.forPhoto(url);
-    if (mounted && _tintFor == url) setState(() => _tint = tint);
+  ProductTheme _themeOf(Product p) =>
+      _theme ??
+      ProductTheme.cached(p) ??
+      ProductTheme.preset(ProductTheme.lookFor(p));
+
+  Future<void> _loadTheme(Product p) async {
+    final key = '${p.id}|${p.firstImage}';
+    if (key == _themeFor) return;
+    _themeFor = key;
+    final theme = await ProductTheme.resolve(p);
+    if (mounted && _themeFor == key) setState(() => _theme = theme);
   }
+
+  /// Guards against a double tap adding the item twice.
+  bool _adding = false;
 
   static const double _sheetOverlap = 24;
 
@@ -127,7 +139,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   Future<void> _loadShop(Product p) async {
-    _loadTint(p);
+    _loadTheme(p);
     if (p.sellerId.isEmpty) return;
     try {
       final results = await Future.wait([
@@ -242,7 +254,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       );
       return;
     }
-    await CartService.add(product);
+    if (_adding) return;
+    setState(() => _adding = true);
+    try {
+      await CartService.add(product);
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
     // No confirmation toast: the basket badge in the header increments, which
     // is the feedback, and the bar that used to restate it is gone. A haptic
     // acknowledges the tap without occupying the screen.
@@ -459,7 +477,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   //  bottom; the two ways to reach the seller live behind "Contact".
   // ---------------------------------------------------------------------
 
-  static const double _galleryAspect = 4 / 5;
+  /// Same height for every product, so nothing jumps when the photo or
+  /// the theme arrives; the photo adapts inside it.
+  static double _stageHeight(BuildContext context) {
+    final w = MediaQuery.sizeOf(context).width;
+    return w * 1.02 + MediaQuery.paddingOf(context).top;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -476,6 +499,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           ? null
           : _BuyBar(
               product: product,
+              theme: _themeOf(product),
+              busy: _adding,
               own: _isOwnListing(product),
               inBasket: CartService.contains(product.id),
               chatBusy: _openingChat,
@@ -491,7 +516,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   /// title. It's pinned over scrolling content, so it is opaque once it
   /// appears (CLAUDE.md: pinned headers are opaque).
   Widget _buildTopBar(Product product) {
-    final galleryHeight = MediaQuery.sizeOf(context).width / _galleryAspect;
+    final galleryHeight = _stageHeight(context);
     final t = ((_scrolled - (galleryHeight - 140)) / 80).clamp(0.0, 1.0);
     final palette = context.palette;
     final solid = t > 0.5;
@@ -586,46 +611,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   top: Radius.circular(28),
                 ),
               ),
-              clipBehavior: Clip.antiAlias,
               child: Stack(
                 children: [
-                  // Adaptive colour (owner-approved, 28 Oct 2026): a faint
-                  // wash of the product photo's own colour across the top
-                  // of the sheet, fading out. Background only — text,
-                  // price and buttons keep the palette. PhotoTint returns
-                  // null for green, pink and dull photos: no wash then.
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: 460,
-                    child: IgnorePointer(
-                      child: AnimatedOpacity(
-                        opacity: _tint == null ? 0 : 1,
-                        duration: const Duration(milliseconds: 500),
-                        child: _tint == null
-                            ? const SizedBox.shrink()
-                            : DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      _tint!.withValues(
-                                        alpha: _isDark ? 0.26 : 0.18,
-                                      ),
-                                      _tint!.withValues(
-                                        alpha: _isDark ? 0.10 : 0.07,
-                                      ),
-                                      _tint!.withValues(alpha: 0),
-                                    ],
-                                    stops: const [0, 0.45, 1],
-                                  ),
-                                ),
-                              ),
-                      ),
-                    ),
-                  ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
                     child: Column(
@@ -770,69 +757,82 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   Widget _buildGallery(Product product) {
     final images = product.imageUrls;
     final unavailable = !product.isAvailable;
-    return Stack(
-      children: [
-        AspectRatio(
-          aspectRatio: _galleryAspect,
-          child: images.isEmpty
-              ? _GalleryPlaceholder(category: product.category)
-              : PageView.builder(
-                  controller: _pageController,
-                  itemCount: images.length,
-                  onPageChanged: (i) => setState(() => _currentImage = i),
-                  itemBuilder: (context, i) {
-                    final image = GestureDetector(
-                      onTap: () => _GalleryViewer.open(context, images, i),
-                      child: CachedImage(
-                        images[i],
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
-                            _GalleryPlaceholder(category: product.category),
-                      ),
-                    );
-                    return i == 0
-                        ? Hero(tag: 'product_image_${product.id}', child: image)
-                        : image;
-                  },
-                ),
-        ),
-        // Soft scrim under the glass buttons only.
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 120,
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.30),
-                    Colors.transparent,
-                  ],
+    final theme = _themeOf(product);
+    final b = _brightness;
+    final stage = theme.stage(b);
+    final top = MediaQuery.paddingOf(context).top + 56;
+    // Plain-background photos fill the stage edge to edge so the product
+    // floats on one surface; busy photos sit framed, at their own shape.
+    final pad = theme.seamless
+        ? EdgeInsets.fromLTRB(16, top, 16, _sheetOverlap + 28)
+        : EdgeInsets.fromLTRB(28, top + 4, 28, _sheetOverlap + 40);
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(end: stage),
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOut,
+      builder: (context, color, child) =>
+          Container(height: _stageHeight(context), color: color, child: child),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: images.isEmpty
+                ? _GalleryPlaceholder(look: theme.look, onStage: stage)
+                : PageView.builder(
+                    controller: _pageController,
+                    itemCount: images.length,
+                    onPageChanged: (i) => setState(() => _currentImage = i),
+                    itemBuilder: (context, i) {
+                      final photo = Padding(
+                        padding: pad,
+                        child: GestureDetector(
+                          onTap: () => _GalleryViewer.open(context, images, i),
+                          child: Semantics(
+                            image: true,
+                            label:
+                                'Photo ${i + 1} of ${images.length}: '
+                                '${product.title}',
+                            child: _StagePhoto(
+                              url: images[i],
+                              framed: !theme.seamless,
+                              fallback: _GalleryPlaceholder(
+                                look: theme.look,
+                                onStage: stage,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                      return i == 0
+                          ? Hero(
+                              tag: 'product_image_${product.id}',
+                              child: photo,
+                            )
+                          : photo;
+                    },
+                  ),
+          ),
+          if (unavailable)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ColoredBox(color: stage.withValues(alpha: 0.45)),
+              ),
+            ),
+          if (images.length > 1)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: _sheetOverlap + 12,
+              child: Center(
+                child: _StageDots(
+                  count: images.length,
+                  index: _currentImage,
+                  active: theme.accent(Brightness.light),
+                  onDark: theme.stageIsDark(b),
                 ),
               ),
             ),
-          ),
-        ),
-        if (unavailable)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
-            ),
-          ),
-        if (images.length > 1)
-          Positioned(
-            right: 16,
-            bottom: _sheetOverlap + 12,
-            child: _Pill(
-              text: '${_currentImage + 1} / ${images.length}',
-              dark: true,
-            ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -864,7 +864,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.labelLarge.copyWith(
-                      color: AppColors.primaryBlue,
+                      color: _themeOf(product).accent(_brightness),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -915,16 +915,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(
-              product.formatPrice(),
-              style: AppTextStyles.displayMedium.copyWith(
-                color: palette.text,
-                fontWeight: FontWeight.w700,
-                fontSize: 30,
-                height: 1,
-                letterSpacing: -0.5,
-              ),
-            ),
+            PriceText(product: product, size: 30, color: palette.text),
             const SizedBox(width: 12),
             if (status == null)
               const _StatusPill(text: 'Available', ok: true)
@@ -942,7 +933,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final chips = <(IconData, String)>[
       if (product.conditionLabel != null)
         (Icons.auto_awesome_outlined, product.conditionLabel!),
-      if (product.category?.isNotEmpty == true)
+      // "Other" tells a buyer nothing.
+      if (product.category?.isNotEmpty == true && product.category != 'other')
         (Icons.category_outlined, _categoryLabel(product.category!)),
       if (product.subcategory?.trim().isNotEmpty == true)
         (Icons.sell_outlined, product.subcategory!.trim()),
@@ -966,7 +958,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(c.$1, size: 15, color: AppColors.primaryBlue),
+                Icon(
+                  c.$1,
+                  size: 15,
+                  color: _themeOf(product).accent(_brightness),
+                ),
                 const SizedBox(width: 6),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 220),
@@ -1513,9 +1509,8 @@ class _StatusPill extends StatelessWidget {
 }
 
 class _Pill extends StatelessWidget {
-  const _Pill({required this.text, this.dark = false});
+  const _Pill({required this.text});
   final String text;
-  final bool dark;
 
   @override
   Widget build(BuildContext context) {
@@ -1577,19 +1572,176 @@ class _HeaderButton extends StatelessWidget {
 }
 
 class _GalleryPlaceholder extends StatelessWidget {
-  const _GalleryPlaceholder({this.category});
-  final String? category;
+  const _GalleryPlaceholder({required this.look, required this.onStage});
+  final ProductLook look;
+  final Color onStage;
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: context.palette.cardMuted,
-      child: Center(
-        child: Icon(
-          Icons.shopping_bag_outlined,
-          size: 72,
-          color: context.palette.textMuted.withValues(alpha: 0.5),
+    final dark = onStage.computeLuminance() < 0.25;
+    return Center(
+      child: Icon(
+        switch (look) {
+          ProductLook.editorial => Icons.menu_book_outlined,
+          ProductLook.fashion => Icons.checkroom_outlined,
+          ProductLook.tech => Icons.devices_other_outlined,
+          ProductLook.home => Icons.chair_outlined,
+          ProductLook.food => Icons.restaurant_outlined,
+          ProductLook.botanical => Icons.spa_outlined,
+          ProductLook.general => Icons.shopping_bag_outlined,
+        },
+        size: 72,
+        color: (dark ? AppColors.white : AppColors.darkNavy).withValues(
+          alpha: 0.22,
         ),
+      ),
+    );
+  }
+}
+
+/// One photo on the stage. Seamless: contained edge to edge (the photo's
+/// own plain background meets the stage). Framed: shown at its natural
+/// aspect ratio with soft corners and a gentle shadow — no cropping, no
+/// stretching — so a busy photo looks deliberately placed.
+class _StagePhoto extends StatefulWidget {
+  const _StagePhoto({
+    required this.url,
+    required this.framed,
+    required this.fallback,
+  });
+  final String url;
+  final bool framed;
+  final Widget fallback;
+
+  @override
+  State<_StagePhoto> createState() => _StagePhotoState();
+}
+
+class _StagePhotoState extends State<_StagePhoto> {
+  double? _aspect;
+  bool _failed = false;
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_stream == null) _resolve();
+  }
+
+  /// Decoded at the screen's pixel width — never the full upload — and the
+  /// same provider for measuring and painting, so it decodes once.
+  late ImageProvider _provider;
+
+  void _resolve() {
+    final mq = MediaQuery.of(context);
+    final width = (mq.size.width * mq.devicePixelRatio).round();
+    _provider = ResizeImage(
+      ProductImageSource.provider(widget.url),
+      width: width,
+      policy: ResizeImagePolicy.fit,
+      allowUpscaling: false,
+    );
+    final stream = _provider.resolve(createLocalImageConfiguration(context));
+    _listener = ImageStreamListener(
+      (info, _) {
+        if (!mounted) return;
+        setState(() => _aspect = info.image.width / info.image.height);
+      },
+      onError: (_, _) {
+        if (mounted) setState(() => _failed = true);
+      },
+    );
+    stream.addListener(_listener!);
+    _stream = stream;
+  }
+
+  @override
+  void dispose() {
+    if (_listener != null) _stream?.removeListener(_listener!);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_failed) return widget.fallback;
+    final image = Image(
+      image: _provider,
+      fit: BoxFit.contain,
+      gaplessPlayback: true,
+      filterQuality: FilterQuality.medium,
+    );
+    if (!widget.framed) return Center(child: image);
+    final aspect = _aspect;
+    if (aspect == null) return const SizedBox.expand();
+    return Center(
+      child: AspectRatio(
+        aspectRatio: aspect,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.10),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image(
+              image: _provider,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.medium,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Gallery position: short bars, the active one long and in the accent.
+class _StageDots extends StatelessWidget {
+  const _StageDots({
+    required this.count,
+    required this.index,
+    required this.active,
+    required this.onDark,
+  });
+  final int count;
+  final int index;
+  final Color active;
+  final bool onDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = count.clamp(1, 8);
+    final current = index.clamp(0, shown - 1);
+    return Semantics(
+      label: 'Photo ${index + 1} of $count',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < shown; i++)
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOut,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: i == current ? 22 : 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: i == current
+                    ? (onDark ? AppColors.white : active)
+                    : (onDark ? AppColors.white : Colors.black).withValues(
+                        alpha: 0.18,
+                      ),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1739,12 +1891,77 @@ class _ContactOption extends StatelessWidget {
   }
 }
 
-/// The pinned purchase bar: one secondary (Contact) and one primary action.
-/// The primary morphs once the item is in the basket, so the tap has a
-/// visible answer without a toast.
+/// Price set the way premium shops set it: a smaller currency mark, the
+/// whole amount large, cents small. Reads as a price at a glance.
+class PriceText extends StatelessWidget {
+  const PriceText({
+    super.key,
+    required this.product,
+    required this.size,
+    required this.color,
+  });
+  final Product product;
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final symbol = product.currency == 'USD' ? r'$' : '${product.currency} ';
+    final whole = product.price.truncate();
+    final cents = ((product.price - whole) * 100).round();
+    final base = AppTextStyles.displayMedium.copyWith(
+      color: color,
+      fontWeight: FontWeight.w700,
+      fontSize: size,
+      height: 1,
+      letterSpacing: -0.5,
+    );
+    final small = base.copyWith(fontSize: size * 0.52, letterSpacing: 0);
+    return Semantics(
+      label: product.formatPrice(),
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(top: size * 0.08),
+            child: Text(symbol, style: small),
+          ),
+          Text(_group(whole), style: base),
+          if (cents > 0)
+            Padding(
+              padding: EdgeInsets.only(top: size * 0.08),
+              child: Text(cents.toString().padLeft(2, '0'), style: small),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _group(int n) {
+    final s = n.toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
+      b.write(s[i]);
+    }
+    return b.toString();
+  }
+}
+
+/// The pinned purchase bar.
+///
+/// One confident primary — a pill in the product's own accent that carries
+/// the price ("Add to basket · \$10"), the way the best food and fashion
+/// apps do it — and one quiet secondary: a chat button that opens the
+/// seller-contact sheet. Once added, the pill turns tonal and reads
+/// "In basket · View", so the tap is answered without a toast.
 class _BuyBar extends StatelessWidget {
   const _BuyBar({
     required this.product,
+    required this.theme,
+    required this.busy,
     required this.own,
     required this.inBasket,
     required this.chatBusy,
@@ -1755,6 +1972,8 @@ class _BuyBar extends StatelessWidget {
   });
 
   final Product product;
+  final ProductTheme theme;
+  final bool busy;
   final bool own;
   final bool inBasket;
   final bool chatBusy;
@@ -1766,33 +1985,45 @@ class _BuyBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final available = product.isAvailable;
+    final b = Theme.of(context).brightness;
+    final accent = theme.accent(b);
+    final onAccent = theme.onAccent(b);
 
-    Widget primary;
+    final Widget primary;
     if (own) {
-      primary = _PrimaryButton(
-        icon: Icons.storefront_outlined,
+      primary = _Pill2(
         label: 'Manage in your shop',
+        trailing: const Icon(Icons.arrow_forward_rounded, size: 18),
+        bg: accent,
+        fg: onAccent,
         onTap: onManage,
       );
-    } else if (!available) {
-      primary = _PrimaryButton(
-        icon: Icons.block_rounded,
+    } else if (!product.isAvailable) {
+      primary = _Pill2(
         label: product.isSold ? 'Sold' : 'Reserved',
-        onTap: null,
+        trailingText: 'Ask the shop',
+        bg: palette.cardMuted,
+        fg: palette.textMuted,
+        onTap: onContact,
       );
     } else if (inBasket) {
-      primary = _PrimaryButton(
-        icon: Icons.check_rounded,
-        label: 'In basket · View',
+      primary = _Pill2(
+        label: 'In basket',
+        leading: Icons.check_rounded,
+        trailingText: 'View',
+        bg: accent.withValues(alpha: b == Brightness.dark ? 0.22 : 0.12),
+        fg: b == Brightness.dark ? accent : accent,
         onTap: onViewBasket,
-        tonal: true,
       );
     } else {
-      primary = _PrimaryButton(
-        icon: Icons.add_shopping_cart_rounded,
+      primary = _Pill2(
         label: 'Add to basket',
+        trailingText: product.formatPrice(),
+        bg: accent,
+        fg: onAccent,
+        busy: busy,
         onTap: onAdd,
+        raised: true,
       );
     }
 
@@ -1800,7 +2031,6 @@ class _BuyBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.card,
         border: Border(top: BorderSide(color: palette.divider)),
-        boxShadow: AppShadows.floating(context),
       ),
       child: SafeArea(
         top: false,
@@ -1809,40 +2039,50 @@ class _BuyBar extends StatelessWidget {
           child: Row(
             children: [
               if (!own) ...[
-                Expanded(
-                  flex: 2,
-                  child: SizedBox(
-                    height: 52,
-                    child: OutlinedButton.icon(
-                      onPressed: chatBusy ? null : onContact,
-                      icon: chatBusy
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: BrandSpinner(size: 16),
-                            )
-                          : const Icon(
-                              Icons.chat_bubble_outline_rounded,
-                              size: 18,
-                            ),
-                      label: const Text('Contact'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: palette.text,
-                        side: BorderSide(color: palette.divider),
-                        minimumSize: const Size(0, 52),
-                        textStyle: AppTextStyles.labelLarge.copyWith(
-                          fontWeight: FontWeight.w700,
+                Semantics(
+                  button: true,
+                  label: 'Contact the seller',
+                  child: Tooltip(
+                    message: 'Contact the seller',
+                    child: Pressable(
+                      onTap: chatBusy ? null : onContact,
+                      pressedScale: 0.92,
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: palette.scaffoldBg,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: palette.divider),
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                        child: chatBusy
+                            ? const Center(child: BrandSpinner(size: 18))
+                            : Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.chat_bubble_outline_rounded,
+                                    size: 20,
+                                    color: palette.text,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Chat',
+                                    style: AppTextStyles.labelSmall.copyWith(
+                                      color: palette.text,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 10.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
               ],
-              Expanded(flex: 3, child: primary),
+              Expanded(child: primary),
             ],
           ),
         ),
@@ -1851,63 +2091,105 @@ class _BuyBar extends StatelessWidget {
   }
 }
 
-class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({
-    required this.icon,
+class _Pill2 extends StatelessWidget {
+  const _Pill2({
     required this.label,
+    required this.bg,
+    required this.fg,
     required this.onTap,
-    this.tonal = false,
+    this.trailingText,
+    this.trailing,
+    this.leading,
+    this.busy = false,
+    this.raised = false,
   });
-  final IconData icon;
   final String label;
+  final String? trailingText;
+  final Widget? trailing;
+  final IconData? leading;
+  final Color bg;
+  final Color fg;
   final VoidCallback? onTap;
-  final bool tonal;
+  final bool busy;
+  final bool raised;
 
   @override
   Widget build(BuildContext context) {
-    final disabled = onTap == null;
-    final fg = tonal ? AppColors.primaryBlue : AppColors.white;
+    final text = AppTextStyles.labelLarge.copyWith(
+      color: fg,
+      fontWeight: FontWeight.w700,
+      fontSize: 15.5,
+    );
     return Semantics(
       button: true,
-      label: label,
+      label: [label, ?trailingText].join(', '),
+      excludeSemantics: true,
       child: Pressable(
-        onTap: onTap,
+        onTap: busy ? null : onTap,
         haptics: true,
+        pressedScale: 0.97,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          height: 52,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOut,
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           decoration: BoxDecoration(
-            gradient: tonal || disabled ? null : AppColors.primaryGradient,
-            color: tonal
-                ? AppColors.primaryBlue.withValues(alpha: 0.12)
-                : disabled
-                ? context.palette.cardMuted
+            color: bg,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: raised
+                ? [
+                    BoxShadow(
+                      color: bg.withValues(alpha: 0.35),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
                 : null,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: tonal || disabled ? null : AppShadows.glow(context),
           ),
-          alignment: Alignment.center,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 19,
-                  color: disabled ? context.palette.textMuted : fg,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: AppTextStyles.buttonText.copyWith(
-                    fontSize: 15,
-                    color: disabled ? context.palette.textMuted : fg,
+          child: busy
+              ? Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: fg),
                   ),
+                )
+              : Row(
+                  children: [
+                    if (leading != null) ...[
+                      Icon(leading, size: 18, color: fg),
+                      const SizedBox(width: 8),
+                    ],
+                    // Expanded, not Flexible + Spacer: those split the free
+                    // space in half and cut "Add to basket" short.
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (trailingText != null) ...[
+                      Container(
+                        width: 1,
+                        height: 18,
+                        color: fg.withValues(alpha: 0.28),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        trailingText!,
+                        style: text.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                    if (trailing != null)
+                      IconTheme(
+                        data: IconThemeData(color: fg),
+                        child: trailing!,
+                      ),
+                  ],
                 ),
-              ],
-            ),
-          ),
         ),
       ),
     );

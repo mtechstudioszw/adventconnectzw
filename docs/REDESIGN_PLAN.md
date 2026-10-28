@@ -184,3 +184,45 @@ to run in the SQL editor; app features depending on it say so until it runs
   View" once added; your own listing shows "Manage in your shop".
 - Adaptive colour: a faint wash of the product photo's colour across the
   top of the sheet (CLAUDE.md exception, same limits as the profile glow).
+
+### Product page — adaptive marketplace (28 Oct 2026, owner's brief)
+
+**Audit of what was there.** One template for every product: a 4:5 photo
+cropped to cover (cutting heads off portrait shots and sides off landscape
+ones), a navy fill when there was no photo, and a generic action bar (an
+outlined "Contact" next to a blue gradient box) that looked like default
+Material. Screenshots sent earlier also never showed a photo — the test
+renderer can't download images — which exaggerated the emptiness.
+
+**Approach** (lib/marketplace/):
+- `ProductImageSource` — one provider for the hero and the analysis.
+- `ProductTheme` — reads a 48×48 sample of the first photo:
+  - outer ring plain → **seamless**: the stage takes that exact colour and
+    the photo is shown contained, edge to edge (studio shots float on one
+    surface); busy ring → **framed**: the photo sits at its natural aspect
+    with soft corners and shadow on a category surface. No cropping.
+  - centre (background pixels excluded) → saturation-weighted hue →
+    **accent**, darkened/lightened to pass 4.5:1 for its label. Reds/pinks
+    and colourless products use the category accent.
+  - category looks: botanical, editorial, fashion, tech, home, food,
+    general (from category, subcategory and title words).
+  - first paint uses the category preset; the photo theme eases in
+    (450 ms) — never blocks or flickers; results cached per photo.
+- Purchase bar: a "Chat" button (opens the contact sheet) + one solid
+  accent pill "Add to basket | $price", which becomes "In basket | View";
+  duplicate taps guarded; Sold/Reserved and own-listing states.
+- Price set with a small currency mark and small cents.
+- Hero photos decoded at screen width, measured and painted from one decode.
+
+**Tested on fixtures** (test_screens/fixtures — generated stand-ins; the
+environment can't reach Supabase storage): herbal bottle on white, book on
+a desk, dark suit on charcoal, red shoe, silver laptop on white, sofa in a
+room, text-heavy flyer, no photo, broken photo, sold + very long title, dark
+mode, 360 px width. Engine unit tests: seamless detection, framed busy
+photos, backdrop not stolen as accent, red/pink fallback, 4.5:1 for every
+preset and 18 hues in both themes, category mapping.
+
+**Not possible with the current data:** variants, sizes, stock counts,
+specifications (dimensions, ingredients, author/edition) and sale prices —
+products have no such columns. The layout has room for them; adding them
+needs a schema change (a later stage), not invented values.

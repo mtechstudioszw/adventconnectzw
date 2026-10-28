@@ -47,6 +47,21 @@ from the product's first photo, across the top of the product details
 sheet (`_tint` in lib/screens/marketplace/product_details_screen.dart).
 Same limits: background only, same alphas, same banned hues. Organization
 Pages and storefronts use `ProfileGlow` from their logo. Nowhere else.
+**Superseded for the product page (28 Oct 2026, owner's "world-class
+adaptive marketplace" brief):** the product details screen uses the
+adaptive theme engine in lib/marketplace/product_theme.dart instead of the
+wash. Per product it sets the hero STAGE colour (the photo's own plain
+background when it has one, else a category surface) and an ACCENT for the
+primary pill, seller link and fact icons. Deliberate departures from the
+palette, scoped to this screen only:
+  - Accents may be any hue taken from the product photo — including deep
+    botanical greens for herbal products — EXCEPT reds and pinks (red
+    stays reserved for errors; pink stays banned). Those fall back to the
+    category preset.
+  - Every accent is forced to WCAG 4.5:1 against its label (tested).
+  - The primary button is a solid accent pill, not the blue gradient.
+Text, navigation, cards and the rest of the app keep the palette. Do not
+spread this engine to other screens without the owner's say-so.
 
 
 

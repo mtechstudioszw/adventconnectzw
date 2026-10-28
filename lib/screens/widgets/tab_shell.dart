@@ -30,6 +30,14 @@ class TabShell extends StatefulWidget {
   /// the tab order in [MainBottomNav].
   static const int homeIndex = 0;
   static const int marketplaceIndex = 3;
+  static const int profileIndex = 4;
+
+  /// The branch on screen. Kept-alive tabs only run `initState` once a
+  /// session, so a tab whose data goes stale while you are elsewhere (the
+  /// post you just made, a friend you just added) listens here and
+  /// refreshes when it comes back. Updated after the frame — never
+  /// notified mid-build.
+  static final ValueNotifier<int> activeIndex = ValueNotifier(homeIndex);
 
   /// Re-tap handlers, keyed by branch index. A tab that wants "tap the
   /// active tab again → scroll to top" registers here in initState and
@@ -67,6 +75,14 @@ class _TabShellState extends State<TabShell> with NavVisibilityMixin {
   @override
   Widget build(BuildContext context) {
     final index = widget.shell.currentIndex;
+    // Every route into a tab ends up here — the island, `goNamed` from a
+    // deep screen, a notification — so this is the one place that sees
+    // all of them.
+    if (TabShell.activeIndex.value != index) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) TabShell.activeIndex.value = widget.shell.currentIndex;
+      });
+    }
     return Scaffold(
       backgroundColor: Colors.transparent,
       // Home's feed runs full-height under the frosted island and reserves

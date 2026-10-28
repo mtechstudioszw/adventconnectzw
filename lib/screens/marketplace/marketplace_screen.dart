@@ -283,9 +283,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       // The island and the banner above it are drawn by TabShell. (The
       // "N items · View basket" bar that used to sit there is gone — it
       // restated the header's basket badge and ate a row of products.)
-      floatingActionButton: const PostFab(
+      floatingActionButton: PostFab(
         routeName: 'add_product',
         tooltip: 'List a product',
+        onCreated: _refresh,
       ),
       body: BrandedRefreshIndicator(
         color: AppColors.primaryBlue,

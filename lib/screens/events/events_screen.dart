@@ -223,9 +223,10 @@ class _EventsScreenState extends State<EventsScreen>
       // PUSHED from Home, so hide the nav and show the AppBar back button.
       currentIndex: 0,
       showNav: false,
-      floatingActionButton: const PostFab(
+      floatingActionButton: PostFab(
         routeName: 'post_event',
         tooltip: 'Post an event',
+        onCreated: _refreshActive,
       ),
       body: AnimatedBuilder(
         animation: _entrance,

@@ -19,11 +19,17 @@ class PostFab extends StatelessWidget {
     required this.routeName,
     required this.tooltip,
     this.icon = Icons.add,
+    this.onCreated,
   });
 
   final String routeName;
   final String tooltip;
   final IconData icon;
+
+  /// Called when the create screen pops `true` (it saved). Every create
+  /// screen already returned that, and every list ignored it — so the
+  /// thing you had just posted was missing until you pulled to refresh.
+  final VoidCallback? onCreated;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +54,10 @@ class PostFab extends StatelessWidget {
         shape: const CircleBorder(),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => context.pushNamed(routeName),
+          onTap: () async {
+            final created = await context.pushNamed<bool>(routeName);
+            if (created == true) onCreated?.call();
+          },
           customBorder: const CircleBorder(),
           child: Tooltip(
             message: tooltip,

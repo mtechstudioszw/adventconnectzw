@@ -39,6 +39,7 @@ import '../../widgets/cached_image.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
+import '../widgets/tab_shell.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -72,6 +73,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _bootstrap();
     _loadAdminRoles();
     _loadVerified();
+    _loadMinistryTags();
+    TabShell.activeIndex.addListener(_onTabChanged);
+  }
+
+  @override
+  void dispose() {
+    TabShell.activeIndex.removeListener(_onTabChanged);
+    super.dispose();
+  }
+
+  DateTime _lastLoad = DateTime.now();
+
+  /// Profile is a kept-alive tab, so `initState` runs once a session. Home
+  /// says "Posted — see it on your profile", and the post was not there
+  /// until the app restarted; friend and church counts went stale the same
+  /// way. Refresh on return, throttled so flicking between tabs is free.
+  void _onTabChanged() {
+    if (TabShell.activeIndex.value != TabShell.profileIndex) return;
+    final now = DateTime.now();
+    if (now.difference(_lastLoad) < const Duration(seconds: 10)) return;
+    _lastLoad = now;
+    _bootstrap();
     _loadMinistryTags();
   }
 

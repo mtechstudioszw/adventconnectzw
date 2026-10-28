@@ -262,6 +262,16 @@ Owner decisions taken in this session:
   - `orders`, `order_items`, `place_order` and `orders_freeze_financials`
     exist live but are **not in `database/`**. The repo can't rebuild the
     DB as it is.
+- **Profile went stale (regression from keep-alive tabs, fixed):** Home
+  says "Posted — see it on your profile" and the post wasn't there until
+  restart; friend/church counts too. New `TabShell.activeIndex` notifier
+  (set post-frame from the shell's build, so every route into a tab is
+  seen); Profile refreshes on return, throttled to once per 10s.
+  Use the same notifier for any other kept-alive tab that goes stale.
+- **New posts missing from their own list (fixed):** every create screen
+  popped `true`, every list ignored it. `PostFab(onCreated:)` wired on
+  Jobs, Events, Prayer, Marketplace. Test: `test/post_fab_on_created_test.dart`.
+  Full suite: **790 passed**.
 - **Marketplace findings NOT fixed (need a decision):**
   - `fetchProducts` sends every approved seller id in the URL
     (`inFilter('seller_id', …)`). Fine now; at a few hundred sellers the
@@ -271,8 +281,10 @@ Owner decisions taken in this session:
     links to it — and it ignores the country scope. Remove or relink.
 
 ### Resume point (exact)
-**Batch 2 → Marketplace remaining:** cart / orders screens audit, listing
-card visual hierarchy (needs eyes on a device). Then **Profile** (Batch 2 D).
+**Batch 2 → Profile (D), continued:** audit edit profile (country rules
+are Batch 12 — don't change them here), avatar quality on Profile,
+profile → chat (keep as fixed in Batch 1). Then the end-of-batch report
++ full `flutter analyze`.
 - **Done:** Home left open overnight kept yesterday's devotion and
   hymn/track/book. Home now has an `AppLifecycleListener`; on resume, if the
   UTC day changed (devotion RPC and TodayCard picks both roll on UTC), it

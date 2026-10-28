@@ -152,9 +152,10 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
       // the Marketplace pill — the same lie Prayer told with the Profile
       // pill. Its ScreenHero already carries the back button.
       bottomNavigationBar: const SafeArea(top: false, child: AdBanner()),
-      floatingActionButton: const PostFab(
+      floatingActionButton: PostFab(
         routeName: 'post_job',
         tooltip: 'Post a job',
+        onCreated: _loadJobs,
       ),
       body: NotificationListener<UserScrollNotification>(
         onNotification: handleNavScroll,

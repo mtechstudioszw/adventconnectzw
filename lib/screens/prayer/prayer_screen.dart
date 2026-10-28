@@ -464,10 +464,11 @@ class _PrayerScreenState extends State<PrayerScreen> {
       // the founder reported (2 Aug 2026).
       currentIndex: 0,
       showNav: false,
-      floatingActionButton: const PostFab(
+      floatingActionButton: PostFab(
         routeName: 'post_prayer',
         tooltip: 'Share a prayer',
         icon: Icons.volunteer_activism,
+        onCreated: _bootstrap,
       ),
       body: Column(
         children: [

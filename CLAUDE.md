@@ -158,6 +158,12 @@ Success Green:  #2E7D32  // Status badges ONLY
     `onboarding\_screen`, `maintenance\_screen`, and `chat\_screen` (via
     `ChatWallpaper`). Transparent there stacks two fields.
 
+  \- \*\*No ghost outlines behind real screens (28 Oct 2026).\*\* The field's
+    outlined rounded rects read as broken layout over real content, so
+    `AmbientPainter(ghosts: false)` everywhere a screen sits on it
+    (AmbientBackground, ChatWallpaper, the create sheet). Splash and the
+    onboarding film keep them. Blobs and dust are unchanged.
+
   \- \*\*It runs at ~15fps behind a RepaintBoundary, not 60.\*\* See
     `AmbientBackground.frameInterval` and the note on `ChatWallpaper`: a
     full-screen animated CustomPaint under a flung list repaints the

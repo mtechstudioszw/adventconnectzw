@@ -266,31 +266,40 @@ class _PersonSkeleton extends StatelessWidget {
 class _ProductSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    // Mirrors ProductTile's silhouette: a 3:4 photo block, then price and
-    // title bars on the background. A single filled rectangle no longer
-    // resembles what loads in behind it.
+    // Mirrors ProductTile's silhouette (redesigned 28 Oct 2026): a card
+    // with a square photo, then price, title and seller bars inside it.
+    final fill = context.palette.card;
     return Shimmer.fromColors(
       baseColor: ShimmerLoaders.baseColor(context),
       highlightColor: ShimmerLoaders.highlightColor(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AspectRatio(
-            aspectRatio: 3 / 4,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: context.palette.card,
-                borderRadius: AppRadius.lgAll,
+      child: Container(
+        decoration: BoxDecoration(
+          color: fill,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 1,
+              child: ColoredBox(color: fill),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpace.md - 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _Bar(width: 52, height: 14, palette: fill),
+                  const SizedBox(height: 6),
+                  _Bar(width: double.infinity, height: 10, palette: fill),
+                  const SizedBox(height: 6),
+                  _Bar(width: 80, height: 10, palette: fill),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: AppSpace.sm),
-          _Bar(width: 62, height: 14, palette: context.palette.card),
-          const SizedBox(height: 6),
-          _Bar(width: double.infinity, height: 10, palette: context.palette.card),
-          const SizedBox(height: 4),
-          _Bar(width: 90, height: 10, palette: context.palette.card),
-        ],
+          ],
+        ),
       ),
     );
   }

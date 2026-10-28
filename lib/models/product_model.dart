@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 import '../config/countries.dart';
 
 class Product {
@@ -191,6 +193,21 @@ class Product {
 
 class ProductCategory {
   const ProductCategory({required this.id, required this.label, required this.icon});
+
+  /// Material icon for the chip strip. The emoji in [icon] rendered as
+  /// colourful clip-art next to the app's line icons everywhere else, and
+  /// at a different size on every phone vendor.
+  IconData get materialIcon => switch (id) {
+        'all' => Icons.apps_rounded,
+        'books' => Icons.menu_book_rounded,
+        'clothing' => Icons.checkroom_rounded,
+        'electronics' => Icons.smartphone_rounded,
+        'food' => Icons.bakery_dining_rounded,
+        'catering' => Icons.restaurant_rounded,
+        'furniture' => Icons.chair_rounded,
+        'services' => Icons.handyman_rounded,
+        _ => Icons.category_rounded,
+      };
   final String id;
   final String label;
   final String icon;

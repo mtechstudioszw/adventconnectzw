@@ -455,7 +455,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         const SectionHeader(title: 'Shops in the community'),
         const SizedBox(height: AppSpace.md),
         SizedBox(
-          height: 208,
+          height: ShopCard.railHeight,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
@@ -494,7 +494,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           final cat = ProductCategory.all[i];
           return _CategoryChip(
             label: cat.label,
-            icon: cat.icon,
+            icon: cat.materialIcon,
             selected: _selectedCategory == cat.id,
             onTap: () => _selectCategory(cat.id),
           );
@@ -1002,41 +1002,48 @@ class _CategoryChip extends StatelessWidget {
   });
 
   final String label;
-  final String icon;
+  final IconData icon;
   final bool selected;
   final VoidCallback onTap;
 
+  /// Selected is Primary Blue with white, per the colour rules ("buttons,
+  /// active states"). It was `palette.text` — a white pill in dark mode,
+  /// the brightest thing on the screen, for a filter.
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+    final fg = selected ? AppColors.white : palette.text;
     return Pressable(
       onTap: onTap,
       pressedScale: 0.94,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(
-          horizontal: AppSpace.lg - 2,
-          vertical: AppSpace.md - 2,
+          horizontal: AppSpace.md + 2,
+          vertical: AppSpace.sm,
         ),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? context.palette.text : context.palette.card,
+          color: selected ? AppColors.primaryBlue : palette.card,
           borderRadius: AppRadius.pillAll,
           border: Border.all(
-            color: selected ? context.palette.text : context.palette.divider,
+            color: selected ? AppColors.primaryBlue : palette.divider,
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(icon, style: const TextStyle(fontSize: 14)),
+            Icon(
+              icon,
+              size: 16,
+              color: selected ? AppColors.white : AppColors.primaryBlue,
+            ),
             const SizedBox(width: 6),
             Text(
               label,
               style: AppTextStyles.labelMedium.copyWith(
-                color: selected
-                    ? context.palette.scaffoldBg
-                    : context.palette.text,
-                fontWeight: FontWeight.w700,
+                color: fg,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],

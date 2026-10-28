@@ -26,7 +26,7 @@ class ProductTile extends StatelessWidget {
     required this.product,
     required this.onTap,
     this.heroTag,
-    this.aspectRatio = 3 / 4,
+    this.aspectRatio = 1,
     this.saved,
     this.onToggleSave,
   });
@@ -41,9 +41,10 @@ class ProductTile extends StatelessWidget {
   static const SliverGridDelegateWithFixedCrossAxisCount gridDelegate =
       SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisSpacing: AppSpace.xl,
+        mainAxisSpacing: AppSpace.md,
         crossAxisSpacing: AppSpace.md,
-        childAspectRatio: 0.56,
+        // Square photo + ~110px of text inside the card.
+        childAspectRatio: 0.62,
       );
 
   final Product product;
@@ -65,99 +66,73 @@ class ProductTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final unavailable = !product.isAvailable;
-    return Pressable(
-      onTap: onTap,
+    // Redesigned 28 Oct 2026 to the house rules: a card (white with
+    // shadow, 16 radius) holding a SQUARE photo — CLAUDE.md makes product
+    // covers square — with price, title and seller inside the card. It was
+    // a 3:4 photo with its text floating on the page background.
+    final compactText = MediaQuery.textScalerOf(context).scale(1) > 1.3;
+    return LayoutBuilder(
+      builder: (context, constraints) => _card(
+        context,
+        palette,
+        unavailable,
+        compactText,
+        bounded: constraints.hasBoundedHeight,
+      ),
+    );
+  }
+
+  /// [bounded]: in a grid cell or fixed-height rail the text area fills the
+  /// rest of the card and the seller line sits at the bottom. Unbounded
+  /// (the listing preview sheet) it simply takes its natural height —
+  /// `Expanded` there would throw.
+  Widget _card(
+    BuildContext context,
+    AppPalette palette,
+    bool unavailable,
+    bool compactText, {
+    required bool bounded,
+  }) {
+    final text = Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.md - 2,
+        AppSpace.sm,
+        AppSpace.md - 2,
+        AppSpace.sm,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: bounded ? MainAxisSize.max : MainAxisSize.min,
         children: [
-          // Flexible, not a bare AspectRatio.
-          //
-          // The grid hands each tile a FIXED height (width / 0.56) and the
-          // 3:4 photo plus price + two title lines + the seller row landed
-          // within ~2dp of it. Any larger system font size, or a font
-          // whose metrics differ by a hair, tipped it over — which is the
-          // "BOTTOM OVERFLOWED BY 7 PIXELS" stripe.
-          //
-          // Loose-fitting the photo lets it give back the few pixels the
-          // text needs instead of the column blowing its bounds. At normal
-          // text size nothing moves; the photo keeps its 3:4.
-          Flexible(
-            child: AspectRatio(
-              aspectRatio: aspectRatio,
-              child: ClipRRect(
-                borderRadius: AppRadius.lgAll,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (heroTag != null)
-                      Hero(
-                        tag: heroTag!,
-                        child: _TileImage(url: product.firstImage),
-                      )
-                    else
-                      _TileImage(url: product.firstImage),
-
-                    // Sold / reserved dim the photo rather than hiding the
-                    // listing — scarcity is information a buyer wants.
-                    if (unavailable)
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.45),
-                        ),
-                      ),
-                    if (unavailable)
-                      Center(
-                        child: _StatusStamp(
-                          label: product.isSold ? 'SOLD' : 'RESERVED',
-                        ),
-                      ),
-
-                    if (product.isFeatured && !unavailable)
-                      const Positioned(
-                        top: AppSpace.sm,
-                        left: AppSpace.sm,
-                        child: _FeaturedPip(),
-                      ),
-
-                    if (saved != null)
-                      Positioned(
-                        top: AppSpace.xs,
-                        right: AppSpace.xs,
-                        child: _SaveHeart(saved: saved!, onTap: onToggleSave),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpace.sm),
-
-          // Price leads. It is the number the buyer is actually scanning
-          // for, so it gets the strongest type on the tile instead of
-          // being a 12px chip floating over uncontrolled photo content.
           Text(
             product.formatPrice(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.titleMedium.copyWith(
-              color: palette.text,
-              fontWeight: FontWeight.w800,
+              color: AppColors.primaryBlue,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 2),
           Text(
             product.title,
-            maxLines: 2,
+            maxLines: compactText ? 1 : 2,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.bodySmall.copyWith(
               color: palette.text,
+              fontWeight: FontWeight.w500,
               height: 1.3,
             ),
           ),
-          const SizedBox(height: 2),
+          if (bounded) const Spacer() else const SizedBox(height: 6),
           Row(
             children: [
+              Icon(
+                Icons.storefront_outlined,
+                size: 12,
+                color: palette.textMuted,
+              ),
+              const SizedBox(width: 4),
               Flexible(
                 child: Text(
                   product.sellerName,
@@ -165,6 +140,7 @@ class ProductTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.bodySmall.copyWith(
                     color: palette.textMuted,
+                    fontSize: 11.5,
                   ),
                 ),
               ),
@@ -179,6 +155,64 @@ class ProductTile extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+    return Pressable(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: palette.divider),
+          boxShadow: AppShadows.card(context),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: bounded ? MainAxisSize.max : MainAxisSize.min,
+          children: [
+            AspectRatio(
+              aspectRatio: aspectRatio,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (heroTag != null)
+                    Hero(
+                      tag: heroTag!,
+                      child: _TileImage(url: product.firstImage),
+                    )
+                  else
+                    _TileImage(url: product.firstImage),
+                  if (unavailable)
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                      ),
+                    ),
+                  if (unavailable)
+                    Center(
+                      child: _StatusStamp(
+                        label: product.isSold ? 'SOLD' : 'RESERVED',
+                      ),
+                    ),
+                  if (product.isFeatured && !unavailable)
+                    const Positioned(
+                      top: AppSpace.sm,
+                      left: AppSpace.sm,
+                      child: _FeaturedPip(),
+                    ),
+                  if (saved != null)
+                    Positioned(
+                      top: AppSpace.xs,
+                      right: AppSpace.xs,
+                      child: _SaveHeart(saved: saved!, onTap: onToggleSave),
+                    ),
+                ],
+              ),
+            ),
+            if (bounded) Expanded(child: text) else text,
+          ],
+        ),
       ),
     );
   }

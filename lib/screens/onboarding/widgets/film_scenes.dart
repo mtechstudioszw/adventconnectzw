@@ -103,7 +103,17 @@ class AmbientPainter extends CustomPainter {
     required this.loop,
     required this.film,
     required this.dark,
+    this.ghosts = true,
   });
+
+  /// Draw the ghost UI fragments (outlined rounded rects).
+  ///
+  /// Off for the app-wide field behind every screen (28 Oct 2026): over
+  /// real content the empty outlines read as broken layout — leftover
+  /// boxes beside a profile's stats, under a header, between cards — not
+  /// as depth. They stay on the splash and onboarding film, where there
+  /// is no real UI for them to be mistaken for.
+  final bool ghosts;
 
   final double loop; // 0→1 repeating (~14s)
   final double film; // master film position, for parallax drift
@@ -171,7 +181,7 @@ class AmbientPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
     const depths = [0.35, 0.6, 1.0];
-    for (var i = 0; i < 6; i++) {
+    for (var i = 0; ghosts && i < 6; i++) {
       final d = depths[i % 3];
       final phase = a * (0.5 + d * 0.5) + i * 1.1;
       final x =
@@ -210,7 +220,10 @@ class AmbientPainter extends CustomPainter {
   bool shouldRepaint(AmbientPainter old) =>
       // `dark` belongs here: without it a live theme switch keeps the old
       // field painted until some other value happens to change.
-      old.loop != loop || old.film != film || old.dark != dark;
+      old.loop != loop ||
+      old.film != film ||
+      old.dark != dark ||
+      old.ghosts != ghosts;
 }
 
 // ---------------------------------------------------------------------------

@@ -168,6 +168,9 @@ class _AmbientBackgroundState extends State<AmbientBackground> {
                     // outside that reel there is no story to follow, so
                     // the field just breathes in place.
                     film: 0,
+                    // Ghost outlines off behind real screens — see
+                    // AmbientPainter.ghosts.
+                    ghosts: false,
                     dark: dark,
                   ),
                   child: const SizedBox.expand(),
@@ -243,7 +246,12 @@ class AmbientFill extends StatelessWidget {
                 child: ValueListenableBuilder<double>(
                   valueListenable: AmbientBackground.loop,
                   builder: (context, loop, _) => CustomPaint(
-                    painter: AmbientPainter(loop: loop, film: 0, dark: dark),
+                    painter: AmbientPainter(
+                      loop: loop,
+                      film: 0,
+                      dark: dark,
+                      ghosts: false,
+                    ),
                     child: const SizedBox.expand(),
                   ),
                 ),

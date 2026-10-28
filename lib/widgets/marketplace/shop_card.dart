@@ -8,145 +8,130 @@ import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../motion/pressable.dart';
 
-/// A storefront as a destination, for the shops rail on the marketplace tab.
+/// One shop in the "Shops in the community" rail.
 ///
-/// The shape is deliberately the inverse of a product tile: wide 16:9 cover
-/// with the logo breaking its bottom edge, so shops and products can never
-/// be confused for one another while scrolling.
+/// Redesigned 28 Oct 2026. It was a 224px card with a 16:9 cover and a
+/// logo hanging off it — two of them filled the screen, so the rail pushed
+/// every product below the fold on a phone. Now a short horizontal card: a
+/// square thumbnail (the logo, else the cover, else a storefront glyph —
+/// uploaded images are square per CLAUDE.md), the name on up to two lines,
+/// and one line of trust and place. The cover still leads the shop page.
 class ShopCard extends StatelessWidget {
   const ShopCard({
     super.key,
     required this.seller,
     required this.onTap,
-    this.width = 224,
+    this.width = 236,
   });
 
   final Seller seller;
   final VoidCallback onTap;
   final double width;
 
-  static const double _logo = 44;
+  static const double _thumb = 60;
+
+  /// Rail height that fits the card at 1.0x text. The rail uses this so the
+  /// two can't drift apart.
+  static const double railHeight = 92;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final cover = seller.coverPhotoUrl;
-    final hasCover = cover != null && cover.isNotEmpty;
     final place = [
       seller.city,
       seller.province,
     ].where((s) => s != null && s.isNotEmpty).join(', ');
+    final rated = seller.ratingCount > 0;
 
     return Pressable(
       onTap: onTap,
-      child: SizedBox(
+      child: Container(
         width: width,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+        padding: const EdgeInsets.all(AppSpace.sm + 2),
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: palette.divider),
+          boxShadow: AppShadows.card(context),
+        ),
+        child: Row(
           children: [
-            // Cover + overlapping logo. The Stack is sized by the cover and
-            // allowed to overflow downward by half the logo, so the row of
-            // text below starts clear of it.
-            SizedBox(
-              height: width * 9 / 16 + _logo / 2,
-              child: Stack(
-                clipBehavior: Clip.none,
+            _ShopThumb(seller: seller, size: _thumb),
+            const SizedBox(width: AppSpace.md),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 0,
-                    child: ClipRRect(
-                      borderRadius: AppRadius.lgAll,
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: hasCover
-                            ? CachedNetworkImage(
-                                imageUrl: cover,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) =>
-                                    const _CoverFallback(),
-                                errorWidget: (context, url, error) =>
-                                    const _CoverFallback(),
-                              )
-                            : const _CoverFallback(),
-                      ),
+                  Text.rich(
+                    TextSpan(
+                      text: seller.businessName,
+                      children: [
+                        if (seller.verified || seller.sdaVerified)
+                          const WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Padding(
+                              padding: EdgeInsets.only(left: 3),
+                              child: Icon(
+                                Icons.verified,
+                                size: 14,
+                                color: AppColors.goldAccent,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
-                  Positioned(
-                    left: AppSpace.md,
-                    bottom: 0,
-                    child: _ShopLogo(seller: seller, size: _logo),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpace.sm),
-            Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    seller.businessName,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.titleSmall.copyWith(
-                      color: palette.text,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                if (seller.verified || seller.sdaVerified) ...[
-                  const SizedBox(width: AppSpace.xs),
-                  const Icon(
-                    Icons.verified,
-                    size: 14,
-                    color: AppColors.goldAccent,
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 2),
-            Row(
-              children: [
-                if (seller.ratingCount > 0) ...[
-                  const Icon(
-                    Icons.star_rounded,
-                    size: 13,
-                    color: AppColors.goldAccent,
-                  ),
-                  const SizedBox(width: 2),
-                  Text(
-                    seller.rating.toStringAsFixed(1),
-                    style: AppTextStyles.bodySmall.copyWith(
+                    style: AppTextStyles.labelLarge.copyWith(
                       color: palette.text,
                       fontWeight: FontWeight.w700,
+                      height: 1.25,
                     ),
                   ),
-                  const SizedBox(width: AppSpace.sm),
-                ] else ...[
-                  Text(
-                    'New',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w700,
+                  const SizedBox(height: 3),
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        if (rated) ...[
+                          const WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Icon(
+                              Icons.star_rounded,
+                              size: 13,
+                              color: AppColors.goldAccent,
+                            ),
+                          ),
+                          TextSpan(
+                            text: ' ${seller.rating.toStringAsFixed(1)}',
+                            style: TextStyle(
+                              color: palette.text,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ] else
+                          const TextSpan(
+                            text: 'New',
+                            style: TextStyle(
+                              color: AppColors.primaryBlue,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        TextSpan(
+                          text:
+                              ' · ${place.isEmpty ? SellerCategory.labelFor(seller.category) : place}',
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: AppSpace.sm),
-                ],
-                Flexible(
-                  child: Text(
-                    place.isEmpty
-                        ? SellerCategory.labelFor(seller.category)
-                        : place,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.bodySmall.copyWith(
                       color: palette.textMuted,
+                      fontSize: 11.5,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
@@ -155,46 +140,45 @@ class ShopCard extends StatelessWidget {
   }
 }
 
-class _CoverFallback extends StatelessWidget {
-  const _CoverFallback();
-
-  @override
-  Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(gradient: AppColors.appBarGradient),
-    );
-  }
-}
-
-class _ShopLogo extends StatelessWidget {
-  const _ShopLogo({required this.seller, required this.size});
+class _ShopThumb extends StatelessWidget {
+  const _ShopThumb({required this.seller, required this.size});
 
   final Seller seller;
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    final photo = seller.profilePhotoUrl;
-    final hasPhoto = photo != null && photo.isNotEmpty;
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        gradient: hasPhoto ? null : AppColors.primaryGradient,
-        color: hasPhoto ? AppColors.lightGrey : null,
-        shape: BoxShape.circle,
-        border: Border.all(color: context.palette.scaffoldBg, width: 3),
-        image: hasPhoto
-            ? DecorationImage(
-                image: CachedNetworkImageProvider(photo),
-                fit: BoxFit.cover,
-              )
-            : null,
+    final logo = seller.profilePhotoUrl;
+    final cover = seller.coverPhotoUrl;
+    final url = (logo != null && logo.isNotEmpty)
+        ? logo
+        : (cover != null && cover.isNotEmpty)
+        ? cover
+        : null;
+    final fallback = DecoratedBox(
+      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+      child: Center(
+        child: Icon(
+          Icons.storefront_rounded,
+          color: AppColors.white,
+          size: size * 0.36,
+        ),
       ),
-      alignment: Alignment.center,
-      child: hasPhoto
-          ? null
-          : Icon(Icons.storefront, color: AppColors.white, size: size * 0.45),
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.button),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: url == null
+            ? fallback
+            : CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                placeholder: (context, _) => fallback,
+                errorWidget: (context, _, _) => fallback,
+              ),
+      ),
     );
   }
 }

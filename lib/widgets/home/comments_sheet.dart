@@ -165,6 +165,17 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     }
   }
 
+  /// The name of the comment [reply] answers, or null when it answers the
+  /// top comment of its thread (that's already clear from the layout).
+  String? _replyingToName(PostComment reply, PostComment root) {
+    final parentId = reply.parentCommentId;
+    if (parentId == null || parentId == root.id) return null;
+    for (final c in _flat) {
+      if (c.id == parentId) return c.authorName;
+    }
+    return null;
+  }
+
   void _startReply(PostComment target) {
     setState(() => _replyTo = target);
     _composerFocus.requestFocus();
@@ -206,11 +217,21 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     );
     if (confirmed != true) return;
 
-    // Optimistic removal of the comment + any direct replies to it.
-    final removedIds = <String>{
-      comment.id,
-      ..._flat.where((c) => c.parentCommentId == comment.id).map((c) => c.id),
-    };
+    // Optimistic removal of the comment and every reply under it, however
+    // deep — replies can now answer replies, so "direct replies" is not
+    // enough.
+    final removedIds = <String>{comment.id};
+    var grew = true;
+    while (grew) {
+      grew = false;
+      for (final c in _flat) {
+        if (c.parentCommentId != null &&
+            removedIds.contains(c.parentCommentId) &&
+            removedIds.add(c.id)) {
+          grew = true;
+        }
+      }
+    }
     final prev = _flat;
     final next = _flat.where((c) => !removedIds.contains(c.id)).toList();
     setState(() {
@@ -348,11 +369,18 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                     for (final reply in root.replies) ...[
                       _CommentRow(
                         comment: reply,
+                        // Who this reply answers, when it isn't the top
+                        // comment — so a back-and-forth reads as one.
+                        replyingTo: _replyingToName(reply, root),
                         isOwner: widget.postAuthorId != null &&
                             reply.authorId == widget.postAuthorId,
                         canDelete: _canDelete(reply),
                         onDelete: () => _deleteComment(reply),
-                        onReply: () => _startReply(root),
+                        // Reply to THIS reply. It used to target the top
+                        // comment, so you could never answer the person
+                        // who replied to you — the thread stopped after
+                        // one reply, and they were never notified.
+                        onReply: () => _startReply(reply),
                         onLike: () => _react(reply, 1),
                         onDislike: () => _react(reply, -1),
                       ),
@@ -522,9 +550,13 @@ class _CommentRow extends StatelessWidget {
     this.isOwner = false,
     this.canDelete = false,
     this.onDelete,
+    this.replyingTo,
   });
 
   final PostComment comment;
+
+  /// Name of the person this reply answers, shown above the text.
+  final String? replyingTo;
   final bool isOwner;
   final bool canDelete;
   final VoidCallback? onDelete;
@@ -662,6 +694,32 @@ class _CommentRow extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 2),
+                    if (replyingTo != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.subdirectory_arrow_right_rounded,
+                              size: 13,
+                              color: AppColors.primaryBlue,
+                            ),
+                            const SizedBox(width: 3),
+                            Flexible(
+                              child: Text(
+                                replyingTo!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.primaryBlue,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     // Long comments fold. One 1,000-character comment used
                     // to push every reply under it off the sheet — you had
                     // to scroll past someone's essay to find the next

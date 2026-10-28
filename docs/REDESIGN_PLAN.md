@@ -65,8 +65,8 @@ to run in the SQL editor; app features depending on it say so until it runs
 
 | # | Stage | Needs DB patch | Status |
 |---|---|---|---|
-| 1 | Audit + design foundation (tokens, remove dots/outlines/glow noise) | no | in progress |
-| 2 | Shared post card + menu: own posts in Home, Save (+ Saved screen), Hide, Copy link, Report; feed/profile consistency | **patch_273** saved_posts, hidden_posts | next |
+| 1 | Audit + design foundation (tokens, remove dots/outlines/glow noise) | no | done (quiet field); tokens continue per stage |
+| 2 | Shared post card + menu: own posts in Home, Save (+ Saved screen), Hide, Copy link, Report; feed/profile consistency; comment reply-to-reply | **patch_273** saved_posts, hidden_posts | code done; Unfollow item waits for stage 3 |
 | 3 | Profile redesign + followers (one-way) alongside friends; privacy | **patch_274** follows, profile links/privacy | |
 | 4 | Organization Pages (create/manage/follow), church associations | **patch_275** pages, page_admins, page_follows; migrate churches carefully (no auto-migration) | |
 | 5 | Marketplace discovery: sections, server-side search/filters/pagination, deterministic ranking + exploration, labelled sponsorship | maybe (indexes, ranking view) | |

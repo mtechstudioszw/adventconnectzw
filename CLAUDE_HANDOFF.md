@@ -184,9 +184,12 @@ Owner decisions taken in this session:
 
 ### Resume point (exact)
 **Batch 2 → Home card visual pass**, then Marketplace (item 2 below).
-Watch for other self-loading Home widgets that fetch only in `initState`
-(same kept-alive issue) — `TodayCard` picks "of the day" items once, so a
-session left open past midnight keeps yesterday's hymn/track/book.
+- **Done:** Home left open overnight kept yesterday's devotion and
+  hymn/track/book. Home now has an `AppLifecycleListener`; on resume, if the
+  UTC day changed (devotion RPC and TodayCard picks both roll on UTC), it
+  runs `_refresh()`, which also refetches the devotion and bumps
+  `TodayCard.refreshTick`. Pull-to-refresh refreshes them too now.
+  Not unit-tested (Home/TodayCard need Supabase) — check on device.
 
 Then, still Batch 2:
 1. Home polish: card visual pass (states done)

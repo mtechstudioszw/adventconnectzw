@@ -208,6 +208,16 @@ class _HomeScreenState extends State<HomeScreen>
   /// (Featured church events) refetch too. Home is a kept-alive tab, so
   /// their `initState` no longer runs on each visit.
   int _refreshTick = 0;
+
+  /// The UTC day Home's "of the day" content was loaded for — UTC because
+  /// the devotion RPC and TodayCard's picks both roll over on the UTC date.
+  /// A kept-alive Home left open overnight otherwise kept yesterday's
+  /// devotion, hymn, track and book until the app was killed.
+  String _loadedDay = _utcDay();
+  late final AppLifecycleListener _lifecycle;
+
+  static String _utcDay() =>
+      DateTime.now().toUtc().toIso8601String().substring(0, 10);
   int _pagesLoaded = 0;
 
   /// Batches "I've seen this" writes. A card marks itself locally as it
@@ -231,6 +241,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
+    _lifecycle = AppLifecycleListener(onResume: _onResume);
     // Tapping Home while already on Home returns to the top — the only way
     // back up from an endless feed. The shared island calls this.
     TabShell.registerReselect(TabShell.homeIndex, _scrollToTop);
@@ -402,6 +413,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    _lifecycle.dispose();
     TabShell.unregisterReselect(TabShell.homeIndex, _scrollToTop);
     FeedService.friendshipsChanged.removeListener(_onFriendshipsChanged);
     _authSub?.cancel();
@@ -485,10 +497,23 @@ class _HomeScreenState extends State<HomeScreen>
   ///
   /// Tier 2 failures are swallowed per-tier: a dead marketplace must never
   /// blank the feed.
-  /// Pull-to-refresh, the "Updated X ago" strip and the feed's Try again.
+  /// Pull-to-refresh, the "Updated X ago" strip, the feed's Try again, and
+  /// coming back to the app on a new day.
   Future<void> _refresh() {
-    setState(() => _refreshTick++);
+    setState(() {
+      _refreshTick++;
+      _loadedDay = _utcDay();
+    });
+    DevotionService.fetchToday().then((d) {
+      if (mounted && d != null) setState(() => _devotion = d);
+    });
     return _bootstrap();
+  }
+
+  /// Back in the foreground. Only a new day triggers anything — a full
+  /// refresh on every app switch would cost data for nothing.
+  void _onResume() {
+    if (mounted && _utcDay() != _loadedDay) _refresh();
   }
 
   Future<void> _bootstrap() async {
@@ -1434,7 +1459,10 @@ class _HomeScreenState extends State<HomeScreen>
                   // Devotion + Sabbath School + hymn / music / EGW of the
                   // day. Self-hides only if every source is empty, which the
                   // bundled hymnal makes very unlikely.
-                  TodayCard(devotion: _devotion),
+                  TodayCard(
+                    devotion: _devotion,
+                    refreshTick: _refreshTick,
+                  ),
                   const SizedBox(height: AppSpace.md),
                   // Library launcher, and the quiz's only entry point ON THE
                   // FEED — the Library app bar gained a second one in Aug

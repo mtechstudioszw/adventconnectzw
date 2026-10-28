@@ -38,9 +38,14 @@ import '../motion/pressable.dart';
 /// live position rather than by discrete page-change events, so it tracks
 /// the finger.
 class TodayCard extends StatefulWidget {
-  const TodayCard({super.key, required this.devotion});
+  const TodayCard({super.key, required this.devotion, this.refreshTick = 0});
 
   final Devotion? devotion;
+
+  /// Bumped by Home on refresh and when the app resumes on a new day. The
+  /// card lives in a kept-alive tab, so `initState` alone would pick the
+  /// hymn, track and book once per session — yesterday's, after midnight.
+  final int refreshTick;
 
   @override
   State<TodayCard> createState() => _TodayCardState();
@@ -68,6 +73,16 @@ class _TodayCardState extends State<TodayCard> {
   @override
   void initState() {
     super.initState();
+    _loadPicks();
+  }
+
+  @override
+  void didUpdateWidget(TodayCard old) {
+    super.didUpdateWidget(old);
+    if (old.refreshTick != widget.refreshTick) _loadPicks();
+  }
+
+  void _loadPicks() {
     _loadHymn();
     _loadQuarterly();
     _loadLibraryPick('music', (i) => _track = i);

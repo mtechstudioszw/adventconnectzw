@@ -23,6 +23,7 @@ import '../../widgets/marketplace/safety_card.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
+import '../../widgets/offline_toast.dart';
 
 /// Product detail.
 ///
@@ -52,6 +53,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   Product? _product;
   bool _loading = true;
   String? _error;
+
+  /// The server says this listing is gone — deleted, removed by the
+  /// seller, or the shop is no longer approved. Opening a shared link to
+  /// one used to crash (`_product!` on null), and opening one from a stale
+  /// grid kept offering Add to basket for something nobody can buy.
+  bool _gone = false;
   bool _saved = false;
   int _currentImage = 0;
   final _pageController = PageController();
@@ -84,7 +91,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       );
       if (!mounted) return;
       setState(() {
-        _product = fetched ?? _product;
+        if (fetched == null) {
+          _gone = true;
+          _product = null;
+        } else {
+          _product = fetched;
+        }
         _loading = false;
       });
     } catch (_) {
@@ -117,10 +129,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _saved = was);
+      // Every failure used to say "Sign in", including a signed-in member
+      // with no signal.
+      if (maybeShowOffline(context)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Sign in to save listings.',
+            AuthService.currentUser == null
+                ? 'Sign in to save listings.'
+                : "Couldn't save this listing. Try again.",
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
@@ -296,7 +313,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
       body: _buildBody(),
-      bottomNavigationBar: product == null
+      bottomNavigationBar: product == null || _gone
           ? null
           : _ActionBar(
               product: product,
@@ -309,6 +326,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   Widget _buildBody() {
+    if (_gone) return _buildGone();
     if (_loading && _product == null) {
       return const Center(child: BrandSpinner(size: 34));
     }
@@ -364,9 +382,59 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
+  /// Shared frame for the full-screen notices. The details screen has no
+  /// app bar (the photo runs under the status bar), so without this the
+  /// only way out of an error was the system back gesture.
+  Widget _noticeFrame(Widget child) {
+    return SafeArea(
+      child: Stack(
+        children: [
+          Center(child: child),
+          const Positioned(top: 4, left: 4, child: BackButton()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGone() {
+    final palette = context.palette;
+    return _noticeFrame(
+      Padding(
+        padding: const EdgeInsets.all(AppSpace.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.remove_shopping_cart_outlined,
+              size: 48,
+              color: palette.textMuted,
+            ),
+            const SizedBox(height: AppSpace.md),
+            Text(
+              'This listing is no longer available',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.titleMedium.copyWith(
+                color: palette.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              'The seller may have sold or removed it.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: palette.textMuted,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildError() {
-    return Center(
-      child: Padding(
+    return _noticeFrame(
+      Padding(
         padding: const EdgeInsets.all(AppSpace.xl),
         child: Column(
           mainAxisSize: MainAxisSize.min,

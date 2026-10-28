@@ -163,12 +163,18 @@ class MarketplaceService {
     final response =
         await _client.from(_table).select().eq('id', id).maybeSingle();
     if (response == null) return null;
+    final viewerId = _client.auth.currentUser?.id;
+    // A listing the seller took down is gone for everyone but them. It used
+    // to open from a shared link anyway, labelled "RESERVED".
+    if (response['status'] == 'removed' &&
+        response['seller_id']?.toString() != viewerId) {
+      return null;
+    }
     // products has no seller_phone / seller_name column — those live on
     // the sellers row keyed by auth_user_id. Hydrate them here so the
     // product details screen can render the WhatsApp + name affordances
     // without a second round-trip on the screen side.
     final sellerId = (response['seller_id'] ?? '').toString();
-    final viewerId = _client.auth.currentUser?.id;
     if (sellerId.isNotEmpty) {
       try {
         final sellerRow = await _client

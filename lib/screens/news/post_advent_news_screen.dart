@@ -9,6 +9,7 @@ import '../../models/advent_news_model.dart';
 import '../../services/ads/interstitial_ad_manager.dart';
 import '../../services/advent_news_service.dart';
 import '../../services/storage_service.dart';
+import '../../services/post_limit_error.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
@@ -169,7 +170,10 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
       if (!mounted) return;
       setState(() {
         _saving = false;
-        _error = 'Could not save. ${e is Exception ? '' : e.toString()}';
+        _error = PostLimitError.messageFor(
+          e,
+          fallback: 'Could not save. ${e is Exception ? '' : e.toString()}',
+        );
       });
     }
   }

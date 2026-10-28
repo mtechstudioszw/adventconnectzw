@@ -216,6 +216,20 @@ Owner decisions taken in this session:
   `t.runAsync(() => Future.delayed(...))` + `pump`; a failed request
   leaves postgrest retry timers, so pump ~30s before the test ends.
 - Full `flutter test`: **776 passed**.
+- **Edit listing (fixed):** subcategory, condition and location were never
+  pre-filled in edit mode and never sent by `SellerService.updateProduct`
+  — "Like new" opened as "New" and every change to those three was
+  silently dropped. Prefilled now; `updateProduct` takes them (null =
+  unchanged, '' clears; an unknown legacy condition is left alone and the
+  dropdown shows its hint instead of crashing).
+- **Daily post limit message was never shown, anywhere.** `PostLimitError`
+  builds "You've listed 3 products today. Try again in 24 hours." but all
+  seven create screens (product, news, post, story, prayer, event, job)
+  caught it with `catch (_)` → "Please try again". New
+  `PostLimitError.messageFor(e, fallback:)` (limit → its message; offline →
+  offline; else fallback) used in all seven.
+- `signInFake(userId)` added to the test harness.
+  Test: `test/edit_product_fields_test.dart`. Full suite: **780 passed**.
 - **Marketplace findings NOT fixed (need a decision):**
   - `fetchProducts` sends every approved seller id in the URL
     (`inFilter('seller_id', …)`). Fine now; at a few hundred sellers the

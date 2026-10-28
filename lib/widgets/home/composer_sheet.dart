@@ -10,6 +10,7 @@ import '../../services/auth_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
 import '../../services/feed_service.dart';
+import '../../services/post_limit_error.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
@@ -365,13 +366,16 @@ class _PostComposerState extends State<_PostComposer>
       // publish must leave the text exactly where it was.
       _clearDraft();
       Navigator.of(context).pop(post);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _publishing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Could not publish. Try again.',
+            PostLimitError.messageFor(
+              e,
+              fallback: 'Could not publish. Try again.',
+            ),
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
@@ -1611,13 +1615,16 @@ class _StoryComposerState extends State<_StoryComposer> {
             );
       if (!mounted) return;
       Navigator.of(context).pop(story);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _publishing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Could not publish. Try again.',
+            PostLimitError.messageFor(
+              e,
+              fallback: 'Could not publish. Try again.',
+            ),
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),

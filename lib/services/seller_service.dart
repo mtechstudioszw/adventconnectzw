@@ -287,6 +287,14 @@ class SellerService {
     String? country,
     /// Province for ZW, free-text region elsewhere.
     String? province,
+    /// Omit (null) to leave unchanged; an empty string clears it. The edit
+    /// form shows all three, and without these parameters every change to
+    /// them was silently discarded.
+    String? subcategory,
+    String? location,
+    /// Null leaves the stored condition alone (it may be an older value
+    /// the form's dropdown doesn't list).
+    String? condition,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -295,7 +303,7 @@ class SellerService {
     final updates = <String, dynamic>{
       'title': title.trim(),
       'price': price,
-      // DB column is `price_currency` (CHECK in 'USD','ZWL','ZAR') —
+      // DB column is `price_currency` (any ISO 4217 code since patch_217) —
       // writing to `currency` returns PGRST204 / 42703 and silently
       // surfaces as "Could not edit product".
       'price_currency': currency,
@@ -310,6 +318,11 @@ class SellerService {
       // just moved to Kenya, the exact bad data the picker exists to stop.
       'country': ?country,
       if (country != null) 'province': province?.trim(),
+      if (subcategory != null)
+        'subcategory': subcategory.trim().isEmpty ? null : subcategory.trim(),
+      if (location != null)
+        'location': location.trim().isEmpty ? null : location.trim(),
+      'condition': ?condition,
     };
     final updated = await _client
         .from(_productsTable)

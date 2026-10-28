@@ -8,6 +8,7 @@ import '../../services/ads/interstitial_ad_manager.dart';
 import '../../services/auth_service.dart';
 import '../../services/event_service.dart';
 import '../../services/storage_service.dart';
+import '../../services/post_limit_error.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -362,13 +363,16 @@ class _PostEventScreenState extends State<PostEventScreen>
       );
       unawaited(InterstitialAdManager.maybeShow());
       context.pop(true);
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = widget.isEditing
-              ? 'Could not update the event. Please try again.'
-              : 'Could not post the event. Please try again.';
+          _error = PostLimitError.messageFor(
+            e,
+            fallback: widget.isEditing
+                ? 'Could not update the event. Please try again.'
+                : 'Could not post the event. Please try again.',
+          );
         });
       }
     }

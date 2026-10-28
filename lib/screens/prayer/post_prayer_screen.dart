@@ -5,6 +5,7 @@ import '../../models/prayer_model.dart';
 import '../../services/prayer_circle_service.dart';
 import '../../widgets/prayer_circles_sheet.dart';
 import '../../services/prayer_service.dart';
+import '../../services/post_limit_error.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -125,13 +126,16 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
         ),
       );
       context.pop(true);
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = widget.isEditing
-              ? 'Could not update your prayer. Please try again.'
-              : 'Could not share your prayer. Please try again.';
+          _error = PostLimitError.messageFor(
+            e,
+            fallback: widget.isEditing
+                ? 'Could not update your prayer. Please try again.'
+                : 'Could not share your prayer. Please try again.',
+          );
         });
       }
     }

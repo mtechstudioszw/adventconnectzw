@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'connectivity_service.dart';
+
 /// Maps the server-side `enforce_daily_post_limit` trigger raise into
 /// a user-friendly error and a per-section label so screens can show
 /// "3 prayers today — try again in 24 hours" instead of the raw
@@ -49,6 +51,20 @@ class PostLimitError {
 
   /// Wraps [action] and rethrows a friendly message when the trigger
   /// raised the daily-limit exception. All other errors pass through.
+  /// What a create/edit screen should tell the member when a save fails.
+  ///
+  /// [guard] turns the database's limit error into a friendly sentence, but
+  /// every screen caught it with `catch (_)` and showed "Please try again"
+  /// — so a member on their fourth listing of the day was invited to retry
+  /// something that could not succeed until tomorrow.
+  static String messageFor(Object error, {required String fallback}) {
+    if (error is _PostLimitException) return error.message;
+    if (!ConnectivityService.isOnline) {
+      return "You're offline. Try again when you have a connection.";
+    }
+    return fallback;
+  }
+
   static Future<T> guard<T>(
     PostSection section,
     Future<T> Function() action,

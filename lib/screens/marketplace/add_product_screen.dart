@@ -10,6 +10,7 @@ import '../../services/auth_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/seller_service.dart';
 import '../../services/storage_service.dart';
+import '../../services/post_limit_error.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -52,7 +53,11 @@ class _AddProductScreenState extends State<AddProductScreen>
 
   String _category = 'other';
   String _currency = 'USD';
-  String _condition = 'new';
+  /// Null only when editing a listing whose stored condition isn't one
+  /// of [_conditions] (older data). The dropdown then shows its hint, and
+  /// saving leaves the stored value alone unless the seller picks one —
+  /// pre-selecting an unknown value would crash the dropdown.
+  String? _condition = 'new';
 
   /// ISO 3166-1 alpha-2. Never null in practice — seeded in [initState]
   /// from the listing being edited, else from the seller's own profile.
@@ -137,6 +142,12 @@ class _AddProductScreenState extends State<AddProductScreen>
       _category = p.category ?? 'other';
       _currency = p.currency;
       if (p.imageUrls.isNotEmpty) _photoUrls.addAll(p.imageUrls);
+      // These three were never pre-filled, and never saved: editing a
+      // "Like new" listing showed "New", and whatever the seller changed
+      // here was silently dropped.
+      _subcategoryController.text = p.subcategory ?? '';
+      _locationController.text = p.location ?? '';
+      _condition = _conditions.containsKey(p.condition) ? p.condition : null;
     }
     // Country first, then the province/region that hangs off it. Editing
     // keeps whatever the listing already says; a new listing starts on the
@@ -275,6 +286,9 @@ class _AddProductScreenState extends State<AddProductScreen>
           imageUrls: List.unmodifiable(_photoUrls),
           country: _country,
           province: _regionValue,
+          subcategory: _subcategoryController.text.trim(),
+          condition: _condition,
+          location: _locationController.text.trim(),
         );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -319,13 +333,16 @@ class _AddProductScreenState extends State<AddProductScreen>
       // Task complete → show a frequency-capped interstitial (best-effort).
       unawaited(InterstitialAdManager.maybeShow());
       context.pop(true);
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = widget.isEditing
-              ? 'Could not update the product. Please try again.'
-              : 'Could not list the product. Please try again.';
+          _error = PostLimitError.messageFor(
+            e,
+            fallback: widget.isEditing
+                ? 'Could not update the product. Please try again.'
+                : 'Could not list the product. Please try again.',
+          );
         });
       }
     }
@@ -642,7 +659,7 @@ class _AddProductScreenState extends State<AddProductScreen>
                     (e) => DropdownMenuItem(value: e.key, child: Text(e.value)),
                   )
                   .toList(),
-              onChanged: (v) => setState(() => _condition = v ?? 'new'),
+              onChanged: (v) => setState(() => _condition = v),
             ),
           ),
           const SizedBox(height: 18),

@@ -7,6 +7,7 @@ import '../../models/job_model.dart';
 import '../../services/ads/interstitial_ad_manager.dart';
 import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
+import '../../services/post_limit_error.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -246,13 +247,16 @@ class _PostJobScreenState extends State<PostJobScreen>
       );
       unawaited(InterstitialAdManager.maybeShow());
       context.pop(true);
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = _isEdit
-              ? 'Could not save changes. Please try again.'
-              : 'Could not post the job. Please try again.';
+          _error = PostLimitError.messageFor(
+            e,
+            fallback: _isEdit
+                ? 'Could not save changes. Please try again.'
+                : 'Could not post the job. Please try again.',
+          );
         });
       }
     }

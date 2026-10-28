@@ -29,6 +29,38 @@ void setFakeSupabaseHandler(FakeHandler handler) {
   fakeSupabaseRequests.clear();
 }
 
+/// Signs in as [userId] by answering GoTrue's password grant locally, so
+/// services that need `auth.currentUser` work. Call after [initFakeSupabase].
+Future<void> signInFake(String userId, {String country = 'ZW'}) async {
+  final previous = _handler;
+  _handler = (req) {
+    if (req.url.path.endsWith('/auth/v1/token')) {
+      return {
+        'access_token': 'fake-access-token',
+        'token_type': 'bearer',
+        'expires_in': 3600,
+        'expires_at': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 3600,
+        'refresh_token': 'fake-refresh-token',
+        'user': {
+          'id': userId,
+          'aud': 'authenticated',
+          'role': 'authenticated',
+          'email': '$userId@example.test',
+          'app_metadata': <String, Object?>{},
+          'user_metadata': {'country': country},
+          'created_at': '2026-01-01T00:00:00Z',
+        },
+      };
+    }
+    return previous(req);
+  };
+  await Supabase.instance.client.auth.signInWithPassword(
+    email: '$userId@example.test',
+    password: 'x',
+  );
+  _handler = previous;
+}
+
 Future<void> initFakeSupabase([FakeHandler? handler]) async {
   TestWidgetsFlutterBinding.ensureInitialized();
   SharedPreferences.setMockInitialValues({});

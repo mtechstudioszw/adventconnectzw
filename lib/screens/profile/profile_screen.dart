@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/platform_flags.dart';
@@ -40,6 +41,8 @@ import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../utils/photo_url.dart';
+import '../../widgets/home/composer_sheet.dart';
+import '../../theme/app_tokens.dart';
 import '../widgets/tab_shell.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -76,12 +79,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadVerified();
     _loadMinistryTags();
     TabShell.activeIndex.addListener(_onTabChanged);
+    _postChangesSub = FeedService.postChanges.listen(_onPostChange);
   }
 
   @override
   void dispose() {
     TabShell.activeIndex.removeListener(_onTabChanged);
+    _postChangesSub?.cancel();
     super.dispose();
+  }
+
+  StreamSubscription<PostChange>? _postChangesSub;
+
+  /// Same post, same state, on both tabs: a post made from Home lands here,
+  /// one deleted here leaves Home (see FeedService.postChanges).
+  void _onPostChange(PostChange c) {
+    if (!mounted) return;
+    final me = AuthService.currentUser?.id;
+    setState(() {
+      switch (c.kind) {
+        case PostChangeKind.created:
+          if (c.post!.authorId == me) {
+            _myPosts = [c.post!, ..._myPosts.where((p) => p.id != c.id)];
+          }
+        case PostChangeKind.updated:
+          _myPosts = [for (final p in _myPosts) p.id == c.id ? c.post! : p];
+        case PostChangeKind.deleted:
+          _myPosts = _myPosts.where((p) => p.id != c.id).toList();
+      }
+    });
   }
 
   DateTime _lastLoad = DateTime.now();
@@ -781,24 +807,95 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Widget _buildPostsTab() {
-    if (_myPosts.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-        child: Text(
-          'You haven\'t posted anything yet.',
-          textAlign: TextAlign.center,
-          style: AppTextStyles.bodySmall.copyWith(
-            color: context.palette.textMuted,
-            fontStyle: FontStyle.italic,
+  /// "Share something…" at the top of your own Posts. Opens the same
+  /// composer as Home, and the new post reaches both tabs through
+  /// FeedService.postChanges — one post, not a profile copy.
+  Widget _buildComposerPrompt() {
+    final palette = context.palette;
+    final photo = _profilePhotoUrl();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Material(
+        color: palette.card,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        child: InkWell(
+          onTap: () => showPostComposer(context),
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              border: Border.all(color: palette.divider),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: AppColors.primaryBlue,
+                  backgroundImage: photo == null
+                      ? null
+                      : CachedNetworkImageProvider(
+                          photoUrlAtSize(
+                            photo,
+                            (36 * MediaQuery.devicePixelRatioOf(context))
+                                .round(),
+                          ),
+                        ),
+                  child: photo == null
+                      ? Text(
+                          _initials(),
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Share something…',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: palette.textMuted,
+                    ),
+                  ),
+                ),
+                const Icon(
+                  Icons.photo_library_outlined,
+                  color: AppColors.primaryBlue,
+                  size: 22,
+                ),
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPostsTab() {
+    if (_myPosts.isEmpty) {
+      return Column(
+        children: [
+          _buildComposerPrompt(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: Text(
+              'Your posts will appear here and in your friends\' feeds.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.palette.textMuted,
+              ),
+            ),
+          ),
+        ],
       );
     }
     final viewerId = AuthService.currentUser?.id;
     final cachedAt = CacheService.cachedAt(_cacheKey);
     return Column(
       children: [
+        _buildComposerPrompt(),
         if (cachedAt != null) ...[
           const SizedBox(height: 4),
           LastUpdatedStrip(

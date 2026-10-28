@@ -245,6 +245,7 @@ class _HomeScreenState extends State<HomeScreen>
     super.initState();
     _lifecycle = AppLifecycleListener(onResume: _onResume);
     _loadSuperAdmin();
+    _postChangesSub = FeedService.postChanges.listen(_onPostChange);
     // Tapping Home while already on Home returns to the top — the only way
     // back up from an endless feed. The shared island calls this.
     TabShell.registerReselect(TabShell.homeIndex, _scrollToTop);
@@ -416,6 +417,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    _postChangesSub?.cancel();
     _lifecycle.dispose();
     TabShell.unregisterReselect(TabShell.homeIndex, _scrollToTop);
     FeedService.friendshipsChanged.removeListener(_onFriendshipsChanged);
@@ -605,13 +607,11 @@ class _HomeScreenState extends State<HomeScreen>
         UrgentBannerService.fetchActive(),
       ]);
       if (!mounted) return;
-      // Hide the viewer's own posts from the home feed — they already
-      // see them in the Profile → Posts tab. Treating "home" as a feed
-      // of *other* people's content matches what users expect from a
-      // social timeline.
-      final feedPosts = (results[0] as List<Post>)
-          .where((p) => viewerId == null || p.authorId != viewerId)
-          .toList();
+      // The viewer's own posts are part of their Home feed (owner's
+      // redesign brief, 28 Oct 2026). They used to be filtered out here
+      // "because they're on Profile → Posts", so a member who posted saw
+      // it everywhere except their own feed. One `posts` row backs both.
+      final feedPosts = results[0] as List<Post>;
       setState(() {
         _friendshipsByUser = friendsByUser;
         _followedChurchIds = followedChurchIds;
@@ -762,7 +762,6 @@ class _HomeScreenState extends State<HomeScreen>
       _loadingMore = true;
       _loadMoreFailed = false;
     });
-    final viewerId = AuthService.currentUser?.id;
     try {
       var oldest = _posts.first.createdAt;
       for (final p in _posts) {
@@ -781,10 +780,7 @@ class _HomeScreenState extends State<HomeScreen>
       );
       if (!mounted) return;
       final existing = _posts.map((p) => p.id).toSet();
-      final fresh = page
-          .where((p) => !existing.contains(p.id))
-          .where((p) => viewerId == null || p.authorId != viewerId)
-          .toList();
+      final fresh = page.where((p) => !existing.contains(p.id)).toList();
       setState(() {
         _posts = [..._posts, ...fresh];
         _pagesLoaded++;
@@ -970,15 +966,20 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _openPostComposer() async {
     final post = await showPostComposer(context);
     if (!mounted || post == null) return;
-    // The viewer's own posts are filtered out of the home feed (they
-    // belong on Profile → Posts), so don't insert a fresh one here.
-    // Surface a small confirmation instead so the user knows the post
-    // landed and where to find it.
+    // The post is already at the top: FeedService.postChanges delivered it
+    // (see _onPostChange), the same way it reaches Profile.
+    if (_scroll.hasClients) {
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOut,
+      );
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: AppColors.successGreen,
         content: Text(
-          'Posted — see it on your profile.',
+          'Posted.',
           style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
         ),
       ),
@@ -2594,6 +2595,24 @@ class _HomeScreenState extends State<HomeScreen>
       'user_profile',
       pathParameters: {'userId': post.authorId},
     );
+  }
+
+  StreamSubscription<PostChange>? _postChangesSub;
+
+  /// Keeps the feed in step with posts made, edited or deleted anywhere —
+  /// including from Profile, which is a separate kept-alive tab.
+  void _onPostChange(PostChange c) {
+    if (!mounted) return;
+    setState(() {
+      switch (c.kind) {
+        case PostChangeKind.created:
+          _posts = [c.post!, ..._posts.where((p) => p.id != c.id)];
+        case PostChangeKind.updated:
+          _posts = [for (final p in _posts) p.id == c.id ? c.post! : p];
+        case PostChangeKind.deleted:
+          _posts = _posts.where((p) => p.id != c.id).toList();
+      }
+    });
   }
 
   /// Super admins see "Hide post (admin)" in a post's menu. Loaded once;

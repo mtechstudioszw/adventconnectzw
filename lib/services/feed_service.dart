@@ -16,8 +16,28 @@ import '../utils/require_changed.dart';
 ///   - posts            (CRUD + likes + comments)
 ///   - stories          (24h ephemeral)
 ///   - friendships      (request / accept / decline)
+/// What happened to a post, for screens that show the same post (Home,
+/// Profile) to stay in step without refetching.
+enum PostChangeKind { created, updated, deleted }
+
+class PostChange {
+  const PostChange(this.kind, this.id, [this.post]);
+  final PostChangeKind kind;
+  final String id;
+
+  /// The post as the server now has it; null for [PostChangeKind.deleted].
+  final Post? post;
+}
+
 class FeedService {
   FeedService._();
+
+  /// Every create / edit / delete of a post, emitted only after the server
+  /// confirmed it. Home and Profile are separate kept-alive tabs: a post
+  /// made from Profile never reached Home, and a post deleted on one stayed
+  /// on the other until a manual refresh.
+  static final _postChanges = StreamController<PostChange>.broadcast();
+  static Stream<PostChange> get postChanges => _postChanges.stream;
 
   static final SupabaseClient _client = Supabase.instance.client;
 
@@ -206,7 +226,14 @@ class FeedService {
     // is part of the seed).
     final seed = '${viewerId}_${p.id}_$nonce'.hashCode.abs();
     final jitter = ((seed % 1000) / 1000.0) * 0.20;
-    final ownPenalty = p.authorId == viewerId ? -1.0 : 0.0;
+    // Your own posts rank like anyone's, with a short lift while they are
+    // new so the one you just published stays near the top after a
+    // refresh. It used to be a flat -1.0 — together with a filter in Home,
+    // the author never saw their own post in their feed.
+    final ownBoost = p.authorId == viewerId &&
+            DateTime.now().difference(p.createdAt) < const Duration(hours: 6)
+        ? 0.6
+        : 0.0;
     return recency +
         engagement +
         friendBoost +
@@ -214,7 +241,7 @@ class FeedService {
         countryBoost +
         jitter +
         seenPenalty +
-        ownPenalty;
+        ownBoost;
   }
 
   /// Prevent the top of the feed from being dominated by a single
@@ -295,7 +322,9 @@ class FeedService {
           )
           .single(),
     );
-    return Post.fromJson(inserted, viewerId: _viewerId);
+    final post = Post.fromJson(inserted, viewerId: _viewerId);
+    _postChanges.add(PostChange(PostChangeKind.created, post.id, post));
+    return post;
   }
 
   static Future<void> deletePost(String postId) async {
@@ -303,6 +332,7 @@ class FeedService {
       await _client.from(_postsTable).delete().eq('id', postId).select('id'),
       'post $postId',
     );
+    _postChanges.add(PostChange(PostChangeKind.deleted, postId));
   }
 
   /// Super admin: hide a post from everyone but its author (or restore it)
@@ -375,7 +405,9 @@ class FeedService {
           'post_comments(id)',
         )
         .single();
-    return Post.fromJson(updated, viewerId: _viewerId);
+    final post = Post.fromJson(updated, viewerId: _viewerId);
+    _postChanges.add(PostChange(PostChangeKind.updated, post.id, post));
+    return post;
   }
 
   // ---- Likes --------------------------------------------------------

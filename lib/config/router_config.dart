@@ -75,7 +75,6 @@ import '../screens/legal/help_center_screen.dart';
 import '../screens/legal/privacy_screen.dart';
 import '../screens/legal/terms_screen.dart';
 import '../screens/marketplace/add_product_screen.dart';
-import '../screens/marketplace/category_screen.dart';
 import '../screens/marketplace/marketplace_screen.dart';
 import '../screens/marketplace/cart_screen.dart';
 import '../screens/marketplace/my_orders_screen.dart';
@@ -531,21 +530,6 @@ final GoRouter appRouter = GoRouter(
                   path: 'add',
                   name: 'add_product',
                   builder: (context, state) => const AddProductScreen(),
-                ),
-                GoRoute(
-                  parentNavigatorKey: rootNavigatorKey,
-                  path: 'categories',
-                  name: 'categories',
-                  builder: (context, state) => const CategoryScreen(),
-                  routes: [
-                    GoRoute(
-                      path: ':id',
-                      name: 'category',
-                      builder: (context, state) => CategoryScreen(
-                        categoryId: state.pathParameters['id'],
-                      ),
-                    ),
-                  ],
                 ),
                 // Declared BEFORE ':id' — both would match
                 // '/marketplace/cart', and the literal segment has to win.

@@ -13,6 +13,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
+import '../../utils/photo_url.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -449,7 +450,14 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               ],
               image: hasPhoto
                   ? DecorationImage(
-                      image: CachedNetworkImageProvider(_profilePhotoUrl!),
+                      // Sized for the circle: Google's stored URL is 96px.
+                      image: CachedNetworkImageProvider(
+                        photoUrlAtSize(
+                          _profilePhotoUrl,
+                          (72 * MediaQuery.devicePixelRatioOf(context))
+                              .round(),
+                        ),
+                      ),
                       fit: BoxFit.cover,
                     )
                   : null,

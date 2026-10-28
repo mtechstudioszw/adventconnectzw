@@ -39,6 +39,7 @@ import '../../widgets/cached_image.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
+import '../../utils/photo_url.dart';
 import '../widgets/tab_shell.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -1501,7 +1502,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // editor to finish it, a finished one opens the photo.
                   onTap: () => _profileCompletion() < 1.0
                       ? context.pushNamed('edit_profile')
-                      : FullImageViewer.show(context, photoUrl),
+                      // Full size for the viewer: the stored Google URL is
+                      // 96px, which is a smear at full screen.
+                      : FullImageViewer.show(
+                          context,
+                          photoUrlAtSize(photoUrl, 1024),
+                        ),
                   // Explicitly sized. The parent Container sets
                   // `alignment: Alignment.center`, which hands its child
                   // LOOSE constraints — so an unsized CachedImage laid
@@ -1510,7 +1516,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // around it. That ring is the "white edges". With the
                   // box pinned to the circle, BoxFit.cover fills it.
                   child: CachedImage(
-                    photoUrl,
+                    // The raw URL was used here, and Google's stored size
+                    // is 96px — stretched into a 118dp circle (~354px on a
+                    // 3x screen) it was visibly soft on the member's own
+                    // profile, the one place they look hardest.
+                    photoUrlAtSize(
+                      photoUrl,
+                      (118 * MediaQuery.devicePixelRatioOf(context)).round(),
+                    ),
                     fit: BoxFit.cover,
                     width: 118,
                     height: 118,

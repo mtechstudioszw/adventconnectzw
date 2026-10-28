@@ -139,9 +139,18 @@ class OrderLine {
     required this.qty,
     this.productId,
     this.imageUrlSnapshot,
+    this.variantLabel,
   });
 
   final String id;
+
+  /// The size/colour ordered (patch_280), as it read at checkout.
+  final String? variantLabel;
+
+  /// "Pathfinder Uniform (M / Navy)" — what the buyer, the seller and the
+  /// WhatsApp message all need to see.
+  String get displayTitle =>
+      variantLabel == null ? titleSnapshot : '$titleSnapshot ($variantLabel)';
 
   /// Null once the underlying product is deleted — the snapshot fields
   /// still render, there's just nothing left to navigate to.
@@ -162,6 +171,7 @@ class OrderLine {
     currency: (json['currency'] ?? 'USD') as String,
     qty: (json['qty'] as num?)?.toInt() ?? 1,
     imageUrlSnapshot: json['image_url_snapshot'] as String?,
+    variantLabel: json['variant_label'] as String?,
   );
 
   String formatPrice() => formatMoney(priceSnapshot, currency);

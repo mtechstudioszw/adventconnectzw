@@ -73,7 +73,7 @@ class _CartScreenState extends State<CartScreen> {
   Future<void> _saveForLater(CartItem item) async {
     try {
       await MarketplaceService.saveProduct(item.productId);
-      await CartService.remove(item.productId);
+      await CartService.remove(item.lineKey);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -156,8 +156,8 @@ class _CartScreenState extends State<CartScreen> {
                 shop: _shops[baskets[i].sellerId],
                 onSaveForLater: _saveForLater,
                 onChangeQty: (item, qty) =>
-                    CartService.setQty(item.productId, qty),
-                onRemove: (item) => CartService.remove(item.productId),
+                    CartService.setQty(item.lineKey, qty),
+                onRemove: (item) => CartService.remove(item.lineKey),
                 onOpenProduct: (item) => context.pushNamed(
                   'product_details',
                   pathParameters: {'id': item.productId},
@@ -238,6 +238,7 @@ class _CartScreenState extends State<CartScreen> {
     // One order per shop. Each is committed independently, so a shop
     // whose item just sold out doesn't cost the buyer the rest of the
     // basket — the successful shops are cleared, the failed one stays.
+    String? reason;
     for (final basket in CartService.baskets) {
       final String id;
       try {
@@ -249,6 +250,7 @@ class _CartScreenState extends State<CartScreen> {
         );
       } catch (e) {
         failed.add(basket.sellerName);
+        reason ??= OrderService.reasonFor(e);
         continue;
       }
       // Created: out of the basket before anything else can fail.
@@ -274,9 +276,11 @@ class _CartScreenState extends State<CartScreen> {
             offline
                 ? "You're offline. Your basket is saved — try again when "
                       'you have a connection.'
-                : failed.isEmpty
-                ? 'Could not place the order. Try again.'
-                : 'Could not place the order — some items may no longer be available.',
+                : reason ??
+                      (failed.isEmpty
+                          ? 'Could not place the order. Try again.'
+                          : 'Could not place the order — some items may no '
+                                'longer be available.'),
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
@@ -606,6 +610,14 @@ class _CartLine extends StatelessWidget {
                     height: 1.3,
                   ),
                 ),
+                if (item.variantLabel != null)
+                  Text(
+                    item.variantLabel!,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: context.palette.text,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 const SizedBox(height: AppSpace.xs),
                 Row(
                   children: [
@@ -633,6 +645,9 @@ class _CartLine extends StatelessWidget {
                   children: [
                     _QtyStepper(
                       qty: item.qty,
+                      max: item.stock == null
+                          ? CartItem.maxQty
+                          : item.stock!.clamp(1, CartItem.maxQty),
                       onChanged: onChangeQty,
                     ),
                     const Spacer(),
@@ -712,12 +727,17 @@ class _FulfilmentLine extends StatelessWidget {
   }
 }
 
-/// Quantity control. Products carry no stock column, so there is nothing
-/// to validate against — the only ceiling is the DB's own qty check.
+/// Quantity control. Capped at the stock the seller counted when the item
+/// was added (patch_280) — advisory; checkout checks the live number.
 class _QtyStepper extends StatelessWidget {
-  const _QtyStepper({required this.qty, required this.onChanged});
+  const _QtyStepper({
+    required this.qty,
+    required this.onChanged,
+    this.max = CartItem.maxQty,
+  });
 
   final int qty;
+  final int max;
   final ValueChanged<int> onChanged;
 
   @override
@@ -746,7 +766,7 @@ class _QtyStepper extends StatelessWidget {
           ),
           _StepButton(
             icon: Icons.add_rounded,
-            onTap: qty >= CartItem.maxQty ? null : () => onChanged(qty + 1),
+            onTap: qty >= max ? null : () => onChanged(qty + 1),
           ),
         ],
       ),

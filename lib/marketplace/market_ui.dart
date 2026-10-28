@@ -161,16 +161,21 @@ class PriceText extends StatelessWidget {
     required this.product,
     required this.size,
     required this.color,
+    this.amount,
   });
   final Product product;
   final double size;
   final Color color;
 
+  /// Overrides the product's price — a size or colour with its own price.
+  final double? amount;
+
   @override
   Widget build(BuildContext context) {
     final symbol = product.currency == 'USD' ? r'$' : '${product.currency} ';
-    final whole = product.price.truncate();
-    final cents = ((product.price - whole) * 100).round();
+    final price = amount ?? product.price;
+    final whole = price.truncate();
+    final cents = ((price - whole) * 100).round();
     final base = AppTextStyles.displayMedium.copyWith(
       color: color,
       fontWeight: FontWeight.w700,
@@ -180,7 +185,9 @@ class PriceText extends StatelessWidget {
     );
     final small = base.copyWith(fontSize: size * 0.52, letterSpacing: 0);
     return Semantics(
-      label: product.formatPrice(),
+      label: amount == null
+          ? product.formatPrice()
+          : '$symbol${price.toStringAsFixed(cents > 0 ? 2 : 0)}',
       excludeSemantics: true,
       child: Row(
         mainAxisSize: MainAxisSize.min,

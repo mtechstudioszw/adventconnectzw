@@ -33,6 +33,8 @@ import '../../widgets/verified_tick.dart';
 import '../../marketplace/product_image_source.dart';
 import '../../marketplace/product_theme.dart';
 import '../../marketplace/market_ui.dart';
+import '../../services/product_options_service.dart';
+import '../../widgets/marketplace/product_option_picker.dart';
 
 /// Product detail.
 ///
@@ -87,6 +89,86 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   /// The same shop's other listings for sale.
   List<Product> _moreFromShop = const [];
+
+  /// Sizes / colours (patch_280): every combination, and what the buyer
+  /// has picked so far (group → value).
+  List<ProductVariant> _variants = const [];
+  bool _variantsLoaded = false;
+  final Map<String, String> _picked = {};
+  final _optionsKey = GlobalKey();
+
+  /// The combination matching every pick, once each group has one.
+  ProductVariant? get _selected {
+    final p = _product;
+    if (p == null || !p.hasOptions) return null;
+    if (_picked.length < p.optionGroups.length) return null;
+    for (final v in _variants) {
+      if (v.isActive &&
+          p.optionGroups.every((g) => v.options[g.name] == _picked[g.name])) {
+        return v;
+      }
+    }
+    return null;
+  }
+
+  /// Stock to show: the picked combination's, else the product's own
+  /// (for options, the server-kept total).
+  int? _stockFor(Product p) {
+    if (!p.hasOptions) return p.stockQuantity;
+    final v = _selected;
+    if (v != null) return v.stock;
+    return p.stockQuantity;
+  }
+
+  Future<void> _loadVariants(Product p) async {
+    if (!p.hasOptions || _variantsLoaded) return;
+    final list = await ProductOptionsService.fetchVariants(p.id);
+    if (!mounted) return;
+    setState(() {
+      _variants = [for (final v in list) if (v.isActive) v];
+      _variantsLoaded = true;
+      // One choice per group? Pick it for them.
+      for (final g in p.optionGroups) {
+        if (g.values.length == 1) _picked[g.name] = g.values.first;
+      }
+    });
+  }
+
+  void _pick(String group, String value) {
+    setState(() {
+      if (_picked[group] == value) {
+        _picked.remove(group);
+      } else {
+        _picked[group] = value;
+      }
+    });
+    HapticFeedback.selectionClick();
+  }
+
+  /// What the buyer still has to choose, e.g. "Choose a size", or null.
+  String? _choiceNeeded(Product p) {
+    if (!p.hasOptions) return null;
+    for (final g in p.optionGroups) {
+      if (_picked[g.name] == null) {
+        final n = g.name.toLowerCase();
+        final article = 'aeiou'.contains(n[0]) ? 'an' : 'a';
+        return 'Choose $article $n';
+      }
+    }
+    return _selected == null ? 'Choose an option' : null;
+  }
+
+  void _scrollToOptions() {
+    final ctx = _optionsKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOut,
+        alignment: 0.3,
+      );
+    }
+  }
 
   /// The adaptive presentation (lib/marketplace/product_theme.dart):
   /// stage colour, accent, seamless vs framed photo. Starts as the
@@ -188,6 +270,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       // Only listings someone else is selling, and only while for sale —
       // your own stock isn't "recently viewed".
       if (fetched != null && _seller == null) _loadShop(fetched);
+      if (fetched != null) _loadVariants(fetched);
       if (fetched != null &&
           fetched.status == 'available' &&
           fetched.sellerId != AuthService.currentUser?.id) {
@@ -254,10 +337,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       );
       return;
     }
+    if (_choiceNeeded(product) != null) {
+      _scrollToOptions();
+      return;
+    }
     if (_adding) return;
     setState(() => _adding = true);
     try {
-      await CartService.add(product);
+      await CartService.add(product, variant: _selected);
     } finally {
       if (mounted) setState(() => _adding = false);
     }
@@ -502,7 +589,16 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               theme: _themeOf(product),
               busy: _adding,
               own: _isOwnListing(product),
-              inBasket: CartService.contains(product.id),
+              inBasket: product.hasOptions
+                  ? (_selected != null &&
+                        CartService.lineFor(
+                              '${product.id}#${_selected!.id}',
+                            ) !=
+                            null)
+                  : CartService.contains(product.id),
+              needsChoice: _choiceNeeded(product),
+              soldOut: _stockFor(product) == 0,
+              price: _selected?.price,
               chatBusy: _openingChat,
               onAdd: _addToCart,
               onViewBasket: () => context.pushNamed('cart'),
@@ -638,6 +734,23 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                   reason: product.moderationReason,
                                 ),
                               ),
+                            if (product.hasOptions) ...[
+                              const SizedBox(height: 20),
+                              KeyedSubtree(
+                                key: _optionsKey,
+                                child: !_variantsLoaded
+                                    ? const SizedBox(height: 44)
+                                    : ProductOptionPicker(
+                                        groups: product.optionGroups,
+                                        variants: _variants,
+                                        picked: _picked,
+                                        accent: _themeOf(
+                                          product,
+                                        ).accent(_brightness),
+                                        onPick: _pick,
+                                      ),
+                              ),
+                            ],
                             const SizedBox(height: 18),
                             StaggeredReveal(
                               index: 1,
@@ -654,6 +767,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                                     height: 1.6,
                                   ),
                                 ),
+                              ),
+                            if (product.specs.isNotEmpty)
+                              MarketSection(
+                                title: 'Specifications',
+                                child: _buildSpecTable(product),
                               ),
                             if (_seller != null)
                               MarketSection(
@@ -932,14 +1050,23 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            PriceText(product: product, size: 30, color: palette.text),
+            PriceText(
+              product: product,
+              size: 30,
+              color: palette.text,
+              amount: _selected?.price,
+            ),
             const SizedBox(width: 12),
-            if (status == null)
-              const _StatusPill(text: 'Available', ok: true)
-            else
-              _StatusPill(text: status, ok: false),
+            if (status != null)
+              _StatusPill(text: status, ok: false)
+            else if (_stockFor(product) == null)
+              const _StatusPill(text: 'Available', ok: true),
           ],
         ),
+        if (status == null && _stockFor(product) != null) ...[
+          const SizedBox(height: 10),
+          StockLine(stock: _stockFor(product)),
+        ],
       ],
     );
   }
@@ -997,6 +1124,55 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  // ----- Specifications (patch_280) ---------------------------------------------
+
+  Widget _buildSpecTable(Product product) {
+    final palette = context.palette;
+    return Container(
+      decoration: BoxDecoration(
+        color: palette.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: palette.divider),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < product.specs.length; i++)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                border: i == 0
+                    ? null
+                    : Border(top: BorderSide(color: palette.divider)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 120,
+                    child: Text(
+                      product.specs[i].label,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: palette.textMuted,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      product.specs[i].value,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: palette.text,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -1788,7 +1964,17 @@ class _BuyBar extends StatelessWidget {
     required this.onViewBasket,
     required this.onContact,
     required this.onManage,
+    this.needsChoice,
+    this.soldOut = false,
+    this.price,
   });
+
+  /// "Choose a size" while an option is missing (patch_280).
+  final String? needsChoice;
+  final bool soldOut;
+
+  /// The picked size/colour's own price, when it has one.
+  final double? price;
 
   final Product product;
   final ProductTheme theme;
@@ -1825,6 +2011,22 @@ class _BuyBar extends StatelessWidget {
         fg: palette.textMuted,
         onTap: onContact,
       );
+    } else if (soldOut) {
+      primary = MarketPill(
+        label: 'Sold out',
+        trailingText: 'Ask the shop',
+        bg: palette.cardMuted,
+        fg: palette.textMuted,
+        onTap: onContact,
+      );
+    } else if (needsChoice != null) {
+      primary = MarketPill(
+        label: needsChoice!,
+        trailing: const Icon(Icons.arrow_upward_rounded, size: 18),
+        bg: accent,
+        fg: onAccent,
+        onTap: onAdd,
+      );
     } else if (inBasket) {
       primary = MarketPill(
         label: 'In basket',
@@ -1837,7 +2039,18 @@ class _BuyBar extends StatelessWidget {
     } else {
       primary = MarketPill(
         label: 'Add to basket',
-        trailingText: product.formatPrice(),
+        trailingText: price == null
+            ? product.formatPrice()
+            : Product(
+                id: product.id,
+                sellerId: product.sellerId,
+                sellerName: product.sellerName,
+                title: product.title,
+                price: price!,
+                currency: product.currency,
+                imageUrls: const [],
+                createdAt: product.createdAt,
+              ).formatPrice(),
         bg: accent,
         fg: onAccent,
         busy: busy,

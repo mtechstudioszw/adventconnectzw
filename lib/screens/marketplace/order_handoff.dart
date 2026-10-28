@@ -104,7 +104,7 @@ class OrderHandoff {
         productImageUrl: first?.imageUrlSnapshot,
         productTitle: order.itemCount > 1
             ? '${order.reference} · ${order.itemCount} items'
-            : first?.titleSnapshot,
+            : first?.displayTitle,
         productPrice: order.formatSubtotal(),
       );
       if (!context.mounted) return;

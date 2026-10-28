@@ -19,6 +19,9 @@ class CartItem {
     required this.addedAt,
     this.imageUrl,
     this.sellerPhone,
+    this.variantId,
+    this.variantLabel,
+    this.stock,
   });
 
   final String productId;
@@ -31,6 +34,19 @@ class CartItem {
   final String? imageUrl;
   final int qty;
   final DateTime addedAt;
+
+  /// The size/colour picked (patch_280), or null for a product without
+  /// options.
+  final String? variantId;
+  final String? variantLabel;
+
+  /// Stock when it was added, to cap the stepper. Advisory only — checkout
+  /// checks the live number on the server.
+  final int? stock;
+
+  /// One line per product + option: an M and an L of the same shirt are
+  /// two lines.
+  String get lineKey => variantId == null ? productId : '$productId#$variantId';
 
   double get lineTotal => price * qty;
 
@@ -49,12 +65,22 @@ class CartItem {
     imageUrl: imageUrl,
     qty: qty ?? this.qty,
     addedAt: addedAt,
+    variantId: variantId,
+    variantLabel: variantLabel,
+    stock: stock,
   );
 
-  factory CartItem.fromProduct(Product product, {int qty = 1}) => CartItem(
+  factory CartItem.fromProduct(
+    Product product, {
+    int qty = 1,
+    ProductVariant? variant,
+  }) => CartItem(
     productId: product.id,
     title: product.title,
-    price: product.price,
+    price: variant?.price ?? product.price,
+    variantId: variant?.id,
+    variantLabel: variant?.label,
+    stock: variant != null ? variant.stock : product.stockQuantity,
     currency: product.currency,
     sellerId: product.sellerId,
     sellerName: product.sellerName,
@@ -77,6 +103,9 @@ class CartItem {
     addedAt:
         DateTime.tryParse(json['added_at']?.toString() ?? '') ??
         DateTime.now(),
+    variantId: json['variant_id']?.toString(),
+    variantLabel: json['variant_label'] as String?,
+    stock: (json['stock'] as num?)?.toInt(),
   );
 
   Map<String, dynamic> toJson() => {
@@ -90,6 +119,9 @@ class CartItem {
     'image_url': imageUrl,
     'qty': qty,
     'added_at': addedAt.toIso8601String(),
+    'variant_id': variantId,
+    'variant_label': variantLabel,
+    'stock': stock,
   };
 
   static double _readDouble(dynamic value) {
@@ -143,7 +175,13 @@ class SellerBasket {
   /// Payload for the `place_order` RPC. Only ids and quantities go up —
   /// the server snapshots the authoritative price itself.
   List<Map<String, dynamic>> toRpcItems() => items
-      .map((e) => {'product_id': int.tryParse(e.productId), 'qty': e.qty})
+      .map(
+        (e) => {
+          'product_id': int.tryParse(e.productId),
+          'qty': e.qty,
+          if (e.variantId != null) 'variant_id': int.tryParse(e.variantId!),
+        },
+      )
       .where((e) => e['product_id'] != null)
       .toList();
 }

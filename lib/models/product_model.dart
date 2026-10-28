@@ -27,6 +27,9 @@ class Product {
     this.isFeatured = false,
     this.moderationHiddenAt,
     this.moderationReason,
+    this.stockQuantity,
+    this.optionGroups = const [],
+    this.specs = const [],
   });
 
   final String id;
@@ -82,6 +85,24 @@ class Product {
   final DateTime? moderationHiddenAt;
   final String? moderationReason;
   bool get isModerated => moderationHiddenAt != null;
+
+  /// How many are left (patch_280). Null = the seller doesn't count stock.
+  /// For a product with options it is the options' total, kept by the
+  /// server when every option counts stock.
+  final int? stockQuantity;
+
+  /// Up to two option groups, e.g. Size [S, M, L] and Colour [Black, Navy].
+  final List<ProductOptionGroup> optionGroups;
+
+  /// "Material: Leather" rows, in the seller's order.
+  final List<ProductSpec> specs;
+
+  bool get hasOptions => optionGroups.isNotEmpty;
+  bool get isSoldOut => stockQuantity == 0;
+
+  /// "Only 3 left" is worth saying; "48 in stock" isn't.
+  bool get isLowStock =>
+      stockQuantity != null && stockQuantity! > 0 && stockQuantity! <= 5;
 
   String get firstImage => imageUrls.isEmpty ? '' : imageUrls.first;
 
@@ -143,6 +164,17 @@ class Product {
       moderationHiddenAt:
           DateTime.tryParse(json['moderation_hidden_at']?.toString() ?? ''),
       moderationReason: json['moderation_reason'] as String?,
+      stockQuantity: (json['stock_quantity'] as num?)?.toInt(),
+      optionGroups: [
+        if (json['option_groups'] is List)
+          for (final g in json['option_groups'] as List)
+            if (g is Map) ProductOptionGroup.fromJson(g.cast<String, dynamic>()),
+      ].where((g) => g.name.isNotEmpty && g.values.isNotEmpty).toList(),
+      specs: [
+        if (json['specs'] is List)
+          for (final r in json['specs'] as List)
+            if (r is Map) ProductSpec.fromJson(r.cast<String, dynamic>()),
+      ].where((r) => r.label.isNotEmpty && r.value.isNotEmpty).toList(),
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
     );
@@ -172,6 +204,9 @@ class Product {
         'is_featured': isFeatured,
         'moderation_hidden_at': moderationHiddenAt?.toIso8601String(),
         'moderation_reason': moderationReason,
+        'stock_quantity': stockQuantity,
+        'option_groups': [for (final g in optionGroups) g.toJson()],
+        'specs': [for (final r in specs) r.toJson()],
         'created_at': createdAt.toIso8601String(),
       };
 
@@ -188,6 +223,129 @@ class Product {
       return '$symbol${price.toStringAsFixed(0)}';
     }
     return '$symbol${price.toStringAsFixed(2)}';
+  }
+}
+
+/// One option a buyer picks, e.g. Size with its values.
+class ProductOptionGroup {
+  const ProductOptionGroup({required this.name, required this.values});
+  final String name;
+  final List<String> values;
+
+  factory ProductOptionGroup.fromJson(Map<String, dynamic> j) =>
+      ProductOptionGroup(
+        name: (j['name'] ?? '').toString().trim(),
+        values: [
+          if (j['values'] is List)
+            for (final v in j['values'] as List)
+              if (v.toString().trim().isNotEmpty) v.toString().trim(),
+        ],
+      );
+
+  Map<String, dynamic> toJson() => {'name': name, 'values': values};
+}
+
+/// One "Label: Value" specification row.
+class ProductSpec {
+  const ProductSpec({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  factory ProductSpec.fromJson(Map<String, dynamic> j) => ProductSpec(
+    label: (j['label'] ?? '').toString().trim(),
+    value: (j['value'] ?? '').toString().trim(),
+  );
+
+  Map<String, dynamic> toJson() => {'label': label, 'value': value};
+}
+
+/// One combination of options ("M / Black") with its own optional stock
+/// and price (patch_280, table product_variants).
+class ProductVariant {
+  const ProductVariant({
+    required this.label,
+    required this.options,
+    this.id,
+    this.price,
+    this.stock,
+    this.sort = 0,
+    this.isActive = true,
+  });
+
+  /// Null for one the seller hasn't saved yet.
+  final String? id;
+  final String label;
+
+  /// Group name → chosen value, e.g. {Size: M, Colour: Black}.
+  final Map<String, String> options;
+
+  /// Null = the product's own price.
+  final double? price;
+
+  /// Null = not counted.
+  final int? stock;
+  final int sort;
+  final bool isActive;
+
+  bool get isSoldOut => stock == 0;
+
+  ProductVariant copyWith({
+    Object? price = _keep,
+    Object? stock = _keep,
+    bool? isActive,
+  }) => ProductVariant(
+    id: id,
+    label: label,
+    options: options,
+    price: price == _keep ? this.price : price as double?,
+    stock: stock == _keep ? this.stock : stock as int?,
+    sort: sort,
+    isActive: isActive ?? this.isActive,
+  );
+  static const _keep = Object();
+
+  factory ProductVariant.fromJson(Map<String, dynamic> j) => ProductVariant(
+    id: j['id']?.toString(),
+    label: (j['label'] ?? '').toString(),
+    options: {
+      if (j['options'] is Map)
+        for (final e in (j['options'] as Map).entries)
+          e.key.toString(): e.value.toString(),
+    },
+    price: (j['price'] as num?)?.toDouble(),
+    stock: (j['stock'] as num?)?.toInt(),
+    sort: (j['sort'] as num?)?.toInt() ?? 0,
+    isActive: j['is_active'] != false,
+  );
+
+  Map<String, dynamic> toRow(String productId) => {
+    'product_id': int.parse(productId),
+    'label': label,
+    'options': options,
+    'price': price,
+    'stock': stock,
+    'sort': sort,
+    'is_active': isActive,
+  };
+
+  /// Every combination of [groups], labelled "M / Black", in order.
+  static List<ProductVariant> combinations(List<ProductOptionGroup> groups) {
+    var combos = <Map<String, String>>[{}];
+    for (final g in groups) {
+      combos = [
+        for (final c in combos)
+          for (final v in g.values) {...c, g.name: v},
+      ];
+    }
+    if (groups.isEmpty) return const [];
+    return [
+      for (var i = 0; i < combos.length; i++)
+        ProductVariant(
+          label: [for (final g in groups) combos[i][g.name]].join(' / '),
+          options: combos[i],
+          sort: i,
+        ),
+    ];
   }
 }
 

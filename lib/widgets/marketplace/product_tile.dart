@@ -65,7 +65,7 @@ class ProductTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final unavailable = !product.isAvailable;
+    final unavailable = !product.isAvailable || product.isSoldOut;
     // Redesigned 28 Oct 2026 to the house rules: a card (white with
     // shadow, 16 radius) holding a SQUARE photo — CLAUDE.md makes product
     // covers square — with price, title and seller inside the card. It was
@@ -192,7 +192,11 @@ class ProductTile extends StatelessWidget {
                   if (unavailable)
                     Center(
                       child: _StatusStamp(
-                        label: product.isSold ? 'SOLD' : 'RESERVED',
+                        label: product.isSold
+                            ? 'SOLD'
+                            : product.isSoldOut
+                            ? 'SOLD OUT'
+                            : 'RESERVED',
                       ),
                     ),
                   if (product.isFeatured && !unavailable)

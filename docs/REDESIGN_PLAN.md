@@ -332,3 +332,25 @@ hidden, post → hidden) and **Remove & ban** (also bans and takes down
 everything else they have live). Both dashboards (admin/ and admin-web/)
 updated; they fall back to the old buttons until the patch runs.
 
+### Product sizes, stock and specifications (patch_280, 28 Oct 2026)
+
+- Seller form: "Count my stock" (optional), up to 2 option groups with
+  presets (Size, Shoe size, Colour, or a custom one), a per-combination grid
+  for stock and an optional own price, and specification rows with
+  suggestions per category. Hidden until patch_280 runs.
+- Product page: size/colour chips (sold-out choices struck through and not
+  pickable), the chosen option's own price, "Only N left" / "In stock" /
+  "Sold out", a Specifications table; the buy button says "Choose a size"
+  until one is picked and "Sold out" when nothing is left.
+- Basket: one line per product + option, capped at counted stock; the
+  option label shows in the basket, orders, the seller's inbox and the
+  WhatsApp handoff.
+- Checkout (place_order): locks rows, refuses an order over stock or
+  without an option, uses the option's price, deducts stock; cancelling an
+  order restores it. Its reasons ("Only 2 left of …") reach the buyer.
+- Found while rehearsing on the live DB: **checkout had never worked** —
+  place_order called jsonb_array_length on a text[] column, so every order
+  failed (0 orders existed). Fixed in patch_280.
+- Security: members could INSERT orders/order_items directly (any price,
+  any status). Revoked; place_order (SECURITY DEFINER) is the only way in.
+

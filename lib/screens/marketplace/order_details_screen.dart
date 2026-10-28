@@ -460,7 +460,7 @@ class _ItemsCard extends StatelessWidget {
                         // Snapshot, not a live lookup — this is what was
                         // ordered, whatever the listing says today.
                         Text(
-                          line.titleSnapshot,
+                          line.displayTitle,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.bodyMedium.copyWith(

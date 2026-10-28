@@ -88,28 +88,43 @@ class CartService {
     }).toList();
   }
 
-  static CartItem? lineFor(String productId) {
+  /// The line for [lineKey] — a product id, or "productId#variantId" for
+  /// a size/colour (see [CartItem.lineKey]).
+  static CartItem? lineFor(String lineKey) {
     for (final item in items) {
-      if (item.productId == productId) return item;
+      if (item.lineKey == lineKey) return item;
     }
     return null;
   }
 
-  static bool contains(String productId) => lineFor(productId) != null;
+  /// Any line of this product, whatever option.
+  static bool contains(String productId) =>
+      items.any((e) => e.productId == productId);
 
-  /// Add a product, or bump its quantity if it's already in the basket.
-  /// Returns the resulting quantity so the caller can confirm ("2 in
-  /// basket") without re-reading.
-  static Future<int> add(Product product, {int qty = 1}) async {
-    final existing = lineFor(product.id);
+  /// Highest quantity a line may hold: stock when it was counted, never
+  /// over the order line limit.
+  static int _cap(CartItem line) => line.stock == null
+      ? CartItem.maxQty
+      : line.stock!.clamp(1, CartItem.maxQty);
+
+  /// Add a product (in [variant], when it has options), or bump the
+  /// quantity of that line. Returns the resulting quantity so the caller
+  /// can confirm ("2 in basket") without re-reading.
+  static Future<int> add(
+    Product product, {
+    int qty = 1,
+    ProductVariant? variant,
+  }) async {
+    final fresh = CartItem.fromProduct(product, qty: qty, variant: variant);
+    final existing = lineFor(fresh.lineKey);
     final next = <CartItem>[..._items];
     int resulting;
     if (existing == null) {
-      resulting = qty.clamp(1, CartItem.maxQty);
-      next.add(CartItem.fromProduct(product, qty: resulting));
+      resulting = qty.clamp(1, _cap(fresh));
+      next.add(fresh.copyWith(qty: resulting));
     } else {
-      resulting = (existing.qty + qty).clamp(1, CartItem.maxQty);
-      final index = next.indexWhere((e) => e.productId == product.id);
+      resulting = (existing.qty + qty).clamp(1, _cap(existing));
+      final index = next.indexWhere((e) => e.lineKey == fresh.lineKey);
       next[index] = existing.copyWith(qty: resulting);
     }
     _items = next;
@@ -117,18 +132,18 @@ class CartService {
     return resulting;
   }
 
-  static Future<void> setQty(String productId, int qty) async {
-    if (qty <= 0) return remove(productId);
-    final index = _items.indexWhere((e) => e.productId == productId);
+  static Future<void> setQty(String lineKey, int qty) async {
+    if (qty <= 0) return remove(lineKey);
+    final index = _items.indexWhere((e) => e.lineKey == lineKey);
     if (index == -1) return;
     final next = <CartItem>[..._items];
-    next[index] = next[index].copyWith(qty: qty.clamp(1, CartItem.maxQty));
+    next[index] = next[index].copyWith(qty: qty.clamp(1, _cap(next[index])));
     _items = next;
     await _persist();
   }
 
-  static Future<void> remove(String productId) async {
-    _items = _items.where((e) => e.productId != productId).toList();
+  static Future<void> remove(String lineKey) async {
+    _items = _items.where((e) => e.lineKey != lineKey).toList();
     await _persist();
   }
 

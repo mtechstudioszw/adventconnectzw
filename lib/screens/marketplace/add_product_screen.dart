@@ -8,6 +8,7 @@ import '../../models/product_model.dart';
 import '../../services/ads/interstitial_ad_manager.dart';
 import '../../services/auth_service.dart';
 import '../../services/marketplace_service.dart';
+import '../../services/product_options_service.dart';
 import '../../services/seller_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/post_limit_error.dart';
@@ -15,6 +16,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/country_picker_sheet.dart';
+import '../../widgets/marketplace/product_options_editor.dart';
 import '../../widgets/marketplace/product_tile.dart';
 import '../../widgets/preview_sheet.dart';
 import '../../utils/medical_claims.dart';
@@ -72,6 +74,13 @@ class _AddProductScreenState extends State<AddProductScreen>
   bool _loadingSeller = true;
   Seller? _seller;
 
+  /// Sizes/colours, stock and specs (patch_280). Shown only once the
+  /// database has them; before that the form saves as it always did.
+  late final ProductOptionsController _options = ProductOptionsController(
+    initial: widget.initialProduct,
+  );
+  bool _optionsOn = ProductOptionsService.available;
+
   static const _categories = <String, String>{
     'books': 'Bibles & Books',
     'clothing': 'Clothing',
@@ -126,6 +135,7 @@ class _AddProductScreenState extends State<AddProductScreen>
       end: 0,
     ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
     _loadSeller();
+    _loadOptions();
     // Pre-fill form when editing an existing product
     final p = widget.initialProduct;
     if (p != null) {
@@ -200,8 +210,38 @@ class _AddProductScreenState extends State<AddProductScreen>
     }
   }
 
+  Future<void> _loadOptions() async {
+    final on = await ProductOptionsService.probe();
+    if (!mounted) return;
+    setState(() => _optionsOn = on);
+    final p = widget.initialProduct;
+    if (!on || p == null || !p.hasOptions) return;
+    final saved = await ProductOptionsService.fetchVariants(p.id);
+    if (mounted) _options.loadVariants(saved);
+  }
+
+  /// Saves the options section for [productId]. A failure here leaves the
+  /// listing itself saved, and says so.
+  Future<String?> _saveOptions(String productId) async {
+    if (!_optionsOn) return null;
+    try {
+      await ProductOptionsService.save(
+        productId: productId,
+        stockQuantity: _options.stockQuantity,
+        optionGroups: _options.cleanGroups,
+        specs: _options.cleanSpecs,
+        variants: _options.variants,
+      );
+      return null;
+    } catch (_) {
+      return 'Your listing is saved, but its sizes, stock and specs '
+          "didn't save. Open it and tap Edit to try again.";
+    }
+  }
+
   @override
   void dispose() {
+    _options.dispose();
     _entrance.dispose();
     _titleController.dispose();
     _descriptionController.dispose();
@@ -244,6 +284,13 @@ class _AddProductScreenState extends State<AddProductScreen>
   Future<void> _save() async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
+    if (_optionsOn) {
+      final problem = _options.validate();
+      if (problem != null) {
+        setState(() => _error = problem);
+        return;
+      }
+    }
 
     // Medical claims are refused before the preview, not after it: the
     // seller fixes the wording here instead of a moderator hiding the
@@ -315,18 +362,19 @@ class _AddProductScreenState extends State<AddProductScreen>
           condition: _condition,
           location: _locationController.text.trim(),
         );
+        final optionsProblem = await _saveOptions(widget.initialProduct!.id);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Product updated.',
+              optionsProblem ?? 'Product updated.',
               style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
             ),
           ),
         );
       } else {
         // --- Add mode: create new product ---
-        await MarketplaceService.postProduct(
+        final newId = await MarketplaceService.postProduct(
           title: _titleController.text,
           price: price,
           category: _category,
@@ -345,11 +393,12 @@ class _AddProductScreenState extends State<AddProductScreen>
               : _locationController.text,
           imageUrls: List.unmodifiable(_photoUrls),
         );
+        final optionsProblem = await _saveOptions(newId);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Product listed.',
+              optionsProblem ?? 'Product listed.',
               style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
             ),
           ),
@@ -429,6 +478,18 @@ class _AddProductScreenState extends State<AddProductScreen>
                         const SizedBox(height: 16),
                         _buildPricingCard(),
                         const SizedBox(height: 16),
+                        if (_optionsOn) ...[
+                          PostFormCard(
+                            child: ProductOptionsEditor(
+                              controller: _options,
+                              category: _category,
+                              currencySymbol: _currency == 'USD'
+                                  ? r'$'
+                                  : '$_currency ',
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                         _buildDetailsCard(),
                         if (_error != null) ...[
                           const SizedBox(height: 16),

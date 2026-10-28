@@ -724,7 +724,7 @@ class _OrderRow extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    order.items.map((e) => e.titleSnapshot).join(', '),
+                    order.items.map((e) => e.displayTitle).join(', '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.bodySmall.copyWith(

@@ -45,6 +45,19 @@ class OrderService {
     return id.toString();
   }
 
+  /// What to tell the buyer when checkout refuses: the server's own words
+  /// for stock and options (patch_280), else null.
+  static String? reasonFor(Object e) {
+    final m = e is PostgrestException ? e.message : e.toString();
+    for (final tag in ['OUT_OF_STOCK: ', 'CHOOSE_OPTION: ', 'OPTION_GONE: ']) {
+      final i = m.indexOf(tag);
+      if (i == -1) continue;
+      final text = m.substring(i + tag.length).trim();
+      return text.isEmpty ? null : text[0].toUpperCase() + text.substring(1);
+    }
+    return null;
+  }
+
   /// Orders the signed-in user placed, newest first.
   static Future<List<MarketOrder>> fetchMyOrders() async {
     final user = _client.auth.currentUser;
@@ -166,7 +179,7 @@ class OrderService {
       ..writeln();
     for (final line in order.items) {
       buffer.writeln(
-        '• ${line.titleSnapshot} × ${line.qty} — ${line.formatLineTotal()}',
+        '• ${line.displayTitle} × ${line.qty} — ${line.formatLineTotal()}',
       );
     }
     buffer

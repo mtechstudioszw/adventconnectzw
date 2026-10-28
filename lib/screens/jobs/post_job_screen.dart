@@ -118,10 +118,17 @@ class _PostJobScreenState extends State<PostJobScreen>
       _companyController.text = ex.company;
       _descriptionController.text = ex.description ?? '';
       _requirementsController.text = ex.requirements.join('\n');
-      _salaryController.text =
-          ex.salaryMin != null || ex.salaryMax != null ? ex.formatSalary() : '';
+      // Salary, the two flags and the email were never pre-filled, so
+      // saving an edit wiped them.
+      _salaryController.text = ex.salaryRange ??
+          (ex.salaryMin != null || ex.salaryMax != null
+              ? ex.formatSalary()
+              : '');
       _locationController.text = ex.location ?? '';
       _phoneController.text = ex.contactPhone ?? '';
+      _emailController.text = ex.contactEmail ?? '';
+      _sabbathFriendly = ex.sabbathFriendly;
+      _isSdaInstitution = ex.isSdaInstitution;
       _category = ex.category ?? 'other';
       _jobType = ex.type ?? 'full_time';
       _postType = ex.postType;

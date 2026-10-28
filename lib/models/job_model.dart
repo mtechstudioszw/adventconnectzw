@@ -23,6 +23,10 @@ class Job {
     this.postType = 'hiring',
     this.level = 'mid',
     this.expiresAt,
+    this.salaryRange,
+    this.sabbathFriendly = false,
+    this.isSdaInstitution = false,
+    this.contactEmail,
   });
 
   final String id;
@@ -65,6 +69,18 @@ class Job {
   final DateTime? expiresAt;
   final DateTime createdAt;
 
+  /// What the poster typed in the salary box ("\$400 – \$550"). The
+  /// `jobs` table stores salary ONLY as this text — there are no
+  /// salary_min / salary_max columns — so every job used to read
+  /// "Negotiable" whatever its poster entered.
+  final String? salaryRange;
+
+  /// Saved by the post form all along, and never read back: not shown on
+  /// cards, and wiped by an edit because the form started them empty.
+  final bool sabbathFriendly;
+  final bool isSdaInstitution;
+  final String? contactEmail;
+
   /// Every field carried. The details screen rebuilt the job by hand after
   /// "Mark as filled" / "Reopen" and dropped country, province, post type,
   /// level and expiry — so the page lost them until it was reopened.
@@ -92,6 +108,10 @@ class Job {
         postType: postType,
         level: level,
         expiresAt: expiresAt,
+        salaryRange: salaryRange,
+        sabbathFriendly: sabbathFriendly,
+        isSdaInstitution: isSdaInstitution,
+        contactEmail: contactEmail,
       );
 
   bool get isFilled => status == 'filled';
@@ -132,8 +152,17 @@ class Job {
 
   factory Job.fromJson(Map<String, dynamic> json) {
     final raw = json['requirements'];
+    // The column is TEXT (one requirement per line, as the form writes it);
+    // a list is still accepted for old cached payloads. Reading only lists
+    // meant requirements never showed on any job.
     final reqs = raw is List
         ? raw.map((e) => e.toString()).where((s) => s.isNotEmpty).toList()
+        : raw is String
+        ? raw
+              .split('\n')
+              .map((l) => l.replaceFirst(RegExp(r'^\s*[-•*]\s*'), '').trim())
+              .where((l) => l.isNotEmpty)
+              .toList()
         : <String>[];
     final postType = (json['post_type'] ?? 'hiring').toString();
     return Job(
@@ -164,6 +193,10 @@ class Job {
           DateTime.tryParse(json['expires_at']?.toString() ?? ''),
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
+      salaryRange: (json['salary_range'] as String?)?.trim(),
+      sabbathFriendly: json['sabbath_friendly'] == true,
+      isSdaInstitution: json['is_sda_institution'] == true,
+      contactEmail: json['contact_email'] as String?,
     );
   }
 
@@ -193,9 +226,15 @@ class Job {
         'level': level,
         'expires_at': expiresAt?.toIso8601String(),
         'created_at': createdAt.toIso8601String(),
+        'salary_range': salaryRange,
+        'sabbath_friendly': sabbathFriendly,
+        'is_sda_institution': isSdaInstitution,
+        'contact_email': contactEmail,
       };
 
   String formatSalary() {
+    final typed = salaryRange;
+    if (typed != null && typed.isNotEmpty) return typed;
     if (salaryMin == null && salaryMax == null) return 'Negotiable';
     final symbol = currency == 'USD' ? r'$' : '$currency ';
     String fmt(double v) =>
@@ -209,10 +248,10 @@ class Job {
 
   String formatType() {
     if (type == null || type!.isEmpty) return 'Full-time';
-    return type!
-        .split('-')
-        .map((p) => p.isEmpty ? p : p[0].toUpperCase() + p.substring(1))
-        .join('-');
+    // DB values are snake_case ("full_time"); splitting only on '-' showed
+    // "Full_time" on every card.
+    final words = type!.split(RegExp('[-_]')).join('-');
+    return words[0].toUpperCase() + words.substring(1);
   }
 
   static double? _readNullableDouble(dynamic value) {

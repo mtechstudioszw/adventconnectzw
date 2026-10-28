@@ -96,7 +96,26 @@ class JobCard extends StatelessWidget {
                             icon: Icons.work_outline,
                             label: job.formatType(),
                           ),
+                          _Chip(
+                            icon: Icons.signal_cellular_alt_rounded,
+                            label: job.levelLabel(),
+                          ),
                           _SalaryChip(label: job.formatSalary()),
+                          // Saved by every poster who ticked them, never
+                          // shown until now — and for this community they
+                          // are often the deciding detail.
+                          if (job.sabbathFriendly)
+                            const _Chip(
+                              icon: Icons.brightness_3_outlined,
+                              label: 'Sabbath-friendly',
+                              highlight: true,
+                            ),
+                          if (job.isSdaInstitution)
+                            const _Chip(
+                              icon: Icons.church_outlined,
+                              label: 'SDA institution',
+                              highlight: true,
+                            ),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -221,27 +240,37 @@ class _CompanyLogo extends StatelessWidget {
 }
 
 class _Chip extends StatelessWidget {
-  const _Chip({required this.icon, required this.label});
+  const _Chip({
+    required this.icon,
+    required this.label,
+    this.highlight = false,
+  });
   final IconData icon;
   final String label;
 
+  /// Primary-blue tint for the faith-relevant badges.
+  final bool highlight;
+
   @override
   Widget build(BuildContext context) {
+    final fg = highlight ? AppColors.primaryBlue : AppColors.textMuted;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: context.palette.chipBg,
+        color: highlight
+            ? AppColors.primaryBlue.withValues(alpha: 0.12)
+            : context.palette.chipBg,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 11, color: AppColors.textMuted),
+          Icon(icon, size: 11, color: fg),
           const SizedBox(width: 4),
           Text(
             label,
             style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.textMuted,
+              color: fg,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),

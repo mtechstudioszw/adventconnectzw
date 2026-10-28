@@ -590,6 +590,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _buildSummary(job),
+                  _buildFaithBadges(job),
                   const SizedBox(height: 16),
                   _buildApplyButton(),
                   const SizedBox(height: 20),
@@ -791,6 +792,48 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     );
   }
 
+  /// Sabbath-friendly / SDA institution, when the poster said so. Saved
+  /// from day one and never shown.
+  Widget _buildFaithBadges(Job job) {
+    if (!job.sabbathFriendly && !job.isSdaInstitution) {
+      return const SizedBox.shrink();
+    }
+    Widget badge(IconData icon, String label) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: AppColors.primaryBlue.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 15, color: AppColors.primaryBlue),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        );
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          if (job.sabbathFriendly)
+            badge(Icons.brightness_3_outlined, 'Sabbath-friendly'),
+          if (job.isSdaInstitution)
+            badge(Icons.church_outlined, 'SDA institution'),
+        ],
+      ),
+    );
+  }
+
   /// The notices have no header of their own, so without this the only
   /// way out was the system back gesture.
   Widget _withBack(Widget child) {
@@ -923,8 +966,38 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
             onTap: _callPoster,
           ),
         ],
+        // The post form has always asked for an email; nothing ever used
+        // it, so a poster who gave only an email could not be reached.
+        if (!job.isFilled && (job.contactEmail ?? '').trim().isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _SecondaryActionButton(
+            icon: Icons.email_outlined,
+            label: 'Email the poster',
+            onTap: () => _emailPoster(job),
+          ),
+        ],
       ],
     );
+  }
+
+  Future<void> _emailPoster(Job job) async {
+    final email = (job.contactEmail ?? '').trim();
+    final subject = Uri.encodeComponent(
+      job.isSeeking ? 'Re: ${job.title}' : 'Application: ${job.title}',
+    );
+    try {
+      final ok = await launchUrl(
+        Uri.parse('mailto:$email?subject=$subject'),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!ok) throw Exception('launch failed');
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: email));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No email app found. Address copied: $email')),
+      );
+    }
   }
 
   /// Direct phone-call shortcut for the job's contact_phone.

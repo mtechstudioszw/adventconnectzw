@@ -533,14 +533,19 @@ class _MetricsGrid extends StatelessWidget {
             icon: Icons.payments_outlined,
           ),
         ),
-        const SizedBox(width: AppSpace.md),
-        Expanded(
-          child: _MetricTile(
-            value: '$views',
-            label: 'VIEWS',
-            icon: Icons.visibility_outlined,
+        // Views are only counted once patch_277 runs (nothing incremented
+        // view_count before it). Until a real view arrives the tile stays
+        // away rather than telling every seller "0".
+        if (views > 0) ...[
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: _MetricTile(
+              value: '$views',
+              label: 'VIEWS',
+              icon: Icons.visibility_outlined,
+            ),
           ),
-        ),
+        ],
         const SizedBox(width: AppSpace.md),
         Expanded(
           child: _MetricTile(

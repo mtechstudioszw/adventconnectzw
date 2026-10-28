@@ -70,7 +70,7 @@ to run in the SQL editor; app features depending on it say so until it runs
 | 3 | Profile redesign + followers (one-way) alongside friends; privacy | **patch_274** follows, profile links/privacy | code done (shared `ProfileHeader`, follow lists + requests, Edit profile link + private toggle, post-menu Follow/Unfollow, notification routing); waits on patch_274 |
 | 4 | Organization Pages (create/manage/follow), church associations | **patch_275** pages, page_admins, page_follows, posts.page_id | code done (directory, Page view, create/edit, admins, follow, post as Page, moderation/verify for super admin); waits on patch_275 |
 | 5 | Marketplace discovery: sections, server-side search/filters/pagination, deterministic ranking + exploration, labelled sponsorship | **patch_276** (security: seller privilege guard) | code done |
-| 6 | Product detail, storefront, seller tools, product form, cart/checkout review | maybe (stock, product reviews) | |
+| 6 | Product detail, storefront, seller tools, product form, cart/checkout review | **patch_277** (view counts, server medical-claims rule) | code done |
 | 7 | Jobs: landing, detail, stepped posting form, saved jobs, applications, company profiles | **patch_27x** saved_jobs, job_applications, companies | |
 | 8 | Premium foundations: entitlements table, promotion records — **no prices** | **patch_27x** entitlements, promotions | |
 | 9 | QA: tests, analyze, renders of every redesigned screen | no | |
@@ -140,3 +140,31 @@ to run in the SQL editor; app features depending on it say so until it runs
 - "Pagination": the query caps at 200 listings and the grid reveals 24 at a
   time. True server pagination needs the ranking in the database (a view
   or RPC) — worth doing once the catalogue passes ~200.
+
+## Stage 6 notes
+
+- Product page: Availability row; seller card shows real rating (or "No
+  reviews yet"); "Delivery & payment" card from what the store entered
+  (delivery area/fee or collection, payment methods, Sabbath hours) plus
+  a line that the app takes no payments; "More from <shop>"; the action
+  bar is one row (Message · WhatsApp · Add to basket) without the
+  repeated price.
+- Storefront: shared flat header (square logo, rating, place, since,
+  Products/Reviews counts). The navy slab shown when a shop had no cover
+  is gone. Payment methods now shown; "Collection only" when no delivery.
+- Basket: each shop's delivery/collection line; "Save for later" moves an
+  item into Saved listings. The delivery fee is NOT added to the total —
+  it's free text the shop confirms.
+- Seller dashboard VIEWS was always 0 (nothing ever incremented
+  view_count). patch_277 adds record_product_view (once per buyer per
+  listing per day, never the seller); the tile is hidden until there's a
+  real view.
+- Medical-claims rule now also enforced on the server (patch_277 trigger),
+  same word list as lib/utils/medical_claims.dart — keep them in step.
+- **Open question for the owner:** the WhatsApp button on product and
+  store pages is solid WhatsApp green — a documented deliberate exception
+  in the code, but not listed in CLAUDE.md. Keep (and add it to CLAUDE.md)
+  or switch to brand blue?
+- Not done (needs backend that doesn't exist): stock quantities, product
+  reviews (only store reviews exist), "Follow store", product variations,
+  return policies, real payments. No fake versions were added.

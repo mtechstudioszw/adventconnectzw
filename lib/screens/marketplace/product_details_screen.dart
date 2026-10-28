@@ -14,6 +14,8 @@ import '../../services/marketplace_service.dart';
 import '../../services/recently_viewed_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/seller_service.dart';
+import '../../models/seller_model.dart';
+import '../../widgets/marketplace/product_tile.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -71,6 +73,13 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   /// round trip, and a double-tap would open two threads with the seller.
   bool _openingChat = false;
 
+  /// The store behind the listing — its rating, delivery and payment
+  /// details. Best-effort: the page works without it.
+  Seller? _seller;
+
+  /// The same shop's other listings for sale.
+  List<Product> _moreFromShop = const [];
+
   static const double _sheetOverlap = 24;
 
   @override
@@ -81,6 +90,30 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     _bootstrap();
     _loadSaved();
     _loadAdmin();
+    if (widget.initialProduct != null) _loadShop(widget.initialProduct!);
+  }
+
+  Future<void> _loadShop(Product p) async {
+    if (p.sellerId.isEmpty) return;
+    try {
+      final results = await Future.wait([
+        SellerService.fetchSellerByAuthUserId(p.sellerId),
+        SellerService.fetchPublicProductsByAuthUserId(p.sellerId),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _seller = results[0] as Seller?;
+        // products has no seller-name column; these are all this shop's.
+        final name = _seller?.businessName ?? p.sellerName;
+        _moreFromShop = [
+          for (final x in results[1] as List<Product>)
+            if (x.id != p.id)
+              Product.fromJson({...x.toJson(), 'seller_name': name}),
+        ].take(10).toList();
+      });
+    } catch (_) {
+      // Seller extras just don't show.
+    }
   }
 
   @override
@@ -106,10 +139,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       });
       // Only listings someone else is selling, and only while for sale —
       // your own stock isn't "recently viewed".
+      if (fetched != null && _seller == null) _loadShop(fetched);
       if (fetched != null &&
           fetched.status == 'available' &&
           fetched.sellerId != AuthService.currentUser?.id) {
         RecentlyViewedService.add(fetched);
+        MarketplaceService.recordView(fetched.id);
       }
     } catch (_) {
       if (!mounted) return;
@@ -252,7 +287,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     }
   }
 
-
   /// Message the seller inside the app.
   ///
   /// The second contact route, restored. It was removed when the two
@@ -306,8 +340,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     }
   }
 
-  bool _isOwnListing(Product p) =>
-      p.sellerId == AuthService.currentUser?.id;
+  bool _isOwnListing(Product p) => p.sellerId == AuthService.currentUser?.id;
 
   /// Report (everyone) and Hide (super admins), under the safety card.
   ///
@@ -340,8 +373,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               onPressed: _moderating
                   ? null
                   : () => product.isModerated
-                      ? _adminRestore(product)
-                      : _adminHide(product),
+                        ? _adminRestore(product)
+                        : _adminHide(product),
               icon: Icon(
                 product.isModerated
                     ? Icons.visibility_outlined
@@ -372,7 +405,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final reason = await showModerationReasonDialog(
       context,
       what: 'listing',
-      defaultReason: 'It claims to treat or cure a medical condition, which '
+      defaultReason:
+          'It claims to treat or cure a medical condition, which '
           'the marketplace guidelines do not allow.',
     );
     if (reason == null || !mounted) return;
@@ -483,6 +517,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   StaggeredReveal(index: 1, child: _buildFacts(product)),
                   const SizedBox(height: AppSpace.lg),
                   StaggeredReveal(index: 2, child: _buildSellerCard(product)),
+                  if (_buildFulfilment() case final card?) ...[
+                    const SizedBox(height: AppSpace.lg),
+                    StaggeredReveal(index: 2, child: card),
+                  ],
                   if (product.description?.trim().isNotEmpty == true) ...[
                     const SizedBox(height: AppSpace.lg),
                     StaggeredReveal(
@@ -506,6 +544,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       ),
                     ),
                   if (!_isOwnListing(product)) _moderationRow(product),
+                  if (_moreFromShop.isNotEmpty) _buildMoreFromShop(product),
                 ],
               ),
             ),
@@ -814,6 +853,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   /// stored on every product and shown nowhere.
   Widget _buildFacts(Product product) {
     final facts = <(IconData, String, String)>[
+      (
+        Icons.inventory_2_outlined,
+        'Availability',
+        product.isAvailable
+            ? 'Available'
+            : product.isSold
+            ? 'Sold'
+            : 'Reserved',
+      ),
       if (product.conditionLabel != null)
         (Icons.verified_outlined, 'Condition', product.conditionLabel!),
       if (product.locationLine != null)
@@ -840,11 +888,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               padding: const EdgeInsets.symmetric(vertical: AppSpace.md),
               child: Row(
                 children: [
-                  Icon(
-                    facts[i].$1,
-                    size: 18,
-                    color: AppColors.primaryBlue,
-                  ),
+                  Icon(facts[i].$1, size: 18, color: AppColors.primaryBlue),
                   const SizedBox(width: AppSpace.md),
                   Text(
                     facts[i].$2,
@@ -942,12 +986,44 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    'View store',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w600,
+                  // Reputation from real reviews only; a shop with none
+                  // says so instead of showing a zero.
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        if ((_seller?.ratingCount ?? 0) > 0) ...[
+                          const WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Icon(
+                              Icons.star_rounded,
+                              size: 14,
+                              color: AppColors.goldAccent,
+                            ),
+                          ),
+                          TextSpan(
+                            text:
+                                ' ${_seller!.rating.toStringAsFixed(1)} · '
+                                '${_seller!.ratingCount} review'
+                                '${_seller!.ratingCount == 1 ? '' : 's'} · ',
+                            style: TextStyle(color: context.palette.text),
+                          ),
+                        ] else if (_seller != null)
+                          TextSpan(
+                            text: 'No reviews yet · ',
+                            style: TextStyle(color: context.palette.textMuted),
+                          ),
+                        const TextSpan(
+                          text: 'View store',
+                          style: TextStyle(
+                            color: AppColors.primaryBlue,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodySmall,
                   ),
                 ],
               ),
@@ -955,6 +1031,144 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             Icon(Icons.chevron_right, color: context.palette.textMuted),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Delivery, collection, payment and Sabbath hours — exactly what the
+  /// store entered when it set up, nothing assumed. Null when the store
+  /// hasn't loaded, so nothing is guessed.
+  Widget? _buildFulfilment() {
+    final s = _seller;
+    if (s == null) return null;
+    final rows = <(IconData, String, String)>[
+      if (s.offersDelivery)
+        (
+          Icons.local_shipping_outlined,
+          'Delivery',
+          [
+            if ((s.deliveryArea ?? '').trim().isNotEmpty)
+              s.deliveryArea!.trim()
+            else
+              'Available — ask the shop',
+            if ((s.deliveryFee ?? '').trim().isNotEmpty)
+              'Fee: ${s.deliveryFee!.trim()}',
+          ].join('\n'),
+        )
+      else
+        (
+          Icons.storefront_outlined,
+          'Collection',
+          'Collect from the shop${(s.city ?? '').isEmpty ? '' : ' in ${s.city}'}',
+        ),
+      if ((s.paymentMethods ?? '').trim().isNotEmpty)
+        (Icons.payments_outlined, 'Payment', s.paymentMethods!.trim()),
+      if (s.observesSabbath)
+        (
+          Icons.brightness_3_outlined,
+          'Sabbath',
+          (s.sabbathNoticeText ?? '').trim().isNotEmpty
+              ? s.sabbathNoticeText!.trim()
+              : 'Closed from Friday sunset to Saturday sunset',
+        ),
+    ];
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.all(AppSpace.lg),
+      decoration: BoxDecoration(
+        color: palette.card,
+        borderRadius: AppRadius.lgAll,
+        boxShadow: AppShadows.card(context),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Delivery & payment',
+            style: AppTextStyles.titleMedium.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          for (final r in rows)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpace.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(r.$1, size: 18, color: AppColors.primaryBlue),
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          r.$2,
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: palette.textMuted,
+                          ),
+                        ),
+                        Text(
+                          r.$3,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: palette.text,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpace.md),
+            child: Text(
+              'You arrange payment and handover with the shop directly. '
+              'Adventist Super App doesn\'t take payments.',
+              style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMoreFromShop(Product product) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'More from ${product.sellerName}',
+            style: AppTextStyles.titleMedium.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+          SizedBox(
+            height: 252,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _moreFromShop.length,
+              separatorBuilder: (_, _) => const SizedBox(width: AppSpace.md),
+              itemBuilder: (context, i) {
+                final p = _moreFromShop[i];
+                return SizedBox(
+                  width: 156,
+                  child: ProductTile(
+                    product: p,
+                    onTap: () => context.pushReplacementNamed(
+                      'product_details',
+                      pathParameters: {'id': p.id},
+                      extra: p,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1038,45 +1252,49 @@ class _ActionBar extends StatelessWidget {
               // reason to leave buyers without WhatsApp unable to ask a
               // question. Three buttons plus a price will not fit on one
               // row of a 360dp phone without shrinking "Add" to nothing.
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
+              // One row (redesign, 28 Oct 2026): both contact routes stay
+              // labelled and equal, and "Add to basket" takes the extra
+              // width. The price used to sit here too — it's already the
+              // biggest thing under the photo, and the second copy cost a
+              // whole row of screen.
+              : Row(
                   children: [
-                    Row(
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Price',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: context.palette.textMuted,
-                              ),
+                    Expanded(
+                      flex: 5,
+                      child: _AdventChatButton(
+                        onTap: onAdventChat,
+                        busy: chatBusy,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpace.sm),
+                    Expanded(
+                      flex: 5,
+                      child: _WhatsAppButton(onTap: onWhatsApp),
+                    ),
+                    const SizedBox(width: AppSpace.sm),
+                    Expanded(
+                      flex: 7,
+                      child: Semantics(
+                        button: true,
+                        label: 'Add to basket',
+                        child: Pressable(
+                          onTap: onAddToCart,
+                          haptics: true,
+                          child: Container(
+                            height: 48,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpace.sm,
                             ),
-                            Text(
-                              product.formatPrice(),
-                              style: AppTextStyles.titleLarge.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
+                            decoration: BoxDecoration(
+                              gradient: AppColors.primaryGradient,
+                              borderRadius: AppRadius.buttonAll,
+                              boxShadow: AppShadows.glow(context),
                             ),
-                          ],
-                        ),
-                        const SizedBox(width: AppSpace.md),
-                        Expanded(
-                          child: Pressable(
-                            onTap: onAddToCart,
-                            haptics: true,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: AppSpace.lg,
-                              ),
-                              decoration: BoxDecoration(
-                                gradient: AppColors.primaryGradient,
-                                borderRadius: AppRadius.buttonAll,
-                                boxShadow: AppShadows.glow(context),
-                              ),
+                            alignment: Alignment.center,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   const Icon(
                                     Icons.add_shopping_cart_rounded,
@@ -1085,7 +1303,7 @@ class _ActionBar extends StatelessWidget {
                                   ),
                                   const SizedBox(width: AppSpace.sm),
                                   Text(
-                                    'Add',
+                                    'Add to basket',
                                     style: AppTextStyles.buttonText.copyWith(
                                       fontSize: 15,
                                     ),
@@ -1095,13 +1313,7 @@ class _ActionBar extends StatelessWidget {
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpace.sm),
-                    _ContactRow(
-                      onWhatsApp: onWhatsApp,
-                      onAdventChat: onAdventChat,
-                      chatBusy: chatBusy,
+                      ),
                     ),
                   ],
                 ),
@@ -1164,7 +1376,7 @@ class _AdventChatButton extends StatelessWidget {
         pressedScale: 0.94,
         child: Container(
           height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: AppColors.primaryBlue,
@@ -1177,26 +1389,33 @@ class _AdventChatButton extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (busy)
-                const SizedBox(width: 17, height: 17, child: BrandSpinner(size: 17))
-              else
-                const Icon(
-                  Icons.forum_rounded,
-                  color: AppColors.white,
-                  size: 17,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (busy)
+                  const SizedBox(
+                    width: 17,
+                    height: 17,
+                    child: BrandSpinner(size: 17),
+                  )
+                else
+                  const Icon(
+                    Icons.forum_rounded,
+                    color: AppColors.white,
+                    size: 17,
+                  ),
+                const SizedBox(width: AppSpace.sm - 2),
+                Text(
+                  busy ? 'Opening…' : 'Message',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              const SizedBox(width: AppSpace.sm - 2),
-              Text(
-                busy ? 'Opening…' : 'Message',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: AppColors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1277,7 +1496,7 @@ class _WhatsAppButton extends StatelessWidget {
         pressedScale: 0.94,
         child: Container(
           height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: _brand,
@@ -1290,23 +1509,26 @@ class _WhatsAppButton extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.chat_bubble_rounded,
-                color: AppColors.white,
-                size: 17,
-              ),
-              const SizedBox(width: AppSpace.sm - 2),
-              Text(
-                'WhatsApp',
-                style: AppTextStyles.labelMedium.copyWith(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.chat_bubble_rounded,
                   color: AppColors.white,
-                  fontWeight: FontWeight.w800,
+                  size: 17,
                 ),
-              ),
-            ],
+                const SizedBox(width: AppSpace.sm - 2),
+                Text(
+                  'WhatsApp',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

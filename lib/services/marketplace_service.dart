@@ -243,6 +243,17 @@ class MarketplaceService {
     );
   }
 
+  /// Counts a buyer opening a listing (patch_277). Once per viewer per
+  /// listing per day, never the seller; the server decides all of that.
+  /// Fire-and-forget — before the patch runs this simply does nothing.
+  static Future<void> recordView(String productId) async {
+    final id = int.tryParse(productId);
+    if (id == null || _client.auth.currentUser == null) return;
+    try {
+      await _client.rpc('record_product_view', params: {'p_product': id});
+    } catch (_) {}
+  }
+
   static Future<Product?> fetchProductById(String id) async {
     final response =
         await _client.from(_table).select().eq('id', id).maybeSingle();

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../services/marketplace_service.dart';
+import '../../services/seller_service.dart';
+import '../../models/seller_model.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../models/cart_item_model.dart';
@@ -34,6 +37,56 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   bool _placing = false;
+
+  /// Each shop's delivery / collection details, as it entered them. Loaded
+  /// once per shop; a shop that can't be loaded just shows no line.
+  final Map<String, Seller?> _shops = {};
+
+  @override
+  void initState() {
+    super.initState();
+    CartService.revision.addListener(_loadShops);
+    _loadShops();
+  }
+
+  @override
+  void dispose() {
+    CartService.revision.removeListener(_loadShops);
+    super.dispose();
+  }
+
+  Future<void> _loadShops() async {
+    final missing = {
+      for (final b in CartService.baskets)
+        if (!_shops.containsKey(b.sellerId)) b.sellerId,
+    };
+    for (final id in missing) {
+      _shops[id] = null;
+      try {
+        final s = await SellerService.fetchSellerByAuthUserId(id);
+        if (mounted) setState(() => _shops[id] = s);
+      } catch (_) {}
+    }
+  }
+
+  /// Move an item from the basket to Saved listings.
+  Future<void> _saveForLater(CartItem item) async {
+    try {
+      await MarketplaceService.saveProduct(item.productId);
+      await CartService.remove(item.productId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Saved for later. Find it in Profile → Saved listings.'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in to save listings.')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,6 +153,8 @@ class _CartScreenState extends State<CartScreen> {
               padding: const EdgeInsets.only(bottom: AppSpace.lg),
               child: _ShopBasketCard(
                 basket: baskets[i],
+                shop: _shops[baskets[i].sellerId],
+                onSaveForLater: _saveForLater,
                 onChangeQty: (item, qty) =>
                     CartService.setQty(item.productId, qty),
                 onRemove: (item) => CartService.remove(item.productId),
@@ -389,9 +444,13 @@ class _ShopBasketCard extends StatelessWidget {
     required this.onChangeQty,
     required this.onRemove,
     required this.onOpenProduct,
+    required this.onSaveForLater,
+    this.shop,
   });
 
   final SellerBasket basket;
+  final Seller? shop;
+  final void Function(CartItem item) onSaveForLater;
   final void Function(CartItem item, int qty) onChangeQty;
   final void Function(CartItem item) onRemove;
   final void Function(CartItem item) onOpenProduct;
@@ -456,7 +515,9 @@ class _ShopBasketCard extends StatelessWidget {
               onChangeQty: (qty) => onChangeQty(item, qty),
               onRemove: () => onRemove(item),
               onOpen: () => onOpenProduct(item),
+              onSaveForLater: () => onSaveForLater(item),
             ),
+          if (shop != null) _FulfilmentLine(shop: shop!),
           Padding(
             padding: const EdgeInsets.fromLTRB(
               AppSpace.lg,
@@ -494,9 +555,11 @@ class _CartLine extends StatelessWidget {
     required this.onChangeQty,
     required this.onRemove,
     required this.onOpen,
+    required this.onSaveForLater,
   });
 
   final CartItem item;
+  final VoidCallback onSaveForLater;
   final ValueChanged<int> onChangeQty;
   final VoidCallback onRemove;
   final VoidCallback onOpen;
@@ -544,11 +607,26 @@ class _CartLine extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpace.xs),
-                Text(
-                  item.formatPrice(),
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: context.palette.textMuted,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      item.formatPrice(),
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.palette.textMuted,
+                      ),
+                    ),
+                    const Text('  ·  '),
+                    InkWell(
+                      onTap: onSaveForLater,
+                      child: Text(
+                        'Save for later',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: AppSpace.sm),
                 Row(
@@ -577,6 +655,55 @@ class _CartLine extends StatelessWidget {
               Icons.close_rounded,
               size: 18,
               color: context.palette.textMuted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// How this shop hands over: its delivery area and fee, or collection —
+/// what the shop entered, nothing assumed. The fee isn't added to the
+/// total because it's free text ("USD 3", "depends on area"); the shop
+/// confirms it with the buyer.
+class _FulfilmentLine extends StatelessWidget {
+  const _FulfilmentLine({required this.shop});
+  final Seller shop;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final text = shop.offersDelivery
+        ? [
+            'Delivers',
+            if ((shop.deliveryArea ?? '').trim().isNotEmpty)
+              'to ${shop.deliveryArea!.trim()}',
+            if ((shop.deliveryFee ?? '').trim().isNotEmpty)
+              '· fee ${shop.deliveryFee!.trim()} (confirmed by the shop)',
+          ].join(' ')
+        : 'Collection from the shop'
+              '${(shop.city ?? '').isEmpty ? '' : ' in ${shop.city}'}';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            shop.offersDelivery
+                ? Icons.local_shipping_outlined
+                : Icons.storefront_outlined,
+            size: 16,
+            color: AppColors.primaryBlue,
+          ),
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            child: Text(
+              text,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: palette.text,
+                height: 1.4,
+              ),
             ),
           ),
         ],

@@ -279,17 +279,23 @@ class ProfileHeader extends StatelessWidget {
             children: [for (final f in facts) _FactChip(fact: f)],
           ),
         ],
-        const SizedBox(height: AppSpace.md),
-        _StatRow(stats: stats),
-        const SizedBox(height: AppSpace.md),
-        Row(
-          children: [
-            for (var i = 0; i < actions.length; i++) ...[
-              if (i > 0) const SizedBox(width: AppSpace.sm),
-              actions[i],
+        if (stats.any((x) => x.value != null)) ...[
+          const SizedBox(height: AppSpace.md),
+          _StatRow(stats: stats),
+        ],
+        // No actions row when the host puts its actions elsewhere (the
+        // storefront keeps its pinned contact bar).
+        if (actions.isNotEmpty) ...[
+          const SizedBox(height: AppSpace.md),
+          Row(
+            children: [
+              for (var i = 0; i < actions.length; i++) ...[
+                if (i > 0) const SizedBox(width: AppSpace.sm),
+                actions[i],
+              ],
             ],
-          ],
-        ),
+          ),
+        ],
       ],
     );
   }

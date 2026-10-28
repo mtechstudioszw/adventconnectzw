@@ -1,5 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../../widgets/profile/profile_header.dart';
+import '../../widgets/screen_shell.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
@@ -471,16 +473,13 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
         // page just looks broken rather than deliberately read-only.
         if (_isOwner)
           SliverToBoxAdapter(child: _OwnerPreviewBanner(seller: seller)),
-        SliverToBoxAdapter(child: _IdentityStrip(seller: seller)),
 
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.only(top: AppSpace.xl),
-            child: SectionHeader(
-              title: _products.isEmpty
-                  ? 'Products'
-                  : '${_products.length} ${_products.length == 1 ? 'product' : 'products'}',
-            ),
+            // The count is in the header's stats now; saying it twice was
+            // noise.
+            child: const SectionHeader(title: 'Products'),
           ),
         ),
 
@@ -559,10 +558,13 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
                   _AboutCard(text: seller.description!),
                   const SizedBox(height: AppSpace.lg),
                 ],
-                if (seller.offersDelivery) ...[
+                if (seller.offersDelivery ||
+                    (seller.paymentMethods ?? '').trim().isNotEmpty) ...[
                   _DeliveryCard(
+                    delivers: seller.offersDelivery,
                     area: seller.deliveryArea,
                     fee: seller.deliveryFee,
+                    payment: seller.paymentMethods,
                   ),
                   const SizedBox(height: AppSpace.lg),
                 ],
@@ -602,311 +604,133 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     );
   }
 
-  // Storefront header geometry. Kept as named constants because the name
-  // block's position is derived from all three — hand-tuned magic numbers are
-  // exactly how the name ended up sitting on top of the cover photo.
-  static const double _coverHeight = 190;
-  static const double _logoSize = 88;
-  static const double _logoOverlap = 44;
-  static const double _headerHeight =
-      _coverHeight - _logoOverlap + _logoSize + AppSpace.md + 58;
-
-  /// Cover photo with the logo breaking its bottom edge — the same shape
-  /// language as the shops rail on the marketplace tab, so a shop looks
-  /// like itself wherever you meet it.
+  /// Flat top bar + the shared profile header (redesign, 28 Oct 2026).
   ///
-  /// The shop name sits BELOW the logo, not beside it. Side by side, the name
-  /// was laid over the bottom of the cover photo — dark navy body text on
-  /// whatever picture the seller had uploaded — so it fought both the artwork
-  /// and the logo for the same 40dp of screen. Stacked, the name gets the full
-  /// width on a clean background and long business names stop colliding.
+  /// The old header painted the app-bar gradient as a 190px slab whenever a
+  /// shop had no cover — CLAUDE.md: a missing cover is never a reason for a
+  /// navy slab. Now a cover shows only when there is one, the logo is a
+  /// rounded square (organizations, not people — same as Pages), and the
+  /// name, rating and place read the same way as everywhere else.
   Widget _buildHeader() {
     final seller = _seller;
-    final photo = seller?.profilePhotoUrl;
-    final cover = seller?.coverPhotoUrl;
-    final hasPhoto = photo != null && photo.isNotEmpty;
-    final hasCover = cover != null && cover.isNotEmpty;
-
-    return SizedBox(
-      height: _headerHeight,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            height: _coverHeight,
-            child: hasCover
-                ? GestureDetector(
-                    onTap: () => FullImageViewer.show(context, cover),
-                    child: CachedNetworkImage(
-                      imageUrl: cover,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => const _CoverFallback(),
-                      errorWidget: (context, url, error) =>
-                          const _CoverFallback(),
-                    ),
-                  )
-                : const _CoverFallback(),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            height: _coverHeight,
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.35),
-                      Colors.black.withValues(alpha: 0.15),
-                    ],
-                  ),
+    final topBar = FlatStatusBar(
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: Row(
+            children: [
+              const ScreenHeroBackButton(fallbackRoute: 'marketplace'),
+              const Spacer(),
+              if (seller != null)
+                HeaderIconButton(
+                  icon: Icons.ios_share_rounded,
+                  tooltip: 'Share shop',
+                  onTap: _shareSeller,
                 ),
-              ),
-            ),
+              const SizedBox(width: AppSpace.sm),
+              CartBadgeButton(onTap: () => context.pushNamed('cart')),
+            ],
           ),
-          SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.md,
-                AppSpace.sm,
-                AppSpace.md,
-                0,
-              ),
-              child: Row(
-                children: [
-                  _GlassIconButton(
-                    icon: Icons.arrow_back,
-                    onTap: () => context.canPop()
-                        ? context.pop()
-                        : context.goNamed('marketplace'),
-                  ),
-                  const Spacer(),
-                  _GlassIconButton(
-                    icon: Icons.share_outlined,
-                    onTap: _shareSeller,
-                  ),
-                  const SizedBox(width: AppSpace.sm),
-                  CartBadgeButton(onTap: () => context.pushNamed('cart')),
-                ],
-              ),
-            ),
-          ),
-          // Logo breaks the cover's bottom edge.
-          Positioned(
-            left: AppSpace.lg,
-            top: _coverHeight - _logoOverlap,
-            child: GestureDetector(
-              onTap: hasPhoto
-                  ? () => FullImageViewer.show(context, photo)
-                  : null,
-              child: Container(
-                width: _logoSize,
-                height: _logoSize,
-                decoration: BoxDecoration(
-                  gradient: hasPhoto ? null : AppColors.primaryGradient,
-                  color: hasPhoto ? AppColors.lightGrey : null,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: context.palette.scaffoldBg,
-                    width: 4,
-                  ),
-                  boxShadow: AppShadows.card(context),
-                  image: hasPhoto
-                      ? DecorationImage(
-                          image: CachedNetworkImageProvider(photo),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                child: hasPhoto
-                    ? null
-                    : const Icon(
-                        Icons.storefront,
-                        color: AppColors.white,
-                        size: 36,
-                      ),
-              ),
-            ),
-          ),
-          // Name block, clear of both the logo and the cover photo.
-          Positioned(
-            left: AppSpace.lg,
-            right: AppSpace.lg,
-            top: _coverHeight - _logoOverlap + _logoSize + AppSpace.md,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        seller?.businessName ?? 'Loading…',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.headlineSmall.copyWith(
-                          color: context.palette.text,
-                          fontWeight: FontWeight.w800,
-                          height: 1.2,
-                        ),
-                      ),
-                    ),
-                    if (seller?.verified == true ||
-                        seller?.sdaVerified == true) ...[
-                      const SizedBox(width: 6),
-                      const Icon(
-                        Icons.verified,
-                        color: AppColors.goldAccent,
-                        size: 17,
-                      ),
-                    ],
-                  ],
-                ),
-                if (seller != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    SellerCategory.labelFor(seller.category),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.palette.textMuted,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
-  }
-}
-
-class _CoverFallback extends StatelessWidget {
-  const _CoverFallback();
-
-  @override
-  Widget build(BuildContext context) => const DecoratedBox(
-    decoration: BoxDecoration(gradient: AppColors.appBarGradient),
-  );
-}
-
-/// Rating · location · member-since on one line. The old version was a
-/// full card with three big stat columns; at 0 reviews it was three
-/// em-dashes taking up a screen of height.
-class _IdentityStrip extends StatelessWidget {
-  const _IdentityStrip({required this.seller});
-
-  final Seller seller;
-
-  @override
-  Widget build(BuildContext context) {
-    // Country is appended and flag-led, matching Product.locationLine — a
-    // shop on a worldwide marketplace has to say which country it ships
-    // or hands over in, since the app is never party to the sale.
-    final placeParts = <String?>[
+    if (seller == null) return topBar;
+    final place = <String?>[
       seller.city,
       seller.province,
       Countries.nameOf(seller.country),
     ].where((s) => s != null && s.isNotEmpty).join(', ');
-    final placeFlag = Countries.flagOf(seller.country);
-    final place = placeParts.isEmpty
-        ? ''
-        : (placeFlag.isEmpty ? placeParts : '$placeFlag  $placeParts');
-    final bits = <Widget>[];
-
-    if (seller.ratingCount > 0) {
-      bits.add(
-        _Bit(
-          icon: Icons.star_rounded,
-          iconColor: AppColors.goldAccent,
-          text:
-              '${seller.rating.toStringAsFixed(1)} · ${seller.ratingCount} '
-              '${seller.ratingCount == 1 ? 'review' : 'reviews'}',
-        ),
-      );
-    } else {
-      bits.add(const _Bit(icon: Icons.fiber_new_rounded, text: 'New shop'));
-    }
-    if (place.isNotEmpty) {
-      bits.add(_Bit(icon: Icons.place_outlined, text: place));
-    }
-    if (seller.createdAt != null) {
-      bits.add(
-        _Bit(
-          icon: Icons.event_outlined,
-          text: 'Since ${_monthYear(seller.createdAt!)}',
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpace.lg,
-        AppSpace.md,
-        AppSpace.lg,
-        0,
-      ),
-      child: Wrap(
-        spacing: AppSpace.lg,
-        runSpacing: AppSpace.sm,
-        children: bits,
+    final initials = seller.businessName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .take(2)
+        .map((w) => w[0].toUpperCase())
+        .join();
+    final photo = seller.profilePhotoUrl;
+    final cover = seller.coverPhotoUrl;
+    return ProfileGlow(
+      photoUrl: photo,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          topBar,
+          ProfileHeader(
+            name: seller.businessName,
+            initials: initials.isEmpty ? '?' : initials,
+            photoUrl: photo,
+            coverUrl: cover,
+            squareAvatar: true,
+            verified: seller.verified || seller.sdaVerified,
+            relationNote: SellerCategory.labelFor(seller.category),
+            facts: [
+              if (place.isNotEmpty)
+                ProfileFact(
+                  Icons.place_outlined,
+                  '${Countries.flagOf(seller.country)} $place'.trim(),
+                ),
+              if (seller.createdAt != null)
+                ProfileFact(
+                  Icons.event_outlined,
+                  'Since ${_monthYear(seller.createdAt!)}',
+                ),
+            ],
+            stats: [
+              ProfileStat(
+                _products.length == 1 ? 'Product' : 'Products',
+                _products.length,
+              ),
+              // Real reviews only; a shop with none shows no rating cell
+              // rather than a zero.
+              if (seller.ratingCount > 0)
+                ProfileStat(
+                  seller.ratingCount == 1 ? 'Review' : 'Reviews',
+                  seller.ratingCount,
+                ),
+            ],
+            badges: [
+              if (seller.ratingCount > 0)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.star_rounded,
+                      size: 16,
+                      color: AppColors.goldAccent,
+                    ),
+                    Text(
+                      seller.rating.toStringAsFixed(1),
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: context.palette.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+            onAvatarTap: (photo ?? '').isEmpty
+                ? null
+                : () => FullImageViewer.show(context, photo),
+            onCoverTap: (cover ?? '').isEmpty
+                ? null
+                : () => FullImageViewer.show(context, cover),
+            actions: const [],
+          ),
+        ],
       ),
     );
   }
 
   static String _monthYear(DateTime d) {
     const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     return '${months[d.month - 1]} ${d.year}';
   }
 }
 
-class _Bit extends StatelessWidget {
-  const _Bit({required this.icon, required this.text, this.iconColor});
-
-  final IconData icon;
-  final String text;
-  final Color? iconColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 15, color: iconColor ?? context.palette.textMuted),
-        const SizedBox(width: AppSpace.xs + 1),
-        Text(
-          text,
-          style: AppTextStyles.bodySmall.copyWith(
-            color: context.palette.text,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class _ContactBar extends StatelessWidget {
   const _ContactBar({
@@ -1014,28 +838,6 @@ class _IconAction extends StatelessWidget {
   }
 }
 
-class _GlassIconButton extends StatelessWidget {
-  const _GlassIconButton({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Pressable(
-      onTap: onTap,
-      pressedScale: 0.9,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.38),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: AppColors.white, size: 20),
-      ),
-    );
-  }
-}
 
 class _EmptyProducts extends StatelessWidget {
   @override
@@ -1163,10 +965,19 @@ class _AboutCard extends StatelessWidget {
 }
 
 class _DeliveryCard extends StatelessWidget {
-  const _DeliveryCard({this.area, this.fee});
+  const _DeliveryCard({
+    required this.delivers,
+    this.area,
+    this.fee,
+    this.payment,
+  });
 
+  final bool delivers;
   final String? area;
   final String? fee;
+
+  /// What the shop accepts, as it typed it (EcoCash, cash…).
+  final String? payment;
 
   @override
   Widget build(BuildContext context) {
@@ -1201,14 +1012,22 @@ class _DeliveryCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Offers delivery',
+                  delivers ? 'Offers delivery' : 'Collection only',
                   style: AppTextStyles.titleSmall.copyWith(
                     fontWeight: FontWeight.w700,
                     color: AppColors.primaryBlue,
                   ),
                 ),
                 const SizedBox(height: AppSpace.xs),
-                if (area?.trim().isNotEmpty == true)
+                if (payment?.trim().isNotEmpty == true)
+                  Text(
+                    'Payment: ${payment!.trim()}',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: context.palette.text,
+                      height: 1.5,
+                    ),
+                  ),
+                if (delivers && area?.trim().isNotEmpty == true)
                   Text(
                     'Area: $area',
                     style: AppTextStyles.bodySmall.copyWith(
@@ -1216,7 +1035,7 @@ class _DeliveryCard extends StatelessWidget {
                       height: 1.5,
                     ),
                   ),
-                if (fee?.trim().isNotEmpty == true)
+                if (delivers && fee?.trim().isNotEmpty == true)
                   Text(
                     'Fee: $fee',
                     style: AppTextStyles.bodySmall.copyWith(
@@ -1224,7 +1043,8 @@ class _DeliveryCard extends StatelessWidget {
                       height: 1.5,
                     ),
                   ),
-                if ((area?.trim().isEmpty ?? true) &&
+                if (delivers &&
+                    (area?.trim().isEmpty ?? true) &&
                     (fee?.trim().isEmpty ?? true))
                   Text(
                     'Contact the seller for delivery details.',

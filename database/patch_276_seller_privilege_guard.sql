@@ -103,7 +103,11 @@ BEGIN
     NEW.view_count := 0;
   ELSE
     NEW.is_featured := OLD.is_featured;
-    NEW.view_count := OLD.view_count;
+    -- record_product_view (patch_277) is the one writer allowed to move
+    -- view_count; it marks its own transaction.
+    IF COALESCE(current_setting('app.recording_view', true), '') <> 'on' THEN
+      NEW.view_count := OLD.view_count;
+    END IF;
     NEW.seller_id := OLD.seller_id;
     NEW.created_at := OLD.created_at;
   END IF;

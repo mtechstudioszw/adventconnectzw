@@ -362,7 +362,12 @@ class _AddProductScreenState extends State<AddProductScreen>
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = PostLimitError.messageFor(
+          // patch_277 refuses medical claims on the server too (a wording
+          // the in-app list missed, or an older app version).
+          _error = e.toString().contains('MEDICAL_CLAIM')
+              ? 'Listings may not say a product treats, cures or prevents a '
+                    'disease or condition. Please reword it.'
+              : PostLimitError.messageFor(
             e,
             fallback: widget.isEditing
                 ? 'Could not update the product. Please try again.'

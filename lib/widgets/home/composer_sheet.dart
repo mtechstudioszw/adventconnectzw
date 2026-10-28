@@ -22,14 +22,19 @@ import '../cached_image.dart';
 import '../preview_sheet.dart';
 import '../user_avatar.dart';
 import 'post_preview_sheet.dart';
+import '../../models/org_page_model.dart';
 import 'story_text_style.dart';
 
 /// Opens the "write a post" bottom sheet. Resolves to the freshly
 /// created Post or null if the user cancelled.
-Future<Post?> showPostComposer(BuildContext context, {String? churchId}) {
+Future<Post?> showPostComposer(
+  BuildContext context, {
+  String? churchId,
+  OrgPage? page,
+}) {
   return showBlurredSheet<Post>(
     context: context,
-    builder: (ctx) => _PostComposer(churchId: churchId),
+    builder: (ctx) => _PostComposer(churchId: churchId, page: page),
   );
 }
 
@@ -48,11 +53,14 @@ Future<Story?> showStoryComposer(BuildContext context) {
 //  Post composer
 // ===================================================================
 class _PostComposer extends StatefulWidget {
-  const _PostComposer({this.churchId});
+  const _PostComposer({this.churchId, this.page});
 
   /// When set, the post is published as a church update (shows the church's
   /// name + gold tick in the feed).
   final String? churchId;
+
+  /// When set, the post goes out AS this organization Page (patch_275).
+  final OrgPage? page;
 
   @override
   State<_PostComposer> createState() => _PostComposerState();
@@ -109,7 +117,9 @@ class _PostComposerState extends State<_PostComposer>
   /// Church updates keep their own draft so a half-written church notice
   /// can't overwrite a half-written personal post.
   String get _draftKey =>
-      'composer_draft_v1${widget.churchId == null ? '' : ':${widget.churchId}'}';
+      'composer_draft_v1'
+      '${widget.churchId == null ? '' : ':${widget.churchId}'}'
+      '${widget.page == null ? '' : ':page:${widget.page!.id}'}';
 
   /// The church this update is going out as, when posting from a church
   /// admin dashboard. Loaded here as well as in the identity row because
@@ -261,6 +271,9 @@ class _PostComposerState extends State<_PostComposer>
       // because it is the bit you check before committing.
       churchName: _church?.name,
       churchPhotoUrl: _church?.profilePhotoUrl,
+      pageName: widget.page?.name,
+      pageLogoUrl: widget.page?.logoUrl,
+      pageVerified: widget.page?.isVerified ?? false,
     );
     if (!mounted || !publish) return;
     await _publish();
@@ -358,8 +371,10 @@ class _PostComposerState extends State<_PostComposer>
       final post = await FeedService.createPost(
         body: body.isEmpty ? null : body,
         imageUrls: _photos,
-        visibility: _visibility,
+        // Page updates are public, like church updates.
+        visibility: widget.page != null ? PostVisibility.public : _visibility,
         churchId: widget.churchId,
+        pageId: widget.page?.id,
       );
       if (!mounted) return;
       // Only drop the draft once the insert actually succeeded — a failed
@@ -535,6 +550,7 @@ class _PostComposerState extends State<_PostComposer>
                           1,
                           _IdentityRow(
                             churchId: widget.churchId,
+                            page: widget.page,
                             visibility: _visibility,
                             onChooseVisibility: _chooseVisibility,
                           ),
@@ -1139,11 +1155,13 @@ class _Tile extends StatelessWidget {
 class _IdentityRow extends StatefulWidget {
   const _IdentityRow({
     required this.churchId,
+    this.page,
     required this.visibility,
     required this.onChooseVisibility,
   });
 
   final String? churchId;
+  final OrgPage? page;
   final PostVisibility visibility;
   final VoidCallback onChooseVisibility;
 
@@ -1188,14 +1206,19 @@ class _IdentityRowState extends State<_IdentityRow> {
 
   @override
   Widget build(BuildContext context) {
+    final page = widget.page;
     final isChurch = widget.churchId != null;
     final meta = _selfMeta();
-    final name = isChurch
+    final name = page != null
+        ? page.name
+        : isChurch
         ? (_church?.name ?? 'Your church')
         : ((meta['full_name'] as String?)?.trim().isNotEmpty ?? false
               ? (meta['full_name'] as String).trim()
               : 'You');
-    final photo = isChurch
+    final photo = page != null
+        ? page.logoUrl
+        : isChurch
         ? _church?.profilePhotoUrl
         : (meta['profile_photo_url'] as String?);
 
@@ -1206,7 +1229,11 @@ class _IdentityRowState extends State<_IdentityRow> {
           photoUrl: photo,
           size: 44,
           name: name,
-          fallbackIcon: isChurch ? Icons.church_rounded : null,
+          fallbackIcon: page != null
+              ? page.category.icon
+              : isChurch
+              ? Icons.church_rounded
+              : null,
         ),
         const SizedBox(width: AppSpace.md),
         Expanded(
@@ -1228,7 +1255,7 @@ class _IdentityRowState extends State<_IdentityRow> {
                       ),
                     ),
                   ),
-                  if (isChurch) ...[
+                  if (isChurch || (page?.isVerified ?? false)) ...[
                     const SizedBox(width: 4),
                     const Icon(
                       Icons.verified_rounded,
@@ -1242,7 +1269,15 @@ class _IdentityRowState extends State<_IdentityRow> {
               // Church updates go to everyone by design — there is no
               // audience to choose, so this states the fact instead of
               // offering a control that does nothing.
-              if (isChurch)
+              if (page != null)
+                Text(
+                  'Page update · everyone',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: context.palette.textMuted,
+                    fontSize: 11.5,
+                  ),
+                )
+              else if (isChurch)
                 Text(
                   'Church update · everyone',
                   style: AppTextStyles.labelSmall.copyWith(

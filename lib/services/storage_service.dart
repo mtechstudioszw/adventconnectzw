@@ -87,6 +87,36 @@ class StorageService {
         ),
       );
 
+  /// Organization Page logo (patch_275). Square like every uploaded
+  /// avatar/logo (CLAUDE.md). Lands in the member's own folder of
+  /// `profile_photos` — the church bucket is super-admin-only.
+  static Future<String?> pickAndUploadPageLogo() => _pickAndUpload(
+        bucket: 'profile_photos',
+        maxWidth: 1600,
+        imageQuality: 85,
+        crop: const _CropSpec(
+          ratioX: 1,
+          ratioY: 1,
+          outputWidth: 640,
+          outputQuality: 78,
+          title: 'Crop Page logo',
+        ),
+      );
+
+  /// Organization Page cover, 16:9 like profile covers.
+  static Future<String?> pickAndUploadPageCover() => _pickAndUpload(
+        bucket: 'profile_photos',
+        maxWidth: 2000,
+        imageQuality: 85,
+        crop: const _CropSpec(
+          ratioX: 16,
+          ratioY: 9,
+          outputWidth: 1280,
+          outputQuality: 80,
+          title: 'Crop Page cover',
+        ),
+      );
+
   /// Product-photo bucket. Up to 1600 wide, ~600KB target.
   static Future<String?> pickAndUploadProductPhoto() => _pickAndUpload(
         bucket: 'product_photos',

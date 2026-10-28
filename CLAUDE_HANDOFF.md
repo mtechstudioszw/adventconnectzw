@@ -402,7 +402,10 @@ done (28 Oct 2026). Stage 3 = shared `ProfileHeader`
 (lib/widgets/profile/profile_header.dart) on both profile screens,
 one-way follows (`FollowService`, patch_274), Followers / Following /
 Requests screen, Edit profile Website + Private account, post-menu
-Follow/Unfollow. **Next: Stage 4 — Organization Pages (patch_275).**
+Follow/Unfollow. Soft profile glow (owner-approved palette exception,
+see CLAUDE.md). Stage 4 = organization Pages (patch_275; see
+docs/REDESIGN_PLAN.md "Stage 4 notes" — churches deliberately not
+migrated). **Next: Stage 5 — Marketplace discovery.**
 
 Older note, kept for the record:
 **Batch 2 is IN PROGRESS (awaiting owner device check). Next: Batch 3 — Library information architecture &
@@ -423,10 +426,11 @@ Batch 2 items that were planned (kept for the record):
 
 ## 5. Pending owner actions
 
-0. **Run patches 270–274 in the Supabase SQL editor, in order.** The app
+0. **Run patches 270–275 in the Supabase SQL editor, in order.** The app
    degrades honestly without them (features say a database update is
    needed), but Save/Hide (273), moderation hide + appeal (272) and
-   following/private accounts (274) only work once they run.
+   following/private accounts (274) and Pages (275) only work once they
+   run.
 
 1. **Run `database/patch_269_country_metadata_resync.sql`** in Supabase
    (preview query first). Repairs members whose auth metadata kept a

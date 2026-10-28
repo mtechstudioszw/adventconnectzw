@@ -68,7 +68,7 @@ to run in the SQL editor; app features depending on it say so until it runs
 | 1 | Audit + design foundation (tokens, remove dots/outlines/glow noise) | no | done (quiet field); tokens continue per stage |
 | 2 | Shared post card + menu: own posts in Home, Save (+ Saved screen), Hide, Copy link, Report; feed/profile consistency; comment reply-to-reply | **patch_273** saved_posts, hidden_posts | code done (Unfollow added in stage 3) |
 | 3 | Profile redesign + followers (one-way) alongside friends; privacy | **patch_274** follows, profile links/privacy | code done (shared `ProfileHeader`, follow lists + requests, Edit profile link + private toggle, post-menu Follow/Unfollow, notification routing); waits on patch_274 |
-| 4 | Organization Pages (create/manage/follow), church associations | **patch_275** pages, page_admins, page_follows; migrate churches carefully (no auto-migration) | |
+| 4 | Organization Pages (create/manage/follow), church associations | **patch_275** pages, page_admins, page_follows, posts.page_id | code done (directory, Page view, create/edit, admins, follow, post as Page, moderation/verify for super admin); waits on patch_275 |
 | 5 | Marketplace discovery: sections, server-side search/filters/pagination, deterministic ranking + exploration, labelled sponsorship | maybe (indexes, ranking view) | |
 | 6 | Product detail, storefront, seller tools, product form, cart/checkout review | maybe (stock, product reviews) | |
 | 7 | Jobs: landing, detail, stepped posting form, saved jobs, applications, company profiles | **patch_27x** saved_jobs, job_applications, companies | |
@@ -96,3 +96,25 @@ to run in the SQL editor; app features depending on it say so until it runs
 - postgrest 2.7 loses the Postgres error code on `.maybeSingle()` failures
   (it reports the HTTP status). `UserProfileService._isMissingColumn`
   checks the message too — copy that if you write another fallback.
+
+## Stage 4 notes
+
+- **Churches were not migrated into Pages, on purpose.** They keep
+  `churches` / `church_admins` (appointment-letter verification) /
+  `church_followers`. The brief forbids silent migration and says not to
+  remove existing verification before a replacement is ready. The Pages
+  directory links to the church directory; `pages.category` refuses
+  'church' so nobody can make an unofficial church Page.
+- Pages: ministry, school, community, business. Up to 3 per member. Owners
+  and editors (`page_admins`); admins are added by @username.
+- Verification and hiding are super-admin only (`admin_set_page_state`,
+  guard trigger). Paying never verifies.
+- Posting as a Page uses `posts.page_id` (validated like church posts).
+  `FeedService._readPosts` adds the Page embed and falls back for the
+  session if patch_275 isn't there yet, so feeds never break.
+- No in-app "Message the Page": Contact uses the Page's public phone /
+  WhatsApp / email / website, so an admin's personal account isn't exposed.
+- Not done: Page events, Page insights (premium, stage 8), a web share
+  preview for Pages (share uses the store link until one exists).
+- Churches tab on personal profiles is unchanged: it already shows only
+  the member's own church, and following a Page never implies membership.

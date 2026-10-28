@@ -800,6 +800,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onTap: () => Navigator.pop(ctx, 'follow_requests'),
                 ),
               _MoreMenuRow(
+                icon: Icons.apartment_rounded,
+                label: 'Pages',
+                onTap: () => Navigator.pop(ctx, 'pages'),
+              ),
+              _MoreMenuRow(
                 icon: Icons.event_available_outlined,
                 label: _eventsGoing > 0
                     ? "Events I'm going to ($_eventsGoing)"
@@ -858,6 +863,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         break;
       case 'events':
         context.pushNamed('events');
+        break;
+      case 'pages':
+        context.pushNamed('pages');
         break;
       case 'saved_listings':
         context.pushNamed('saved_listings');

@@ -51,6 +51,11 @@ import '../screens/profile/sabbath_timer_screen.dart';
 import '../screens/profile/saved_listings_screen.dart';
 import '../screens/profile/saved_posts_screen.dart';
 import '../screens/profile/follow_list_screen.dart';
+import '../models/org_page_model.dart';
+import '../screens/pages/page_admins_screen.dart';
+import '../screens/pages/page_details_screen.dart';
+import '../screens/pages/page_edit_screen.dart';
+import '../screens/pages/pages_screen.dart';
 import '../screens/utility/report_submitted_screen.dart';
 import '../services/church_service.dart';
 import '../models/church_model.dart';
@@ -876,6 +881,46 @@ final GoRouter appRouter = GoRouter(
             : FollowListTab.followers,
         name: state.uri.queryParameters['name'],
       ),
+    ),
+    // Organization Pages (patch_275). Top-level, reached from Profile ⋯ →
+    // Pages, from Page posts in any feed, and from notifications — there is
+    // deliberately no sixth tab.
+    GoRoute(
+      path: '/pages',
+      name: 'pages',
+      builder: (context, state) => const PagesScreen(),
+      routes: [
+        GoRoute(
+          path: 'new',
+          name: 'page_create',
+          builder: (context, state) => const PageEditScreen(),
+        ),
+        GoRoute(
+          path: ':id',
+          name: 'page_details',
+          builder: (context, state) => PageDetailsScreen(
+            pageId: state.pathParameters['id'] ?? '',
+            initial: state.extra is OrgPage ? state.extra as OrgPage : null,
+          ),
+          routes: [
+            GoRoute(
+              path: 'edit',
+              name: 'page_edit',
+              builder: (context, state) => state.extra is OrgPage
+                  ? PageEditScreen(existing: state.extra as OrgPage)
+                  : PageEditLoader(pageId: state.pathParameters['id'] ?? ''),
+            ),
+            GoRoute(
+              path: 'admins',
+              name: 'page_admins',
+              builder: (context, state) => PageAdminsScreen(
+                pageId: state.pathParameters['id'] ?? '',
+                isOwner: state.extra == true,
+              ),
+            ),
+          ],
+        ),
+      ],
     ),
     GoRoute(
       path: '/follow-requests',

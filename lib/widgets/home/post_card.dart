@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -157,7 +158,9 @@ class _PostCardState extends State<PostCard>
 
   Future<void> _share() async {
     final text = (post.body ?? '').trim();
-    final author = post.isChurchPost
+    final author = post.isPagePost
+        ? post.pageName!.trim()
+        : post.isChurchPost
         ? post.churchName!.trim()
         : post.authorName;
     // A PUBLIC post now shares a real link that unfurls an OG preview card in
@@ -234,13 +237,17 @@ class _PostCardState extends State<PostCard>
       child: Row(
         children: [
           GestureDetector(
-            onTap: widget.hasStory
+            onTap: post.isPagePost
+                ? _openPage
+                : widget.hasStory
                 ? widget.onStoryRingTapped
                 : (widget.onAuthorAvatarTapped ?? widget.onAuthorTapped),
             child: _StoryRing(
-              hasStory: widget.hasStory,
+              hasStory: widget.hasStory && !post.isPagePost,
               viewed: widget.storyViewed,
-              child: post.isChurchPost
+              child: post.isPagePost
+                  ? _PageAvatar(name: post.pageName!, logoUrl: post.pageLogoUrl)
+                  : post.isChurchPost
                   ? _ChurchAvatar(photoUrl: post.churchPhotoUrl)
                   : _Avatar(
                       name: post.authorName,
@@ -251,7 +258,7 @@ class _PostCardState extends State<PostCard>
           const SizedBox(width: AppSpace.md),
           Expanded(
             child: GestureDetector(
-              onTap: widget.onAuthorTapped,
+              onTap: post.isPagePost ? _openPage : widget.onAuthorTapped,
               behavior: HitTestBehavior.opaque,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -260,8 +267,11 @@ class _PostCardState extends State<PostCard>
                     children: [
                       Flexible(
                         child: Text(
-                          // Church-branded posts show the CHURCH name.
-                          post.isChurchPost
+                          // Church- and Page-branded posts show the
+                          // organization, not the admin who wrote them.
+                          post.isPagePost
+                              ? post.pageName!.trim()
+                              : post.isChurchPost
                               ? post.churchName!.trim()
                               : post.authorName,
                           maxLines: 1,
@@ -273,7 +283,11 @@ class _PostCardState extends State<PostCard>
                         ),
                       ),
                       // Gold tick for church posts (always) or verified authors.
-                      if (post.isChurchPost || post.authorIsVerified) ...[
+                      // A Page's tick is the Page's own verification —
+                      // a verified admin doesn't lend theirs to it.
+                      if (post.isPagePost
+                          ? post.pageVerified
+                          : (post.isChurchPost || post.authorIsVerified)) ...[
                         const SizedBox(width: AppSpace.xs),
                         const Icon(
                           Icons.verified,
@@ -321,7 +335,10 @@ class _PostCardState extends State<PostCard>
                     authorFirstName: _authorFirstName,
                     // Null = not known yet (or following isn't available), and
                     // the item is left out rather than guessed.
-                    followsAuthor: _isOwner || followingIds == null
+                    // Not on Page posts: the writer is an admin, and
+                    // following them isn't following the Page.
+                    followsAuthor:
+                        _isOwner || followingIds == null || post.isPagePost
                         ? null
                         : followingIds.contains(post.authorId),
                     onToggleFollow: _toggleFollow,
@@ -376,6 +393,12 @@ class _PostCardState extends State<PostCard>
             : 'Following needs a database update (patch_274).',
       );
     }
+  }
+
+  void _openPage() {
+    final id = post.pageId;
+    if (id == null) return;
+    context.pushNamed('page_details', pathParameters: {'id': id});
   }
 
   void _toast(String message, {SnackBarAction? action}) {
@@ -1044,6 +1067,50 @@ class _StoryRing extends StatelessWidget {
           color: context.palette.card,
         ),
         child: child,
+      ),
+    );
+  }
+}
+
+/// Avatar for a Page post: its logo as a rounded square — so an
+/// organization never reads as a person — else its initials.
+class _PageAvatar extends StatelessWidget {
+  const _PageAvatar({required this.name, this.logoUrl});
+  final String name;
+  final String? logoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final words = name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+    final initials = words.isEmpty
+        ? '?'
+        : words.take(2).map((w) => w[0].toUpperCase()).join();
+    final fallback = DecoratedBox(
+      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+      child: Center(
+        child: Text(
+          initials,
+          style: AppTextStyles.labelLarge.copyWith(
+            color: AppColors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: (logoUrl ?? '').isEmpty
+            ? fallback
+            : CachedImage(
+                logoUrl!,
+                fit: BoxFit.cover,
+                width: 44,
+                height: 44,
+                errorBuilder: (_, _, _) => fallback,
+              ),
       ),
     );
   }

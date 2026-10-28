@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show ValueNotifier;
+import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/friendship_model.dart';
 import '../models/post_comment_model.dart';
@@ -110,21 +110,16 @@ class FeedService {
     final viewer = _viewerId;
     // Over-fetch so the re-rank has actual signal to work with.
     final overfetch = limit * 2;
-    var query = _client.from(_postsTable).select(
-          '*, '
-          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
-          'churches(name, profile_photo_url), '
-          'post_likes(user_id, reaction), '
-          'post_comments(id)',
-        );
-    if (onlyCountry != null && onlyCountry.isNotEmpty) {
-      query = query.eq('country', onlyCountry);
-    }
-    if (before != null) {
-      query = query.lt('created_at', before.toUtc().toIso8601String());
-    }
-    final response =
-        await query.order('created_at', ascending: false).limit(overfetch);
+    final response = await _readPosts((cols) {
+      var query = _client.from(_postsTable).select(cols);
+      if (onlyCountry != null && onlyCountry.isNotEmpty) {
+        query = query.eq('country', onlyCountry);
+      }
+      if (before != null) {
+        query = query.lt('created_at', before.toUtc().toIso8601String());
+      }
+      return query.order('created_at', ascending: false).limit(overfetch);
+    });
     final posts = (response as List)
         .map((row) => Post.fromJson(
               row as Map<String, dynamic>,
@@ -146,6 +141,50 @@ class FeedService {
     return _diversify(posts).take(limit).toList();
   }
 
+  static const String _basePostCols =
+      '*, '
+      'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
+      'churches(name, profile_photo_url), '
+      'post_likes(user_id, reaction), '
+      'post_comments(id)';
+
+  /// Whether `posts.page_id` → `pages` exists (patch_275). Null = not
+  /// known yet. Reads find out by trying; writes only use the Page embed
+  /// once a read has confirmed it, so a write is never retried.
+  static bool? _pagesInSchema;
+
+  static String get _pageCols =>
+      '$_basePostCols, pages(id, name, logo_url, is_verified)';
+
+  static String get _mutationCols =>
+      _pagesInSchema == true ? _pageCols : _basePostCols;
+
+  /// Runs a posts READ with the Page embed, falling back once — for the
+  /// rest of the session — if the database doesn't have Pages yet. Before
+  /// patch_275 an unknown embed would otherwise fail every feed.
+  static Future<dynamic> _readPosts(
+    Future<dynamic> Function(String cols) run,
+  ) async {
+    if (_pagesInSchema == false) return run(_basePostCols);
+    try {
+      final rows = await run(_pageCols);
+      _pagesInSchema = true;
+      return rows;
+    } on PostgrestException catch (e) {
+      final m = '${e.code} ${e.message} ${e.details}';
+      if (!m.contains('pages') &&
+          !m.contains('PGRST200') &&
+          !m.contains('page_id')) {
+        rethrow;
+      }
+      _pagesInSchema = false;
+      return run(_basePostCols);
+    }
+  }
+
+  @visibleForTesting
+  static void debugResetPagesSchema() => _pagesInSchema = null;
+
   /// A single author's posts, strictly newest-first (for profile Posts
   /// tabs). Unlike [fetchFeed] this is NOT reshuffled by the personalised
   /// ranking — a profile should read latest → oldest as you scroll down.
@@ -153,18 +192,33 @@ class FeedService {
     String authorId, {
     int limit = 100,
   }) async {
+    final response = await _readPosts(
+      (cols) => _client
+          .from(_postsTable)
+          .select(cols)
+          .eq('author_id', authorId)
+          .order('created_at', ascending: false)
+          .limit(limit),
+    );
+    return (response as List)
+        .map((row) =>
+            Post.fromJson(row as Map<String, dynamic>, viewerId: _viewerId))
+        .toList();
+  }
+
+  /// An organization Page's posts, newest first (patch_275). Only called
+  /// once Pages exist, so it always asks for the Page embed.
+  static Future<List<Post>> fetchPagePosts(
+    String pageId, {
+    int limit = 50,
+  }) async {
     final response = await _client
         .from(_postsTable)
-        .select(
-          '*, '
-          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
-            'churches(name, profile_photo_url), '
-          'post_likes(user_id, reaction), '
-          'post_comments(id)',
-        )
-        .eq('author_id', authorId)
+        .select(_pageCols)
+        .eq('page_id', pageId)
         .order('created_at', ascending: false)
         .limit(limit);
+    _pagesInSchema = true;
     return (response as List)
         .map((row) =>
             Post.fromJson(row as Map<String, dynamic>, viewerId: _viewerId))
@@ -281,6 +335,10 @@ class FeedService {
     List<String> imageUrls = const [],
     PostVisibility visibility = PostVisibility.public,
     String? churchId,
+
+    /// Post AS this organization Page (patch_275). The database refuses it
+    /// unless the viewer is one of the Page's admins.
+    String? pageId,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) {
@@ -312,13 +370,11 @@ class FeedService {
             // so only an approved admin of the church can attribute to it.
             if (churchId != null)
               'church_id': int.tryParse(churchId) ?? churchId,
+            'page_id': ?pageId,
           })
           .select(
-            '*, '
-            'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
-            'churches(name, profile_photo_url), '
-            'post_likes(user_id, reaction), '
-            'post_comments(id)',
+            // A Page post needs the Page embed to show as the Page.
+            pageId != null ? _pageCols : _mutationCols,
           )
           .single(),
     );
@@ -441,16 +497,9 @@ class FeedService {
         .limit(200);
     final ids = [for (final r in saved as List) (r as Map)['post_id'].toString()];
     if (ids.isEmpty) return const [];
-    final rows = await _client
-        .from(_postsTable)
-        .select(
-          '*, '
-          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
-          'churches(name, profile_photo_url), '
-          'post_likes(user_id, reaction), '
-          'post_comments(id)',
-        )
-        .inFilter('id', ids);
+    final rows = await _readPosts(
+      (cols) => _client.from(_postsTable).select(cols).inFilter('id', ids),
+    );
     final byId = {
       for (final r in rows as List)
         (r as Map)['id'].toString():
@@ -479,18 +528,14 @@ class FeedService {
   static Future<List<Post>> searchPosts(String query, {int limit = 20}) async {
     final term = query.trim();
     if (term.isEmpty) return const [];
-    final response = await _client
-        .from(_postsTable)
-        .select(
-          '*, '
-          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
-            'churches(name, profile_photo_url), '
-          'post_likes(user_id, reaction), '
-          'post_comments(id)',
-        )
-        .ilike('body', '%$term%')
-        .order('created_at', ascending: false)
-        .limit(limit);
+    final response = await _readPosts(
+      (cols) => _client
+          .from(_postsTable)
+          .select(cols)
+          .ilike('body', '%$term%')
+          .order('created_at', ascending: false)
+          .limit(limit),
+    );
     return (response as List)
         .map((row) => Post.fromJson(
               row as Map<String, dynamic>,
@@ -522,11 +567,7 @@ class FeedService {
         .update(patch)
         .eq('id', postId)
         .select(
-          '*, '
-          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
-            'churches(name, profile_photo_url), '
-          'post_likes(user_id, reaction), '
-          'post_comments(id)',
+          _mutationCols,
         )
         .single();
     final post = Post.fromJson(updated, viewerId: _viewerId);

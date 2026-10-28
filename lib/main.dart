@@ -374,6 +374,11 @@ Future<void> _initBackgroundServices() async {
           case 'seller':
             appRouter.pushNamed('seller_dashboard');
             break;
+          case 'page':
+            if (id.isNotEmpty) {
+              appRouter.pushNamed('page_details', pathParameters: {'id': id});
+            }
+            break;
           case 'user':
             // patch_274 follows — mirrors the notification centre.
             if ((msg.data['type'] ?? '').toString() == 'follow_request') {

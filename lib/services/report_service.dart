@@ -10,7 +10,7 @@ class ReportService {
 
   /// `contentType` is one of: 'seller', 'product', 'event', 'church',
   /// 'prayer', 'prayer_comment', 'job', 'profile', 'notice', 'message',
-  /// 'post', 'comment', 'story', 'news', 'group', 'user'. The column is
+  /// 'post', 'comment', 'story', 'news', 'group', 'user', 'page'. The column is
   /// free text (no CHECK), so admin-web shows whatever is sent.
   static Future<void> submit({
     required String contentType,

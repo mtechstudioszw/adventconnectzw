@@ -48,6 +48,7 @@ class ProfileHeader extends StatelessWidget {
     this.onAvatarTap,
     this.onCoverTap,
     this.relationNote,
+    this.squareAvatar = false,
   });
 
   final String name;
@@ -77,6 +78,10 @@ class ProfileHeader extends StatelessWidget {
   /// "Follows you", "Friends" — a small note under the handle.
   final String? relationNote;
 
+  /// Rounded square instead of a circle — for organization Pages, so a
+  /// logo never reads as a person (and logos are square uploads).
+  final bool squareAvatar;
+
   static const double _avatar = 88;
 
   @override
@@ -100,7 +105,8 @@ class ProfileHeader extends StatelessWidget {
               height: _avatar + 8,
               decoration: BoxDecoration(
                 color: palette.scaffoldBg,
-                shape: BoxShape.circle,
+                shape: squareAvatar ? BoxShape.rectangle : BoxShape.circle,
+                borderRadius: squareAvatar ? BorderRadius.circular(26) : null,
               ),
             ),
             if (completion != null && completion! < 1)
@@ -116,7 +122,10 @@ class ProfileHeader extends StatelessWidget {
                   ),
                 ),
               ),
-            ClipOval(
+            ClipRRect(
+              borderRadius: BorderRadius.circular(
+                squareAvatar ? 22 : _avatar / 2,
+              ),
               child: SizedBox(
                 width: _avatar,
                 height: _avatar,
@@ -236,13 +245,13 @@ class ProfileHeader extends StatelessWidget {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: palette.cardMuted,
+                    color: AppColors.primaryBlue.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     relationNote!,
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: palette.textMuted,
+                      color: AppColors.primaryBlue,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

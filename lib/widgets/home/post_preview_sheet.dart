@@ -20,6 +20,9 @@ Future<bool> showPostPreview(
   required PostVisibility visibility,
   String? churchName,
   String? churchPhotoUrl,
+  String? pageName,
+  String? pageLogoUrl,
+  bool pageVerified = false,
 }) async {
   final user = AuthService.currentUser;
   final meta = user?.userMetadata ?? const {};
@@ -54,6 +57,9 @@ Future<bool> showPostPreview(
     visibility: visibility,
     churchName: churchName,
     churchPhotoUrl: churchPhotoUrl,
+    pageName: pageName,
+    pageLogoUrl: pageLogoUrl,
+    pageVerified: pageVerified,
   );
 
   return showEntityPreview(

@@ -226,6 +226,11 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       case 'seller':
         context.pushNamed('seller_dashboard');
         return true;
+      case 'page':
+        // patch_275: a Page follower, admin invite or moderation notice.
+        if (id.isEmpty) return false;
+        context.pushNamed('page_details', pathParameters: {'id': id});
+        return true;
       case 'user':
         // patch_274 follows: reference_id is the OTHER member. A request
         // opens the list where it can be approved; a new follower or an
@@ -668,6 +673,10 @@ class _NotificationRow extends StatelessWidget {
       case 'follow_request':
       case 'follow_approved':
         return Icons.person_add_alt_outlined;
+      case 'page_follower':
+      case 'page_admin_added':
+      case 'page_hidden':
+        return Icons.apartment_rounded;
       case 'announcement':
       case 'announcement_urgent':
       case 'announcement_obituary':

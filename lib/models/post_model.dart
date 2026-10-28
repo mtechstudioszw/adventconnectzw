@@ -55,6 +55,10 @@ class Post {
     this.viewerReaction,
     this.moderationHiddenAt,
     this.moderationReason,
+    this.pageId,
+    this.pageName,
+    this.pageLogoUrl,
+    this.pageVerified = false,
   });
 
   final String id;
@@ -82,6 +86,15 @@ class Post {
   final String? churchPhotoUrl;
 
   bool get isChurchPost => (churchName ?? '').trim().isNotEmpty;
+
+  /// Posted AS an organization Page (patch_275): shows the Page's name and
+  /// logo instead of the admin who wrote it. Its tick follows the Page's
+  /// own verification, never the writer's.
+  final String? pageId;
+  final String? pageName;
+  final String? pageLogoUrl;
+  final bool pageVerified;
+  bool get isPagePost => (pageName ?? '').trim().isNotEmpty;
   final String? body;
 
   /// First photo. Kept authoritative even for multi-photo posts, because
@@ -149,6 +162,10 @@ class Post {
       moderationReason: identical(moderationReason, _unset)
           ? this.moderationReason
           : moderationReason as String?,
+      pageId: pageId,
+      pageName: pageName,
+      pageLogoUrl: pageLogoUrl,
+      pageVerified: pageVerified,
     );
   }
 
@@ -211,6 +228,8 @@ class Post {
     }
 
     final visibilityStr = (json['visibility'] ?? 'public').toString();
+    final page = json['pages'];
+    final pageMap = page is Map<String, dynamic> ? page : null;
     return Post(
       id: json['id'].toString(),
       authorId: (json['author_id'] ?? '').toString(),
@@ -241,6 +260,11 @@ class Post {
       moderationHiddenAt:
           DateTime.tryParse(json['moderation_hidden_at']?.toString() ?? ''),
       moderationReason: json['moderation_reason'] as String?,
+      pageId: json['page_id']?.toString(),
+      pageName: (pageMap?['name'] ?? json['page_name']) as String?,
+      pageLogoUrl: (pageMap?['logo_url'] ?? json['page_logo_url']) as String?,
+      pageVerified:
+          (pageMap?['is_verified'] ?? json['page_verified']) == true,
     );
   }
 
@@ -276,5 +300,9 @@ class Post {
         'post_comments': {'count': commentCount},
         'moderation_hidden_at': moderationHiddenAt?.toIso8601String(),
         'moderation_reason': moderationReason,
+        if (pageId != null) 'page_id': pageId,
+        if (pageName != null) 'page_name': pageName,
+        if (pageLogoUrl != null) 'page_logo_url': pageLogoUrl,
+        if (pageVerified) 'page_verified': true,
       };
 }

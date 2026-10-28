@@ -207,7 +207,9 @@ REVOKE ALL ON FUNCTION public.can_see_profile_content(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.profile_follow_stats(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.list_follows(uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.my_follow_requests() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.can_see_profile_content(uuid) TO authenticated;
+-- anon too: posts_private_profiles is RESTRICTIVE, so it runs for
+-- signed-out reads (the share-preview worker) and needs EXECUTE there.
+GRANT EXECUTE ON FUNCTION public.can_see_profile_content(uuid) TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION public.profile_follow_stats(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.list_follows(uuid, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.my_follow_requests() TO authenticated;

@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import '../../utils/upload_title.dart';
 
 /// Super-admin "Manage Library" console. Curate the structured Hymnal and
 /// upload Music + EGW-book PDFs that surface in the in-app Library. Gated by
@@ -553,8 +554,7 @@ class _UploadAdminTabState extends State<_UploadAdminTab> {
 
     for (final f in files) {
       try {
-        final dot = f.name.lastIndexOf('.');
-        final title = dot > 0 ? f.name.substring(0, dot) : f.name;
+        final title = titleFromFileName(f.name);
         await LibraryAdminService.uploadAndAddItem(
           kind: widget.kind,
           title: title,

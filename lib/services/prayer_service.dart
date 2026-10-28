@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/prayer_model.dart';
 import 'analytics_service.dart';
 import 'post_limit_error.dart';
+import '../utils/require_changed.dart';
 
 class PrayerService {
   PrayerService._();
@@ -125,17 +126,21 @@ class PrayerService {
       throw const AuthException('Sign in to update your prayer.');
     }
     final trimmed = testimony?.trim();
-    await _client
-        .from(_writeTable)
-        .update({
-          'is_answered': answered,
-          // The trigger clears testimony when un-answering; send it only
-          // on the answering path so we never fight it.
-          if (answered) 'testimony':
-              trimmed?.isNotEmpty == true ? trimmed : null,
-        })
-        .eq('id', prayerId)
-        .eq('author_id', user.id);
+    requireChanged(
+      await _client
+          .from(_writeTable)
+          .update({
+            'is_answered': answered,
+            // The trigger clears testimony when un-answering; send it only
+            // on the answering path so we never fight it.
+            if (answered) 'testimony':
+                trimmed?.isNotEmpty == true ? trimmed : null,
+          })
+          .eq('id', prayerId)
+          .eq('author_id', user.id)
+          .select('id'),
+      'prayer $prayerId',
+    );
   }
 
   static Future<Prayer?> fetchPrayerById(String id) async {
@@ -305,14 +310,15 @@ class PrayerService {
     if (user == null) {
       throw const AuthException('Sign in to edit your prayer.');
     }
-    await _client.from(_writeTable).update({
+    final updated = await _client.from(_writeTable).update({
       'content': content.trim(),
       'visibility': visibility,
       'is_urgent': isUrgent,
       'title': title?.trim().isNotEmpty == true ? title!.trim() : null,
       // ignore: use_null_aware_elements
       if (category != null) 'category': category,
-    }).eq('id', prayerId).eq('author_id', user.id);
+    }).eq('id', prayerId).eq('author_id', user.id).select('id');
+    requireChanged(updated, 'prayer $prayerId');
   }
 
   static Future<List<PrayerComment>> fetchComments(String prayerId) async {
@@ -387,10 +393,14 @@ class PrayerService {
     if (user == null) {
       throw const AuthException('Sign in to delete comments.');
     }
-    await _client
-        .from(_responsesTable)
-        .delete()
-        .eq('id', int.tryParse(responseId) ?? responseId);
+    requireChanged(
+      await _client
+          .from(_responsesTable)
+          .delete()
+          .eq('id', int.tryParse(responseId) ?? responseId)
+          .select('id'),
+      'prayer comment $responseId',
+    );
   }
 
   static Prayer _hydratePrayer(Map<String, dynamic> row) {
@@ -434,11 +444,15 @@ class PrayerService {
     if (user == null) {
       throw const AuthException('Sign in to delete your prayer.');
     }
-    await _client
-        .from(_writeTable)
-        .delete()
-        .eq('id', prayerId)
-        .eq('author_id', user.id);
+    requireChanged(
+      await _client
+          .from(_writeTable)
+          .delete()
+          .eq('id', prayerId)
+          .eq('author_id', user.id)
+          .select('id'),
+      'prayer $prayerId',
+    );
   }
 }
 

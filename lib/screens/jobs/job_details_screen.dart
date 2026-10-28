@@ -30,6 +30,11 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   Job? _job;
   bool _loading = true;
   String? _error;
+
+  /// The server has no such job (deleted, or hidden from this viewer).
+  /// A shared link to one crashed the screen on `_job!`; one opened from a
+  /// stale list kept showing a job nobody could apply to.
+  bool _gone = false;
   bool _markingFilled = false;
   bool _reopening = false;
   bool _renewing = false;
@@ -67,7 +72,8 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
       final fetched = await JobService.fetchJobById(widget.jobId);
       if (!mounted) return;
       setState(() {
-        _job = fetched ?? _job;
+        _job = fetched;
+        _gone = fetched == null;
         _loading = false;
       });
     } catch (_) {
@@ -131,26 +137,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
       if (!mounted) return;
       setState(() {
         _markingFilled = false;
-        _job = Job(
-          id: job.id,
-          posterId: job.posterId,
-          posterName: job.posterName,
-          title: job.title,
-          company: job.company,
-          location: job.location,
-          type: job.type,
-          salaryMin: job.salaryMin,
-          salaryMax: job.salaryMax,
-          currency: job.currency,
-          description: job.description,
-          requirements: job.requirements,
-          category: job.category,
-          contactPhone: job.contactPhone,
-          companyLogoUrl: job.companyLogoUrl,
-          isActive: job.isActive,
-          status: 'filled',
-          createdAt: job.createdAt,
-        );
+        _job = job.copyWith(status: 'filled');
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -222,26 +209,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
       if (!mounted) return;
       setState(() {
         _reopening = false;
-        _job = Job(
-          id: job.id,
-          posterId: job.posterId,
-          posterName: job.posterName,
-          title: job.title,
-          company: job.company,
-          location: job.location,
-          type: job.type,
-          salaryMin: job.salaryMin,
-          salaryMax: job.salaryMax,
-          currency: job.currency,
-          description: job.description,
-          requirements: job.requirements,
-          category: job.category,
-          contactPhone: job.contactPhone,
-          companyLogoUrl: job.companyLogoUrl,
-          isActive: job.isActive,
-          status: 'open',
-          createdAt: job.createdAt,
-        );
+        _job = job.copyWith(status: 'open');
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -571,11 +539,12 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
   }
 
   Widget _buildBody() {
+    if (_gone) return _buildGone();
     if (_loading && _job == null) {
       return const Center(child: BrandSpinner(size: 30));
     }
     if (_error != null && _job == null) {
-      return Center(
+      return _withBack(Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -598,7 +567,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
             ],
           ),
         ),
-      );
+      ));
     }
     final job = _job!;
     return SingleChildScrollView(
@@ -804,6 +773,53 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
             value: (job.location ?? '').isEmpty ? 'TBD' : job.location!,
           ),
         ],
+      ),
+    );
+  }
+
+  /// The notices have no header of their own, so without this the only
+  /// way out was the system back gesture.
+  Widget _withBack(Widget child) {
+    return SafeArea(
+      child: Stack(
+        children: [
+          child,
+          const Positioned(top: 4, left: 4, child: BackButton()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGone() {
+    final palette = context.palette;
+    return _withBack(
+      Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.work_off_outlined, size: 48, color: palette.textMuted),
+              const SizedBox(height: 12),
+              Text(
+                'This job is no longer available',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'The poster may have removed it.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: palette.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

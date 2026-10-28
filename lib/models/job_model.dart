@@ -65,6 +65,35 @@ class Job {
   final DateTime? expiresAt;
   final DateTime createdAt;
 
+  /// Every field carried. The details screen rebuilt the job by hand after
+  /// "Mark as filled" / "Reopen" and dropped country, province, post type,
+  /// level and expiry — so the page lost them until it was reopened.
+  Job copyWith({String? status}) => Job(
+        id: id,
+        posterId: posterId,
+        posterName: posterName,
+        title: title,
+        company: company,
+        createdAt: createdAt,
+        country: country,
+        province: province,
+        location: location,
+        type: type,
+        salaryMin: salaryMin,
+        salaryMax: salaryMax,
+        currency: currency,
+        description: description,
+        requirements: requirements,
+        category: category,
+        contactPhone: contactPhone,
+        companyLogoUrl: companyLogoUrl,
+        isActive: isActive,
+        status: status ?? this.status,
+        postType: postType,
+        level: level,
+        expiresAt: expiresAt,
+      );
+
   bool get isFilled => status == 'filled';
   bool get isOpen => status == 'open';
   bool get isHiring => postType == 'hiring';

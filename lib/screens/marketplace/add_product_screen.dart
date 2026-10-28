@@ -97,13 +97,7 @@ class _AddProductScreenState extends State<AddProductScreen>
     return <String>[_currency, ...choices];
   }
 
-  static const _conditions = <String, String>{
-    'new': 'New',
-    'like_new': 'Like new',
-    'good': 'Good',
-    'fair': 'Fair',
-    'for_parts': 'For parts',
-  };
+  static const _conditions = Product.conditionLabels;
 
   static const _provinces = [
     'Harare',

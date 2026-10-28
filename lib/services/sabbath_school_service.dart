@@ -180,17 +180,7 @@ class SabbathSchoolService {
 
   /// The quarterly covering today, or the newest one available.
   static Future<Quarterly?> currentQuarterly({String? lang}) async {
-    final all = await quarterlies(lang: lang);
-    if (all.isEmpty) return null;
-    for (final q in all) {
-      if (q.isCurrent && (q.groupName == null || q.groupName == 'Standard Adult')) {
-        return q;
-      }
-    }
-    for (final q in all) {
-      if (q.isCurrent) return q;
-    }
-    return all.first;
+    return pickCurrentQuarterly(await quarterlies(lang: lang));
   }
 
   // ---- Lessons ------------------------------------------------------------

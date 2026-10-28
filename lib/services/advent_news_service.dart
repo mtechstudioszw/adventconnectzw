@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/advent_news_model.dart';
 import 'post_limit_error.dart';
+import '../utils/require_changed.dart';
 
 /// Read-mostly service for the Advent News surface. Writes happen
 /// via the dashboard / Edge Functions / admin pipelines; the app
@@ -197,10 +198,14 @@ class AdventNewsService {
   /// Toggle the pinned state of an existing news article. Reserved
   /// for the same admins that can publish.
   static Future<void> setPinned(String id, bool isPinned) async {
-    await _client
-        .from(_table)
-        .update({'is_pinned': isPinned})
-        .eq('id', id);
+    requireChanged(
+      await _client
+          .from(_table)
+          .update({'is_pinned': isPinned})
+          .eq('id', id)
+          .select('id'),
+      'news $id',
+    );
   }
 
   /// Update an existing news article. RLS restricts this to the
@@ -241,7 +246,10 @@ class AdventNewsService {
   /// Delete a news article. RLS gates this to the author or a super
   /// admin so accidental deletes by other admins are blocked.
   static Future<void> deleteNews(String id) async {
-    await _client.from(_table).delete().eq('id', id);
+    requireChanged(
+      await _client.from(_table).delete().eq('id', id).select('id'),
+      'news $id',
+    );
   }
 
   // ────────────────────────────────────────────────────────────────

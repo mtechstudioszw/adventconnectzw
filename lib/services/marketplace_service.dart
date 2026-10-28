@@ -12,25 +12,38 @@ class MarketplaceService {
   static const _savedTable = 'saved_listings';
   static const _sellersTable = 'sellers';
 
-  /// Returns the auth_user_ids of every seller whose storefront is
-  /// approved AND active. Used to gate the marketplace product listing
-  /// so products from pending / rejected / banned sellers never reach
-  /// the buyer-facing surface (patch_031).
+  /// Approved, active sellers: auth_user_id → shop name. Gates the
+  /// marketplace so products from pending / rejected / banned sellers
+  /// never reach buyers (patch_031). A separate query because PostgREST
+  /// doesn't compose subqueries cleanly; one row per seller.
   ///
-  /// Done as a separate query because PostgREST doesn't compose
-  /// subqueries cleanly — but the result set is small (one row per
-  /// seller) and we cache it for the lifetime of a single call so
-  /// callers that filter + fetch share the same lookup.
-  static Future<Set<String>> _fetchApprovedSellerIds() async {
+  /// `products` has no seller-name column, so every grid tile, saved
+  /// listing and basket line read the fallback and said "Seller". The
+  /// approval lookup was already being made; it now brings the name too.
+  static Future<Map<String, String>> _fetchApprovedSellers() async {
     final rows = await _client
         .from(_sellersTable)
-        .select('auth_user_id')
+        .select('auth_user_id, business_name')
         .eq('status', 'approved')
         .eq('is_active', true);
-    return (rows as List)
-        .map((r) => (r as Map<String, dynamic>)['auth_user_id'].toString())
-        .where((id) => id.isNotEmpty)
-        .toSet();
+    return {
+      for (final r in (rows as List).cast<Map<String, dynamic>>())
+        if ((r['auth_user_id'] ?? '').toString().isNotEmpty)
+          r['auth_user_id'].toString():
+              ((r['business_name'] as String?)?.trim().isNotEmpty ?? false)
+                  ? (r['business_name'] as String).trim()
+                  : 'Seller',
+    };
+  }
+
+  /// Fills `seller_name` on product rows from [sellers] before parsing.
+  static Product _withSellerName(
+    Map<String, dynamic> row,
+    Map<String, String> sellers,
+  ) {
+    final name = sellers[(row['seller_id'] ?? '').toString()];
+    if (name != null && row['seller_name'] == null) row['seller_name'] = name;
+    return Product.fromJson(row);
   }
 
   /// Returns the set of product ids the current user has saved. Used by
@@ -96,15 +109,15 @@ class MarketplaceService {
         .map((row) => row['product_id'].toString())
         .toList();
     if (ids.isEmpty) return const [];
-    final approvedIds = await _fetchApprovedSellerIds();
+    final sellers = await _fetchApprovedSellers();
     final response = await _client
         .from(_table)
         .select()
         .inFilter('id', ids)
         .order('created_at', ascending: false);
     return (response as List)
-        .map((row) => Product.fromJson(row as Map<String, dynamic>))
-        .where((p) => approvedIds.contains(p.sellerId))
+        .map((row) => _withSellerName(row as Map<String, dynamic>, sellers))
+        .where((p) => sellers.containsKey(p.sellerId))
         .toList();
   }
 
@@ -124,8 +137,9 @@ class MarketplaceService {
     /// country is wrong needs an escape hatch that is not "edit profile".
     String? country,
   }) async {
-    final approvedIds = await _fetchApprovedSellerIds();
-    if (approvedIds.isEmpty) return const [];
+    final sellers = await _fetchApprovedSellers();
+    if (sellers.isEmpty) return const [];
+    final approvedIds = sellers.keys.toSet();
 
     var query = _client
         .from(_table)
@@ -153,7 +167,7 @@ class MarketplaceService {
         await query.order('created_at', ascending: false).limit(200);
 
     final list = (response as List)
-        .map((row) => Product.fromJson(row as Map<String, dynamic>))
+        .map((row) => _withSellerName(row as Map<String, dynamic>, sellers))
         .toList();
     list.shuffle();
     return list;

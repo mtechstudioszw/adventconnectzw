@@ -223,6 +223,7 @@ class _PostJobScreenState extends State<PostJobScreen>
           requirements: _requirementsController.text,
           category: _category,
           jobType: _jobType,
+          postType: _postType,
           level: _level,
           salaryRange: _salaryController.text,
           country: _country,

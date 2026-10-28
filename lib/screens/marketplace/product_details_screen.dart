@@ -681,8 +681,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   /// stored on every product and shown nowhere.
   Widget _buildFacts(Product product) {
     final facts = <(IconData, String, String)>[
-      if (product.condition?.trim().isNotEmpty == true)
-        (Icons.verified_outlined, 'Condition', product.condition!),
+      if (product.conditionLabel != null)
+        (Icons.verified_outlined, 'Condition', product.conditionLabel!),
       if (product.locationLine != null)
         (Icons.place_outlined, 'Location', product.locationLine!),
       if (product.subcategory?.trim().isNotEmpty == true)

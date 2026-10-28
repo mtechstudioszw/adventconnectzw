@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/job_model.dart';
 import '../utils/postgrest_filter.dart';
+import '../utils/require_changed.dart';
 import 'analytics_service.dart';
 import 'post_limit_error.dart';
 
@@ -127,6 +128,9 @@ class JobService {
     String? requirements,
     String? category,
     String? jobType,
+    /// 'hiring' or 'seeking'. The edit form has the toggle; without this
+    /// parameter switching it was silently discarded.
+    String? postType,
     String? level,
     String? salaryRange,
     /// ISO 3166-1 alpha-2 (patch_213). Travels with [province].
@@ -149,6 +153,7 @@ class JobService {
       'requirements': ?requirements?.trim(),
       'category': ?category,
       'job_type': ?jobType,
+      'post_type': ?postType,
       'level': ?level,
       'salary_range': ?salaryRange?.trim(),
       // Written as a pair. Note the asymmetry: country uses `?` because
@@ -163,11 +168,15 @@ class JobService {
       'contact_phone': ?contactPhone?.trim(),
       'contact_email': ?contactEmail?.trim(),
     };
-    await _client
-        .from(_table)
-        .update(updates)
-        .eq('id', jobId)
-        .eq('poster_id', user.id);
+    requireChanged(
+      await _client
+          .from(_table)
+          .update(updates)
+          .eq('id', jobId)
+          .eq('poster_id', user.id)
+          .select('id'),
+      'job $jobId',
+    );
   }
 
   /// Owner-only delete. Permanently removes the row + its
@@ -177,11 +186,15 @@ class JobService {
     if (user == null) {
       throw const AuthException('Sign in to delete a job.');
     }
-    await _client
-        .from(_table)
-        .delete()
-        .eq('id', jobId)
-        .eq('poster_id', user.id);
+    requireChanged(
+      await _client
+          .from(_table)
+          .delete()
+          .eq('id', jobId)
+          .eq('poster_id', user.id)
+          .select('id'),
+      'job $jobId',
+    );
   }
 
   /// patch_039: bumps expires_at to NOW() + 30 days and flips
@@ -206,11 +219,15 @@ class JobService {
     if (user == null) {
       throw const AuthException('Sign in to update a job.');
     }
-    await _client
-        .from(_table)
-        .update({'status': 'filled'})
-        .eq('id', jobId)
-        .eq('poster_id', user.id);
+    requireChanged(
+      await _client
+          .from(_table)
+          .update({'status': 'filled'})
+          .eq('id', jobId)
+          .eq('poster_id', user.id)
+          .select('id'),
+      'job $jobId',
+    );
   }
 
   /// Flip a filled job back to 'open' so applicants can see it again.
@@ -220,10 +237,14 @@ class JobService {
     if (user == null) {
       throw const AuthException('Sign in to update a job.');
     }
-    await _client
-        .from(_table)
-        .update({'status': 'open'})
-        .eq('id', jobId)
-        .eq('poster_id', user.id);
+    requireChanged(
+      await _client
+          .from(_table)
+          .update({'status': 'open'})
+          .eq('id', jobId)
+          .eq('poster_id', user.id)
+          .select('id'),
+      'job $jobId',
+    );
   }
 }

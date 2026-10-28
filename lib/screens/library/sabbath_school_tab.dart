@@ -176,11 +176,8 @@ class _SabbathSchoolTabState extends State<SabbathSchoolTab>
           final all = snap.data ?? const <Quarterly>[];
           if (all.isEmpty) return _empty(context);
 
-          // Adult quarterlies lead; other groups (Youth, Primary…) follow.
-          final current = all.firstWhere(
-            (q) => q.isCurrent,
-            orElse: () => all.first,
-          );
+          // Same rule as Home's Today card, so both name the same quarter.
+          final current = pickCurrentQuarterly(all)!;
           final rest = all.where((q) => q.id != current.id).take(24).toList();
 
           return CustomScrollView(
@@ -618,6 +615,21 @@ class _QuarterRow extends StatelessWidget {
                             .copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 3),
+                      // The edition, when it isn't the standard one. Two
+                      // rows both titled "The Gift of Prophecy" for the same
+                      // dates were indistinguishable — one was Easy Reading.
+                      if (quarterly.editionLabel != null) ...[
+                        Text(
+                          quarterly.editionLabel!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.primaryBlue,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                      ],
                       Text(
                         quarterly.humanDate,
                         maxLines: 1,

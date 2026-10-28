@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/product_model.dart';
 import '../models/seller_model.dart';
 import 'analytics_service.dart';
+import '../utils/require_changed.dart';
 
 /// All seller-side reads/writes — the application row in `sellers`, plus
 /// product management for the currently-signed-in seller. Public reads
@@ -353,13 +354,17 @@ class SellerService {
     // existing RLS treats as "hide from buyers, owner can still see"
     // (see products_select_visible policy), so it's the right state
     // for a paused listing the seller can flip back later.
-    await _client
-        .from(_productsTable)
-        .update({
-          'status': available ? 'available' : 'removed',
-        })
-        .eq('id', productId)
-        .eq('seller_id', user.id);
+    requireChanged(
+      await _client
+          .from(_productsTable)
+          .update({
+            'status': available ? 'available' : 'removed',
+          })
+          .eq('id', productId)
+          .eq('seller_id', user.id)
+          .select('id'),
+      'product $productId',
+    );
   }
 
   /// Permanently delete a product. RLS additionally restricts this to
@@ -369,11 +374,15 @@ class SellerService {
     if (user == null) {
       throw const AuthException('Sign in to delete your products.');
     }
-    await _client
-        .from(_productsTable)
-        .delete()
-        .eq('id', productId)
-        .eq('seller_id', user.id);
+    requireChanged(
+      await _client
+          .from(_productsTable)
+          .delete()
+          .eq('id', productId)
+          .eq('seller_id', user.id)
+          .select('id'),
+      'product $productId',
+    );
   }
 
   /// Permanently delete the current user's seller row + every product

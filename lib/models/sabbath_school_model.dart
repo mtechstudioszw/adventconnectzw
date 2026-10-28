@@ -64,6 +64,14 @@ class Quarterly {
   /// e.g. "Standard Adult" — lets us surface the adult quarterly first and
   /// group the rest (Primary, Youth, …).
   final String? groupName;
+
+  /// The edition to show beside the title, or null for the standard adult
+  /// quarterly (most people's default, so it needs no label).
+  String? get editionLabel {
+    final g = groupName?.trim();
+    if (g == null || g.isEmpty || g == 'Standard Adult') return null;
+    return g;
+  }
   final DateTime? startDate;
   final DateTime? endDate;
 
@@ -298,6 +306,25 @@ DateTime? parseSsDate(String? raw) {
   final y = int.tryParse(parts[2]);
   if (d == null || m == null || y == null) return null;
   return DateTime(y, m, d);
+}
+
+/// The quarterly to treat as "this quarter": the Standard Adult edition
+/// covering today, else any edition covering today, else the newest.
+///
+/// Home's Today card and the Library tab each had their own copy of this
+/// choice and they disagreed — the tab took whichever current edition came
+/// first, which could be Easy Reading while Home named the adult one.
+Quarterly? pickCurrentQuarterly(List<Quarterly> all) {
+  if (all.isEmpty) return null;
+  for (final q in all) {
+    if (q.isCurrent && (q.groupName == null || q.groupName == 'Standard Adult')) {
+      return q;
+    }
+  }
+  for (final q in all) {
+    if (q.isCurrent) return q;
+  }
+  return all.first;
 }
 
 /// Short weekday name for a calendar date, Sabbath as "Sab".

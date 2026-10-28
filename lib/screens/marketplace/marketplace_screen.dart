@@ -60,6 +60,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   /// the grid reordered under the user's finger while they typed.
   List<Product> _products = [];
   List<Seller> _shops = const [];
+
+  /// The rail follows the same Zimbabwe / Worldwide scope as the grid. It
+  /// didn't, so a member browsing Zimbabwe was shown a shop in Kumasi.
+  /// A shop with no country set stays visible rather than vanishing.
+  List<Seller> get _scopedShops => _worldwide
+      ? _shops
+      : _shops
+            .where((s) => (s.country ?? '').isEmpty || s.country == _country)
+            .toList();
   Set<String> _savedIds = <String>{};
   String _selectedCategory = 'all';
 
@@ -332,7 +341,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
         // Shops rail — hidden while searching, since a text query is about
         // finding a product, not browsing shops.
-        if (_shops.isNotEmpty && _query.isEmpty)
+        if (_scopedShops.isNotEmpty && _query.isEmpty)
           SliverToBoxAdapter(child: _buildShopsRail()),
 
         SliverToBoxAdapter(
@@ -435,6 +444,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
 
   Widget _buildShopsRail() {
+    final shops = _scopedShops;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -449,10 +459,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
-            itemCount: _shops.length,
+            itemCount: shops.length,
             separatorBuilder: (context, i) => const SizedBox(width: AppSpace.md),
             itemBuilder: (context, i) {
-              final shop = _shops[i];
+              final shop = shops[i];
               return StaggeredReveal(
                 index: i,
                 rise: 16,

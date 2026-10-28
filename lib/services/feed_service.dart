@@ -10,6 +10,7 @@ import '../models/story_model.dart';
 import 'cache_service.dart';
 import 'messaging_service.dart';
 import 'post_limit_error.dart';
+import '../utils/require_changed.dart';
 
 /// All Supabase calls behind the Facebook-style home feed:
 ///   - posts            (CRUD + likes + comments)
@@ -298,7 +299,10 @@ class FeedService {
   }
 
   static Future<void> deletePost(String postId) async {
-    await _client.from(_postsTable).delete().eq('id', postId);
+    requireChanged(
+      await _client.from(_postsTable).delete().eq('id', postId).select('id'),
+      'post $postId',
+    );
   }
 
   /// Body-text search across the feed. Respects visibility via RLS so
@@ -531,7 +535,14 @@ class FeedService {
     if (user == null) {
       throw const AuthException('Sign in to delete comments.');
     }
-    await _client.from(_commentsTable).delete().eq('id', commentId);
+    requireChanged(
+      await _client
+          .from(_commentsTable)
+          .delete()
+          .eq('id', commentId)
+          .select('id'),
+      'comment $commentId',
+    );
   }
 
   /// Cast / change / clear the viewer's vote on a comment.
@@ -654,6 +665,10 @@ class FeedService {
   /// stories_delete_author policy created in schema.sql); failures
   /// throw a PostgrestException the caller can surface.
   static Future<void> deleteStory(String storyId) async {
+    // No row check here, unlike posts: `stories_select_active` hides an
+    // expired story even from its author, and a delete that selects its
+    // rows back would then skip it — deleting your own old story would
+    // quietly stop working.
     await _client.from(_storiesTable).delete().eq('id', storyId);
   }
 

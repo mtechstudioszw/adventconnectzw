@@ -284,6 +284,31 @@ Owner decisions taken in this session:
 - End of batch: `flutter analyze` → **No issues found**; `flutter test` →
   **790 passed**. Report: `docs/BATCH_2_REPORT.md`.
 
+### After Batch 2 — founder screenshots, 28 Oct 2026 (fixed)
+- Founder's phone runs an OLD build (Advent AI bubble on every screen,
+  composer + Donate on Home). None of these fixes are on it yet.
+- Product tiles / shop page / basket said "Seller": `products` has no name
+  column. `MarketplaceService._fetchApprovedSellers()` now returns
+  id → business_name and fills `seller_name`.
+- Condition showed raw ("new", "like_new") → `Product.conditionLabel`.
+- Shops rail ignored the Zimbabwe/Worldwide scope (Kumasi shop shown).
+- Music titles were raw file names → `titleFromFileName` on upload;
+  **`database/patch_271_music_titles_cleanup.sql` DRAFT, NOT RUN** fixes
+  the 11 existing rows (ids 99–110; 102 and 108 are the same hymn).
+- Sabbath School: same-title editions now show their edition ("Easy
+  Reading"); Home and Library share `pickCurrentQuarterly`.
+- Jobs: shared link to a deleted job crashed; Hiring/Offering switch never
+  saved on edit; Mark filled/Reopen dropped 5 fields (`Job.copyWith`).
+- Silent zero-row writes → `utils/require_changed.dart` on owner edits and
+  deletes in jobs, posts, comments, prayers, prayer comments, events,
+  news, products. **Not stories**: `stories_select_active` hides expired
+  stories from their author, so a select-back would skip the delete.
+  Live RLS checked for every table touched (deleter can also SELECT).
+- Unused `/marketplace/categories` screen deleted.
+- Live DB: 13 approved sellers (ZW 11, GH 1, TZ 1) — the seller-id URL
+  limit is far off.
+- Full suite: **799 passed**; `flutter analyze` clean.
+
 ### Resume point (exact)
 **Batch 2 is DONE. Next: Batch 3 — Library information architecture &
 design** (see the master prompt). Owner items from the Batch 2 report

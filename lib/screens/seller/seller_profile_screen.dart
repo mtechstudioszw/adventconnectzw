@@ -121,7 +121,17 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
       final seller = results[0] as Seller?;
       setState(() {
         _seller = seller;
-        _products = results[1] as List<Product>;
+        // Tiles read `sellerName`, which `products` has no column for —
+        // on the shop's own page every product said "Seller".
+        _products = [
+          for (final p in results[1] as List<Product>)
+            seller == null || seller.businessName.isEmpty
+                ? p
+                : Product.fromJson({
+                    ...p.toJson(),
+                    'seller_name': seller.businessName,
+                  }),
+        ];
         _owner = results[2] as PublicUserProfile?;
         _loading = false;
       });

@@ -3,6 +3,7 @@ import '../models/event_model.dart';
 import '../utils/postgrest_filter.dart';
 import 'post_limit_error.dart';
 import 'analytics_service.dart';
+import '../utils/require_changed.dart';
 
 class EventService {
   EventService._();
@@ -274,21 +275,25 @@ class EventService {
       'contact_phone': contactPhone?.trim(),
       'cover_photo_url': coverPhotoUrl?.trim(),
     };
+    Object? rows;
     try {
-      await _client
+      rows = await _client
           .from(_table)
           .update(updates)
           .eq('id', eventId)
-          .eq('organizer_id', user.id);
-    } catch (_) {
+          .eq('organizer_id', user.id)
+          .select('id');
+    } on PostgrestException {
       updates.remove('end_date');
       updates.remove('end_time');
-      await _client
+      rows = await _client
           .from(_table)
           .update(updates)
           .eq('id', eventId)
-          .eq('organizer_id', user.id);
+          .eq('organizer_id', user.id)
+          .select('id');
     }
+    requireChanged(rows, 'event $eventId');
   }
 
   static Future<void> rsvpToEvent(String eventId) async {

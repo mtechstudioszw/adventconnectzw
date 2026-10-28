@@ -44,6 +44,27 @@ class Product {
   // screen used to read. Surfaced on the details screen.
   final String? subcategory;
   final String? condition;
+
+  /// Stored condition value → what people read. One list for the listing
+  /// form and the details screen, which showed the raw value ("new",
+  /// "like_new").
+  static const conditionLabels = <String, String>{
+    'new': 'New',
+    'like_new': 'Like new',
+    'good': 'Good',
+    'fair': 'Fair',
+    'for_parts': 'For parts',
+  };
+
+  /// Readable condition; an unknown older value is shown tidied, not raw.
+  String? get conditionLabel {
+    final c = condition?.trim();
+    if (c == null || c.isEmpty) return null;
+    final known = conditionLabels[c];
+    if (known != null) return known;
+    final words = c.replaceAll('_', ' ');
+    return words[0].toUpperCase() + words.substring(1);
+  }
   /// ISO 3166-1 alpha-2 (patch_213). Marketplace handoff is WhatsApp plus
   /// local pickup, so the country is the first thing a buyer needs to know.
   final String? country;

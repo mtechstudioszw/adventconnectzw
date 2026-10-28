@@ -53,6 +53,7 @@ import '../../widgets/ads/feed_ad_card.dart';
 import '../../widgets/premium/premium_promo_sheet.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/composer_entry.dart';
+import '../../widgets/home/feed_error_card.dart';
 import '../../widgets/home/composer_sheet.dart';
 import '../../widgets/home/create_sheet.dart';
 import '../../widgets/home/featured_church_events.dart';
@@ -192,6 +193,16 @@ class _HomeScreenState extends State<HomeScreen>
   );
   bool _loadingMore = false;
   bool _endOfFeed = false;
+
+  /// The first page failed and nothing was cached to fall back on. Without
+  /// this the empty feed said "Your feed starts here — follow a church", which
+  /// told a member with no signal that they had no friends.
+  bool _feedFailed = false;
+
+  /// The last "load more" failed. Auto-paging stops until the member taps
+  /// Retry: the scroll listener used to refire the request on every scroll
+  /// event near the bottom, hammering a dead connection behind a blank gap.
+  bool _loadMoreFailed = false;
   int _pagesLoaded = 0;
 
   /// Batches "I've seen this" writes. A card marks itself locally as it
@@ -498,6 +509,7 @@ class _HomeScreenState extends State<HomeScreen>
     // paging from the old cursor into content the new sort already returned.
     _pagesLoaded = 0;
     _endOfFeed = false;
+    _loadMoreFailed = false;
 
     final viewerId = AuthService.currentUser?.id;
     await _loadCritical(viewerId);
@@ -572,6 +584,7 @@ class _HomeScreenState extends State<HomeScreen>
         _pagesLoaded = 1;
         _endOfFeed = (results[0] as List<Post>).length < _pageSize;
         _loading = false;
+        _feedFailed = false;
       });
       _cacheBadges();
     } catch (_) {
@@ -581,7 +594,10 @@ class _HomeScreenState extends State<HomeScreen>
       if (_posts.isEmpty && _events.isEmpty) {
         _hydrateFromCache();
       }
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _feedFailed = true;
+      });
     }
   }
 
@@ -703,7 +719,10 @@ class _HomeScreenState extends State<HomeScreen>
   /// note on [FeedService.fetchFeed].
   Future<void> _loadMore() async {
     if (_loadingMore || _endOfFeed || _posts.isEmpty) return;
-    setState(() => _loadingMore = true);
+    setState(() {
+      _loadingMore = true;
+      _loadMoreFailed = false;
+    });
     final viewerId = AuthService.currentUser?.id;
     try {
       var oldest = _posts.first.createdAt;
@@ -737,7 +756,11 @@ class _HomeScreenState extends State<HomeScreen>
         _loadingMore = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _loadingMore = false);
+      if (!mounted) return;
+      setState(() {
+        _loadingMore = false;
+        _loadMoreFailed = true;
+      });
     }
   }
 
@@ -757,7 +780,9 @@ class _HomeScreenState extends State<HomeScreen>
 
   /// Auto-paging trigger. Honours the cellular allowance.
   void _maybeAutoLoadMore() {
-    if (_needsManualLoad || _loadingMore || _endOfFeed) return;
+    if (_needsManualLoad || _loadingMore || _endOfFeed || _loadMoreFailed) {
+      return;
+    }
     if (!_scroll.hasClients) return;
     final pos = _scroll.position;
     if (pos.pixels >= pos.maxScrollExtent - 900) _loadMore();
@@ -1799,7 +1824,9 @@ class _HomeScreenState extends State<HomeScreen>
       );
     }
     if (_posts.isEmpty) {
-      return SliverToBoxAdapter(child: _buildEmptyFeed());
+      return SliverToBoxAdapter(
+        child: _feedFailed ? _buildFeedError() : _buildEmptyFeed(),
+      );
     }
     final children = _buildFeedChildren();
     return SliverList(
@@ -1808,6 +1835,21 @@ class _HomeScreenState extends State<HomeScreen>
         childCount: children.length,
         addAutomaticKeepAlives: false,
       ),
+    );
+  }
+
+  /// The first page failed and there was no cached feed to show instead.
+  /// See [FeedErrorCard] for why this is not the empty-feed card.
+  Widget _buildFeedError() {
+    return FeedErrorCard(
+      offline: !ConnectivityService.isOnline,
+      onRetry: () {
+        setState(() {
+          _loading = true;
+          _feedFailed = false;
+        });
+        _bootstrap();
+      },
     );
   }
 
@@ -1962,6 +2004,35 @@ class _HomeScreenState extends State<HomeScreen>
                   label: const Text('Events'),
                 ),
               ],
+            ),
+          ],
+        ),
+      );
+    }
+    if (_loadMoreFailed) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.lg,
+          AppSpace.lg,
+          AppSpace.lg,
+          AppSpace.xl,
+        ),
+        child: Column(
+          children: [
+            Text(
+              ConnectivityService.isOnline
+                  ? "Couldn't load more posts"
+                  : "You're offline",
+              style: AppTextStyles.titleSmall.copyWith(
+                color: palette.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            OutlinedButton.icon(
+              onPressed: _loadMore,
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+              label: const Text('Try again'),
             ),
           ],
         ),

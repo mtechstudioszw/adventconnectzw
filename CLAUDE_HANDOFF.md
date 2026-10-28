@@ -154,8 +154,24 @@ Owner decisions taken in this session:
 - **Still to check on a device:** the gold FAB sits above the island and
   doesn't cover the last feed card; the Today-card → reader flow end to end.
 
+- **Home feed error states (Home polish, part 1).**
+  - First page failed + nothing cached used to show the day-one card
+    "Your feed starts here — follow a church", i.e. told an offline member
+    they had no friends. Now `_feedFailed` → `FeedErrorCard`
+    (`lib/widgets/home/feed_error_card.dart`): "You're offline" vs
+    "Couldn't load your feed", with Try again. Test: `test/feed_error_card_test.dart`.
+  - "Load more" failure was silent, left an 80px blank, and the scroll
+    listener refired the request on every scroll event near the bottom.
+    Now `_loadMoreFailed` stops auto-paging and the footer shows Try again.
+  - Not unit-tested in place: `HomeScreen` has no test harness (needs
+    Supabase). Check on a device in airplane mode on a fresh install.
+- Donate is still reachable: Settings → `_openDonation` (Android only, `kHidePayments`).
+
 ### Resume point (exact)
-**Batch 2 → Home polish** (item 1 below).
+**Batch 2 → Home polish, part 2:** the Today card and Featured church
+events pop in late (they render nothing until loaded), so the feed jumps
+down under the member's thumb. Decide: reserve space with a skeleton
+while loading, collapse to nothing on failure. Then the card visual pass.
 
 Then, still Batch 2:
 1. Home polish: loading/empty/offline states per section; card visual pass

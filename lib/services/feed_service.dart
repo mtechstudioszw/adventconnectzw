@@ -335,6 +335,130 @@ class FeedService {
     _postChanges.add(PostChange(PostChangeKind.deleted, postId));
   }
 
+  // ---- Saved and hidden posts (patch_273) -------------------------------
+
+  /// Posts the member saved / hid. The post card reads these directly, so
+  /// Save and Hide behave the same on every surface that shows a post.
+  static final ValueNotifier<Set<String>> savedPostIds = ValueNotifier({});
+  static final ValueNotifier<Set<String>> hiddenPostIds = ValueNotifier({});
+
+  /// True once patch_273's tables answered; false while they don't exist,
+  /// so the menu can say so instead of pretending to save.
+  static bool savedPostsAvailable = true;
+
+  /// Loads both sets. Safe to call repeatedly; failures leave them as they
+  /// were (and mark the feature unavailable if the tables are missing).
+  static Future<void> loadSavedAndHidden() async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return;
+    try {
+      final rows = await Future.wait([
+        _client.from('saved_posts').select('post_id').eq('user_id', uid),
+        _client.from('hidden_posts').select('post_id').eq('user_id', uid),
+      ]);
+      savedPostsAvailable = true;
+      savedPostIds.value = {
+        for (final r in rows[0] as List) (r as Map)['post_id'].toString(),
+      };
+      hiddenPostIds.value = {
+        for (final r in rows[1] as List) (r as Map)['post_id'].toString(),
+      };
+    } catch (e) {
+      if (_isMissingTable(e)) savedPostsAvailable = false;
+    }
+  }
+
+  static bool _isMissingTable(Object e) {
+    final s = e.toString();
+    return s.contains('saved_posts') || s.contains('hidden_posts') ||
+        s.contains('42P01') || s.contains('PGRST205');
+  }
+
+  /// Save or unsave. Optimistic; reverts and rethrows if the server refuses.
+  static Future<void> setSaved(String postId, bool saved) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw const AuthException('Sign in to save posts.');
+    final before = savedPostIds.value;
+    savedPostIds.value = saved
+        ? {...before, postId}
+        : ({...before}..remove(postId));
+    try {
+      if (saved) {
+        await _client
+            .from('saved_posts')
+            .upsert({'user_id': uid, 'post_id': postId});
+      } else {
+        await _client
+            .from('saved_posts')
+            .delete()
+            .eq('user_id', uid)
+            .eq('post_id', postId);
+      }
+    } catch (e) {
+      savedPostIds.value = before;
+      if (_isMissingTable(e)) savedPostsAvailable = false;
+      rethrow;
+    }
+  }
+
+  /// Hide a post from your own feed ("see less"), or bring it back.
+  static Future<void> setHidden(String postId, bool hidden) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw const AuthException('Sign in first.');
+    final before = hiddenPostIds.value;
+    hiddenPostIds.value = hidden
+        ? {...before, postId}
+        : ({...before}..remove(postId));
+    try {
+      if (hidden) {
+        await _client
+            .from('hidden_posts')
+            .upsert({'user_id': uid, 'post_id': postId});
+      } else {
+        await _client
+            .from('hidden_posts')
+            .delete()
+            .eq('user_id', uid)
+            .eq('post_id', postId);
+      }
+    } catch (e) {
+      hiddenPostIds.value = before;
+      if (_isMissingTable(e)) savedPostsAvailable = false;
+      rethrow;
+    }
+  }
+
+  /// The member's saved posts, newest save first. Posts they can no longer
+  /// see (deleted, made private, moderated) simply don't come back.
+  static Future<List<Post>> fetchSavedPosts() async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return const [];
+    final saved = await _client
+        .from('saved_posts')
+        .select('post_id, created_at')
+        .eq('user_id', uid)
+        .order('created_at', ascending: false)
+        .limit(200);
+    final ids = [for (final r in saved as List) (r as Map)['post_id'].toString()];
+    if (ids.isEmpty) return const [];
+    final rows = await _client
+        .from(_postsTable)
+        .select(
+          '*, '
+          'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
+          'churches(name, profile_photo_url), '
+          'post_likes(user_id, reaction), '
+          'post_comments(id)',
+        )
+        .inFilter('id', ids);
+    final byId = {
+      for (final r in rows as List)
+        (r as Map)['id'].toString():
+            Post.fromJson(r as Map<String, dynamic>, viewerId: _viewerId),
+    };
+    return [for (final id in ids) ?byId[id]];
+  }
+
   /// Super admin: hide a post from everyone but its author (or restore it)
   /// and notify the author with a way to appeal. Backed by
   /// `admin_set_post_hidden` (patch_272), which refuses non-admins.

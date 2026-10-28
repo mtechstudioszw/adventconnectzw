@@ -2,7 +2,6 @@
 // or deleted on one tab stayed stale on the other. FeedService now
 // announces every server-confirmed create / edit / delete.
 
-import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 

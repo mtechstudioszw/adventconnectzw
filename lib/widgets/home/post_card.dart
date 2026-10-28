@@ -1,6 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../config/app_version.dart';
@@ -11,6 +11,7 @@ import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
+import '../../services/feed_service.dart';
 import '../cached_image.dart';
 import '../expandable_text.dart';
 import '../motion/pressable.dart';
@@ -306,26 +307,75 @@ class _PostCardState extends State<PostCard>
               ),
             ),
           ),
-          if (_isOwner)
-            _OwnerMenu(
+          ValueListenableBuilder<Set<String>>(
+            valueListenable: FeedService.savedPostIds,
+            builder: (context, savedIds, _) => _PostMenu(
+              isOwner: _isOwner,
               isFriendsOnly: post.visibility == PostVisibility.friendsOnly,
+              saved: savedIds.contains(post.id),
+              onToggleSaved: _toggleSaved,
+              onCopyLink: _copyLink,
+              onHide: _isOwner ? null : _hide,
               onEdit: widget.onEdit,
               onDelete: widget.onDelete,
               onToggleVisibility: widget.onToggleVisibility,
               onSaveImage: _images.isNotEmpty ? widget.onSaveImage : null,
               photoCount: _images.length,
-            )
-          else if (widget.onReport != null)
-            _ViewerMenu(
-              onReport: widget.onReport!,
-              onSaveImage: _images.isNotEmpty ? widget.onSaveImage : null,
-              photoCount: _images.length,
+              onReport: widget.onReport,
               onAdminModerate: widget.onAdminModerate,
               isModerated: post.isModerated,
             ),
+          ),
         ],
       ),
     );
+  }
+
+  void _toast(String message, {SnackBarAction? action}) {
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message), action: action));
+  }
+
+  /// Saved posts live in the member's private collection (patch_273), not
+  /// a local icon flip.
+  Future<void> _toggleSaved() async {
+    final saving = !FeedService.savedPostIds.value.contains(post.id);
+    try {
+      await FeedService.setSaved(post.id, saving);
+      _toast(saving ? 'Saved. Find it in Profile → Saved.' : 'Removed from Saved.');
+    } catch (_) {
+      _toast(
+        !FeedService.savedPostsAvailable
+            ? 'Saving posts needs a database update (patch_273).'
+            : "Couldn't update Saved. Try again.",
+      );
+    }
+  }
+
+  Future<void> _copyLink() async {
+    await Clipboard.setData(ClipboardData(text: postShareUrl(post.id)));
+    _toast('Link copied.');
+  }
+
+  /// "See less": out of this member's feed only, with Undo.
+  Future<void> _hide() async {
+    try {
+      await FeedService.setHidden(post.id, true);
+      _toast(
+        "Post hidden. You won't see it in your feed.",
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => FeedService.setHidden(post.id, false),
+        ),
+      );
+    } catch (_) {
+      _toast(
+        !FeedService.savedPostsAvailable
+            ? 'Hiding posts needs a database update (patch_273).'
+            : "Couldn't hide this post. Try again.",
+      );
+    }
   }
 
   Widget _buildBody(BuildContext context) {
@@ -1083,206 +1133,135 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-class _OwnerMenu extends StatelessWidget {
-  const _OwnerMenu({
+/// The one ⋯ menu for every post, owner or not (redesign brief, 28 Oct
+/// 2026). Items depend on who is looking:
+///   owner  → Save, Copy link, Edit, Audience, Save photos, Delete
+///   others → Save, Copy link, Hide post, Save photos, Report (+ admin)
+/// Save, Copy link and Hide are handled by the card itself so they behave
+/// the same on every surface; the rest are the host's callbacks.
+class _PostMenu extends StatelessWidget {
+  const _PostMenu({
+    required this.isOwner,
     required this.isFriendsOnly,
-    required this.onEdit,
-    required this.onDelete,
-    required this.onToggleVisibility,
+    required this.saved,
+    required this.onToggleSaved,
+    required this.onCopyLink,
+    this.onHide,
+    this.onEdit,
+    this.onDelete,
+    this.onToggleVisibility,
     this.onSaveImage,
     this.photoCount = 0,
+    this.onReport,
+    this.onAdminModerate,
+    this.isModerated = false,
   });
 
+  final bool isOwner;
   final bool isFriendsOnly;
+  final bool saved;
+  final VoidCallback onToggleSaved;
+  final VoidCallback onCopyLink;
+  final VoidCallback? onHide;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onToggleVisibility;
   final VoidCallback? onSaveImage;
 
-  /// Drives the label only. Save has always applied to the whole post, so
-  /// on an album the menu has to say so — "Save to gallery" next to nine
-  /// photos reads as saving the one on screen.
+  /// Label only: on an album "Save to gallery" read as saving one photo.
   final int photoCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      icon: Icon(Icons.more_horiz, color: context.palette.textMuted, size: 20),
-      tooltip: 'Manage post',
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.button),
-      ),
-      onSelected: (value) {
-        switch (value) {
-          case 'edit':
-            onEdit?.call();
-            break;
-          case 'visibility':
-            onToggleVisibility?.call();
-            break;
-          case 'save':
-            onSaveImage?.call();
-            break;
-          case 'delete':
-            onDelete?.call();
-            break;
-        }
-      },
-      itemBuilder: (ctx) => [
-        if (onEdit != null)
-          const PopupMenuItem(
-            value: 'edit',
-            child: Row(
-              children: [
-                Icon(
-                  Icons.edit_outlined,
-                  size: 18,
-                  color: AppColors.primaryBlue,
-                ),
-                SizedBox(width: 10),
-                Text('Edit post'),
-              ],
-            ),
-          ),
-        if (onToggleVisibility != null)
-          PopupMenuItem(
-            value: 'visibility',
-            child: Row(
-              children: [
-                Icon(
-                  isFriendsOnly ? Icons.public : Icons.people_alt_outlined,
-                  size: 18,
-                  color: AppColors.primaryBlue,
-                ),
-                const SizedBox(width: 10),
-                Text(isFriendsOnly ? 'Make public' : 'Show friends only'),
-              ],
-            ),
-          ),
-        if (onSaveImage != null)
-          PopupMenuItem(
-            value: 'save',
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.download_outlined,
-                  size: 18,
-                  color: AppColors.primaryBlue,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  photoCount > 1
-                      ? 'Save all $photoCount photos'
-                      : 'Save to gallery',
-                ),
-              ],
-            ),
-          ),
-        if (onDelete != null)
-          const PopupMenuItem(
-            value: 'delete',
-            child: Row(
-              children: [
-                Icon(Icons.delete_outline, size: 18, color: AppColors.red),
-                SizedBox(width: 10),
-                Text('Delete post', style: TextStyle(color: AppColors.red)),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _ViewerMenu extends StatelessWidget {
-  const _ViewerMenu({
-    required this.onReport,
-    this.onSaveImage,
-    this.photoCount = 0,
-    this.onAdminModerate,
-    this.isModerated = false,
-  });
-
-  final VoidCallback onReport;
-  final VoidCallback? onSaveImage;
+  final VoidCallback? onReport;
   final VoidCallback? onAdminModerate;
   final bool isModerated;
 
-  /// Label only — see [_OwnerMenu.photoCount].
-  final int photoCount;
+  PopupMenuItem<String> _item(
+    String value,
+    IconData icon,
+    String label, {
+    Color color = AppColors.primaryBlue,
+    bool danger = false,
+  }) {
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: danger ? AppColors.red : color),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: danger ? const TextStyle(color: AppColors.red) : null,
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final photosLabel =
+        photoCount > 1 ? 'Save all $photoCount photos' : 'Save to gallery';
     return PopupMenuButton<String>(
       icon: Icon(Icons.more_horiz, color: context.palette.textMuted, size: 20),
-      tooltip: 'More',
+      tooltip: isOwner ? 'Manage post' : 'More',
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.button),
       ),
       onSelected: (value) {
         switch (value) {
-          case 'save':
+          case 'bookmark':
+            onToggleSaved();
+          case 'copy':
+            onCopyLink();
+          case 'hide':
+            onHide?.call();
+          case 'edit':
+            onEdit?.call();
+          case 'visibility':
+            onToggleVisibility?.call();
+          case 'save_image':
             onSaveImage?.call();
-            break;
+          case 'delete':
+            onDelete?.call();
           case 'report':
-            onReport();
-            break;
+            onReport?.call();
           case 'moderate':
             onAdminModerate?.call();
-            break;
         }
       },
       itemBuilder: (ctx) => [
-        if (onSaveImage != null)
-          PopupMenuItem(
-            value: 'save',
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.download_outlined,
-                  size: 18,
-                  color: AppColors.primaryBlue,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  photoCount > 1
-                      ? 'Save all $photoCount photos'
-                      : 'Save image to gallery',
-                ),
-              ],
-            ),
-          ),
-        const PopupMenuItem(
-          value: 'report',
-          child: Row(
-            children: [
-              Icon(Icons.flag_outlined, size: 18, color: AppColors.red),
-              SizedBox(width: 10),
-              Text('Report post', style: TextStyle(color: AppColors.red)),
-            ],
-          ),
+        _item(
+          'bookmark',
+          saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+          saved ? 'Remove from Saved' : 'Save post',
         ),
-        if (onAdminModerate != null)
-          PopupMenuItem(
-            value: 'moderate',
-            child: Row(
-              children: [
-                Icon(
-                  isModerated
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                  size: 18,
-                  color: AppColors.red,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  isModerated ? 'Restore post (admin)' : 'Hide post (admin)',
-                  style: const TextStyle(color: AppColors.red),
-                ),
-              ],
+        _item('copy', Icons.link_rounded, 'Copy link'),
+        if (isOwner) ...[
+          if (onEdit != null) _item('edit', Icons.edit_outlined, 'Edit post'),
+          if (onToggleVisibility != null)
+            _item(
+              'visibility',
+              isFriendsOnly ? Icons.public : Icons.people_alt_outlined,
+              isFriendsOnly ? 'Make public' : 'Show friends only',
             ),
+        ] else if (onHide != null)
+          _item('hide', Icons.visibility_off_outlined, 'Hide post'),
+        if (onSaveImage != null)
+          _item('save_image', Icons.download_outlined, photosLabel),
+        if (isOwner && onDelete != null)
+          _item('delete', Icons.delete_outline, 'Delete post', danger: true),
+        if (!isOwner && onReport != null)
+          _item('report', Icons.flag_outlined, 'Report post', danger: true),
+        if (!isOwner && onAdminModerate != null)
+          _item(
+            'moderate',
+            isModerated
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
+            isModerated ? 'Restore post (admin)' : 'Hide post (admin)',
+            danger: true,
           ),
       ],
     );
   }
 }
+

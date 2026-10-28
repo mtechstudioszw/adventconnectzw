@@ -246,6 +246,8 @@ class _HomeScreenState extends State<HomeScreen>
     _lifecycle = AppLifecycleListener(onResume: _onResume);
     _loadSuperAdmin();
     _postChangesSub = FeedService.postChanges.listen(_onPostChange);
+    FeedService.hiddenPostIds.addListener(_onHiddenChanged);
+    FeedService.loadSavedAndHidden();
     // Tapping Home while already on Home returns to the top — the only way
     // back up from an endless feed. The shared island calls this.
     TabShell.registerReselect(TabShell.homeIndex, _scrollToTop);
@@ -418,6 +420,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void dispose() {
     _postChangesSub?.cancel();
+    FeedService.hiddenPostIds.removeListener(_onHiddenChanged);
     _lifecycle.dispose();
     TabShell.unregisterReselect(TabShell.homeIndex, _scrollToTop);
     FeedService.friendshipsChanged.removeListener(_onFriendshipsChanged);
@@ -2173,17 +2176,18 @@ class _HomeScreenState extends State<HomeScreen>
     // Spreading them evenly over however many posts there are means every
     // module lands between two posts on any feed length, and a long feed
     // still gets the original 5-post rhythm because of the cap.
-    final discoverySpacing = discoveryCards.isEmpty || _posts.isEmpty
+    final posts = _visiblePosts;
+    final discoverySpacing = discoveryCards.isEmpty || posts.isEmpty
         ? _discoveryEveryNPosts
-        : (_posts.length ~/ (discoveryCards.length + 1))
+        : (posts.length ~/ (discoveryCards.length + 1))
             .clamp(2, _discoveryEveryNPosts);
 
     var cardIdx = 0;
     var adsInserted = 0;
     var videoIdx = 0;
     var musicIdx = 0;
-    for (var i = 0; i < _posts.length; i++) {
-      final post = _posts[i];
+    for (var i = 0; i < posts.length; i++) {
+      final post = posts[i];
       children.add(
         // Fades in and rises as it scrolls into view. In a lazy sliver the
         // card's ELEMENT is created just before it becomes visible, so a
@@ -2598,6 +2602,19 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   StreamSubscription<PostChange>? _postChangesSub;
+
+  /// A post the member hid ("see less") leaves the feed at once, and an
+  /// Undo brings the list back to what the server returns on refresh.
+  void _onHiddenChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// The feed as shown: everything loaded, minus posts this member hid.
+  List<Post> get _visiblePosts {
+    final hidden = FeedService.hiddenPostIds.value;
+    if (hidden.isEmpty) return _posts;
+    return _posts.where((p) => !hidden.contains(p.id)).toList();
+  }
 
   /// Keeps the feed in step with posts made, edited or deleted anywhere —
   /// including from Profile, which is a separate kept-alive tab.

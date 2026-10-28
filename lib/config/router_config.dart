@@ -49,6 +49,7 @@ import '../screens/profile/my_events_screen.dart';
 import '../screens/profile/notification_preferences_screen.dart';
 import '../screens/profile/sabbath_timer_screen.dart';
 import '../screens/profile/saved_listings_screen.dart';
+import '../screens/profile/saved_posts_screen.dart';
 import '../screens/utility/report_submitted_screen.dart';
 import '../services/church_service.dart';
 import '../models/church_model.dart';
@@ -603,6 +604,12 @@ final GoRouter appRouter = GoRouter(
                   path: 'saved-listings',
                   name: 'saved_listings',
                   builder: (context, state) => const SavedListingsScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'saved-posts',
+                  name: 'saved_posts',
+                  builder: (context, state) => const SavedPostsScreen(),
                 ),
                 GoRoute(
                   parentNavigatorKey: rootNavigatorKey,

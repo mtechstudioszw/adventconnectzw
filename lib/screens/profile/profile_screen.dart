@@ -705,6 +705,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               _MoreMenuRow(
+                icon: Icons.bookmark_border_rounded,
+                label: 'Saved posts',
+                onTap: () => Navigator.pop(ctx, 'saved_posts'),
+              ),
+              _MoreMenuRow(
+                icon: Icons.favorite_border_rounded,
+                label: 'Saved listings',
+                onTap: () => Navigator.pop(ctx, 'saved_listings'),
+              ),
+              _MoreMenuRow(
                 icon: Icons.settings_outlined,
                 label: 'Settings',
                 onTap: () => Navigator.pop(ctx, 'settings'),
@@ -737,6 +747,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         break;
       case 'settings':
         context.pushNamed('settings');
+        break;
+      case 'saved_posts':
+        context.pushNamed('saved_posts');
+        break;
+      case 'saved_listings':
+        context.pushNamed('saved_listings');
         break;
       case 'notifications':
         context.pushNamed('notification_preferences');

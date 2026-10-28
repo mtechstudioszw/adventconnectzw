@@ -14,6 +14,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/home/report_sheet.dart';
 
 class EventDetailsScreen extends StatefulWidget {
   const EventDetailsScreen({
@@ -303,6 +304,18 @@ class _EventDetailsScreenState extends State<EventDetailsScreen>
                       );
                       if (updated == true) _bootstrap();
                     },
+                  ),
+                  const SizedBox(width: 8),
+                ] else ...[
+                  // Events had no way to be reported (Apple 1.2).
+                  _CircleIconButton(
+                    icon: Icons.flag_outlined,
+                    onTap: () => showReportSheet(
+                      context,
+                      contentType: 'event',
+                      contentId: event.id,
+                      contentLabel: event.title,
+                    ),
                   ),
                   const SizedBox(width: 8),
                 ],

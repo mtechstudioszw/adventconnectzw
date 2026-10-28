@@ -12,6 +12,7 @@ import '../cached_image.dart';
 import '../char_counter.dart';
 import '../expandable_text.dart';
 import '../verified_tick.dart';
+import 'report_sheet.dart';
 
 /// Bottom sheet that opens when the user taps "Comment" on a feed post.
 /// Loads comments lazily and lets the viewer post a new one, reply to
@@ -679,7 +680,11 @@ class _CommentRow extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.only(top: 6, left: 4),
-                child: Row(
+                // Wrap, not Row: a post owner looking at someone else's
+                // reply gets five actions, which overflowed narrow phones.
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  runSpacing: 6,
                   children: [
                     _VoteButton(
                       icon: comment.viewerVote == 1
@@ -710,6 +715,28 @@ class _CommentRow extends StatelessWidget {
                         ),
                       ),
                     ),
+                    // Comments had no way to be reported (Apple 1.2 asks
+                    // for one on all user content). Not on your own.
+                    if (comment.authorId.isNotEmpty &&
+                        comment.authorId != AuthService.currentUser?.id) ...[
+                      const SizedBox(width: 14),
+                      GestureDetector(
+                        onTap: () => showReportSheet(
+                          context,
+                          contentType: 'comment',
+                          contentId: comment.id,
+                          contentLabel: 'Comment by ${comment.authorName}',
+                        ),
+                        child: Text(
+                          'Report',
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: context.palette.textMuted,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
                     if (canDelete) ...[
                       const SizedBox(width: 14),
                       GestureDetector(

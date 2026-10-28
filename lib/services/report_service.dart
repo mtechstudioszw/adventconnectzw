@@ -9,7 +9,9 @@ class ReportService {
   static const _table = 'reports';
 
   /// `contentType` is one of: 'seller', 'product', 'event', 'church',
-  /// 'prayer', 'job', 'profile', 'notice', 'message'.
+  /// 'prayer', 'prayer_comment', 'job', 'profile', 'notice', 'message',
+  /// 'post', 'comment', 'story', 'news', 'group', 'user'. The column is
+  /// free text (no CHECK), so admin-web shows whatever is sent.
   static Future<void> submit({
     required String contentType,
     required String contentId,

@@ -323,6 +323,17 @@ Owner decisions taken in this session:
 - Theopath not banned (founder agreed). Once patch_272 is run, hide the
   disease-claim listings from the app.
 - Tests: `medical_claims_test`, `product_moderation_test`.
+- **Report gap closed:** Report on stories (viewer header), post comments,
+  prayers (app bar), prayer comments, events, jobs, news — never on your
+  own. Already had: posts, messages, groups, profiles, sellers, products.
+  Test: `report_buttons_test`.
+- **Theopath listings 42 HYPERTENSION KIT, 43 SUGAR DIABETES KIT, 44 GENITAL
+  WARTS KIT set to status 'removed' on the live DB (28 Oct 2026, founder
+  said "ban product")**, seller notified for each. Reversible: set status
+  back to 'available'. The six capsule listings (hedged wording +
+  disclaimer) left up.
+- Plain data writes via execute_sql go through; DDL (patch 270/272) asks
+  for approval, which times out.
 - Supabase `apply_migration` approval prompts timed out 3× (never reached
   the founder). Patches 270/271/272 are for the founder to run in the SQL
   editor; read-only checks work fine.

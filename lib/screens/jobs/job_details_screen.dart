@@ -14,6 +14,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/home/report_sheet.dart';
 
 class JobDetailsScreen extends StatefulWidget {
   const JobDetailsScreen({super.key, required this.jobId, this.initialJob});
@@ -644,6 +645,19 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                           : context.goNamed('jobs'),
                     ),
                     const Spacer(),
+                    // Jobs had no way to be reported (Apple 1.2).
+                    if (!_isPoster) ...[
+                      _CircleIconButton(
+                        icon: Icons.flag_outlined,
+                        onTap: () => showReportSheet(
+                          context,
+                          contentType: 'job',
+                          contentId: job.id,
+                          contentLabel: job.title,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     _CircleIconButton(
                       icon: Icons.share_outlined,
                       onTap: () => _shareJob(),

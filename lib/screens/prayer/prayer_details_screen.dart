@@ -11,6 +11,7 @@ import '../../widgets/cached_image.dart';
 import '../../widgets/prayer_card.dart';
 import '../../widgets/verified_tick.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/home/report_sheet.dart';
 
 class PrayerDetailsScreen extends StatefulWidget {
   const PrayerDetailsScreen({
@@ -324,6 +325,19 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
                 );
                 if (updated == true) _bootstrap();
               },
+            )
+          // Prayers had no way to be reported (Apple 1.2 asks for one on
+          // all user content).
+          else if (_prayer != null)
+            IconButton(
+              icon: const Icon(Icons.flag_outlined),
+              tooltip: 'Report prayer',
+              onPressed: () => showReportSheet(
+                context,
+                contentType: 'prayer',
+                contentId: _prayer!.id,
+                contentLabel: 'Prayer request',
+              ),
             ),
         ],
       ),
@@ -889,6 +903,30 @@ class _CommentTile extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (comment.authorId.isNotEmpty &&
+                      comment.authorId !=
+                          Supabase.instance.client.auth.currentUser?.id) ...[
+                    const SizedBox(width: 16),
+                    InkWell(
+                      onTap: () => showReportSheet(
+                        context,
+                        contentType: 'prayer_comment',
+                        contentId: comment.id,
+                        contentLabel: 'Comment by ${comment.authorName}',
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          'Report',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: context.palette.textMuted,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                   if (canDelete) ...[
                     const SizedBox(width: 16),
                     InkWell(

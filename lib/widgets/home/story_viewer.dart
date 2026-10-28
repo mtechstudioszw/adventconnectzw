@@ -12,6 +12,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import 'story_text_style.dart';
 import '../cached_image.dart';
+import 'report_sheet.dart';
 
 /// Full-screen story viewer modelled on Instagram / Facebook. Each
 /// story plays for [_storyDuration] before advancing; tapping the
@@ -268,6 +269,17 @@ class _StoryViewerState extends State<StoryViewer>
       ..reset()
       ..forward();
     _onStoryShown();
+  }
+
+  Future<void> _reportStory(Story story) async {
+    _onHoldStart();
+    await showReportSheet(
+      context,
+      contentType: 'story',
+      contentId: story.id,
+      contentLabel: 'Story by ${story.authorName}',
+    );
+    if (mounted) _onHoldEnd();
   }
 
   Future<void> _confirmDeleteStory(Story story) async {
@@ -838,6 +850,14 @@ class _StoryViewerState extends State<StoryViewer>
             icon: const Icon(Icons.delete_outline, color: AppColors.white),
             tooltip: 'Delete story',
             onPressed: () => _confirmDeleteStory(story),
+          )
+        else
+          // Stories had no way to be reported (Apple 1.2 asks for one on
+          // all user content). The story pauses while the sheet is open.
+          IconButton(
+            icon: const Icon(Icons.flag_outlined, color: AppColors.white),
+            tooltip: 'Report story',
+            onPressed: () => _reportStory(story),
           ),
         IconButton(
           icon: const Icon(Icons.close, color: AppColors.white),

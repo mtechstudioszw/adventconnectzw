@@ -15,6 +15,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/home/report_sheet.dart';
 
 /// Article view for a single Advent News piece. Arrives either with
 /// the full [initialItem] pre-loaded from the list screen, or just an
@@ -536,6 +537,20 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
                     child: _CircleIconButton(
                       icon: Icons.more_horiz,
                       onTap: _showOwnerMenu,
+                    ),
+                  )
+                // News had no way to be reported (Apple 1.2).
+                else if (_item != null)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _CircleIconButton(
+                      icon: Icons.flag_outlined,
+                      onTap: () => showReportSheet(
+                        context,
+                        contentType: 'news',
+                        contentId: _item!.id,
+                        contentLabel: _item!.title,
+                      ),
                     ),
                   ),
                 _CircleIconButton(icon: Icons.ios_share, onTap: _share),

@@ -526,7 +526,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         // while browsing. Pinning both would eat a third of a small screen.
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.lg, 0),
+            // Bottom gap so the scope switch and the category chips read as
+            // two separate controls, not one cramped block (owner, 28 Oct).
+            padding: const EdgeInsets.fromLTRB(
+              AppSpace.lg,
+              AppSpace.md,
+              AppSpace.lg,
+              AppSpace.md,
+            ),
             child: Align(
               alignment: Alignment.centerLeft,
               child: CountryScopeToggle(

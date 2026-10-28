@@ -1,6 +1,6 @@
 -- ============================================================================
 --  patch_278 — Jobs: moderation guard, apply details, company Pages, saved
---  STATUS: DRAFT, NOT YET RUN. Run AFTER 275 (company Pages) and 276.
+--  STATUS: APPLIED to the live database 28 Oct 2026.
 -- ============================================================================
 --
 --  1. SECURITY. `authenticated` may update every column of its own jobs

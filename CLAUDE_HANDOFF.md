@@ -433,14 +433,13 @@ Batch 2 items that were planned (kept for the record):
 
 ## 5. Pending owner actions
 
-0. **Run patch_276 FIRST (security: sellers can currently self-approve /
-   self-verify / self-feature), then 270–275, then 277, then 278
-   (security: job posters can currently skip moderation), then 279
-   (report takedowns).** The app
-   degrades honestly without them (features say a database update is
-   needed), but Save/Hide (273), moderation hide + appeal (272) and
-   following/private accounts (274) and Pages (275) only work once they
-   run.
+0. **DONE 28 Oct 2026:** patches 276, 270, 271, 272, 273, 274, 275, 277,
+   278, 279 were applied to the live database in that order (via the
+   Management API, at the owner's request) and verified: every trigger,
+   table, column and function present; a rolled-back smoke test as an
+   ordinary member confirmed jobs land 'pending' with a 30-day expiry and
+   can't be self-published, alerts and report-owner stamping work.
+   Still the owner's call: patch_271 left hymn duplicate id 102/108.
 
 1. **Run `database/patch_269_country_metadata_resync.sql`** in Supabase
    (preview query first). Repairs members whose auth metadata kept a

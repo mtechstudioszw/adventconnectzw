@@ -1,6 +1,6 @@
 -- ============================================================================
 --  patch_271 — readable titles for the uploaded music tracks
---  STATUS: DRAFT, NOT YET RUN. Owner to review, then run in the SQL editor.
+--  STATUS: APPLIED to the live database 28 Oct 2026.
 -- ============================================================================
 --
 --  Seen on the founder's phone, 28 Oct 2026: the Music shelf shows raw file

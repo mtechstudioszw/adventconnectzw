@@ -1,7 +1,7 @@
 -- ============================================================================
 --  patch_279 — reports you can act on: see what was reported, take it down,
 --  ban the person behind it
---  STATUS: DRAFT, NOT YET RUN. Run AFTER 272, 275, 276 and 278.
+--  STATUS: APPLIED to the live database 28 Oct 2026.
 -- ============================================================================
 --
 --  Owner, 28 Oct 2026: "is there an option to report jobs … products …

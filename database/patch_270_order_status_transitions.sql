@@ -1,6 +1,6 @@
 -- ============================================================================
 --  patch_270 — order status transitions are enforced server-side
---  STATUS: DRAFT, NOT YET RUN. Owner to review, then run in the SQL editor.
+--  STATUS: APPLIED to the live database 28 Oct 2026.
 -- ============================================================================
 --
 --  Found 28 Oct 2026 (Batch 2 Marketplace audit), read from the live DB:

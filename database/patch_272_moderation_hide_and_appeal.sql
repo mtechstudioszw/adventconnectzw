@@ -1,6 +1,6 @@
 -- ============================================================================
 --  patch_272 — moderators can hide a single listing or post; members appeal
---  STATUS: DRAFT, NOT YET RUN. Owner to run in the SQL editor.
+--  STATUS: APPLIED to the live database 28 Oct 2026.
 --  (Replaces the earlier, never-run patch_272_admin_product_moderation.sql.)
 -- ============================================================================
 --

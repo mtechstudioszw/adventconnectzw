@@ -1,6 +1,6 @@
 -- ============================================================================
 --  patch_276 — sellers/products: members can't grant themselves privileges
---  STATUS: DRAFT, NOT YET RUN. **SECURITY — run this first, before 270–275.**
+--  STATUS: APPLIED to the live database 28 Oct 2026.
 -- ============================================================================
 --
 --  Found 28 Oct 2026 while building marketplace ranking. `authenticated`

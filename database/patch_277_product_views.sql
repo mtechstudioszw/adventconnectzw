@@ -1,6 +1,6 @@
 -- ============================================================================
 --  patch_277 — real product view counts + server-side medical-claims rule
---  STATUS: DRAFT, NOT YET RUN. Run AFTER patch_276.
+--  STATUS: APPLIED to the live database 28 Oct 2026.
 -- ============================================================================
 --
 --  The seller dashboard has always shown a VIEWS number, read from

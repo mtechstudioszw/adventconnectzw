@@ -1,6 +1,6 @@
 -- ============================================================================
 --  patch_273 — Save post and Hide post ("see less") for members
---  STATUS: DRAFT, NOT YET RUN. Owner to run in the SQL editor.
+--  STATUS: APPLIED to the live database 28 Oct 2026.
 -- ============================================================================
 --
 --  Owner's redesign brief (28 Oct 2026): "Saving must persist in a private

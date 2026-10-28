@@ -1,6 +1,6 @@
 -- ============================================================================
 --  patch_275 — organization Pages (ministries, schools, community, business)
---  STATUS: DRAFT, NOT YET RUN. Owner to run in the SQL editor AFTER 274.
+--  STATUS: APPLIED to the live database 28 Oct 2026.
 -- ============================================================================
 --
 --  Owner's redesign brief (28 Oct 2026), section 9.

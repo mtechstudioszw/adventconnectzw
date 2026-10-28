@@ -1,6 +1,6 @@
 -- ============================================================================
 --  patch_274 — one-way followers alongside friends; private profiles; links
---  STATUS: DRAFT, NOT YET RUN. Owner to run in the SQL editor.
+--  STATUS: APPLIED to the live database 28 Oct 2026.
 -- ============================================================================
 --
 --  Owner's redesign brief (28 Oct 2026), section 8: "Introduce a one-way

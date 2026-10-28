@@ -66,7 +66,7 @@ void main() {
       return null;
     });
     await _pump(t);
-    expect(find.text('Report listing'), findsOneWidget);
+    expect(find.text('Report this listing'), findsOneWidget);
     expect(find.text('Hide listing (admin)'), findsNothing);
     await t.pump(const Duration(seconds: 2));
   });

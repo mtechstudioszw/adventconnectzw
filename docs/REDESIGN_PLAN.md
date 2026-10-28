@@ -161,10 +161,26 @@ to run in the SQL editor; app features depending on it say so until it runs
   real view.
 - Medical-claims rule now also enforced on the server (patch_277 trigger),
   same word list as lib/utils/medical_claims.dart — keep them in step.
-- **Open question for the owner:** the WhatsApp button on product and
-  store pages is solid WhatsApp green — a documented deliberate exception
-  in the code, but not listed in CLAUDE.md. Keep (and add it to CLAUDE.md)
-  or switch to brand blue?
+- WhatsApp green: retired from the product page (WhatsApp now lives in the
+  Contact sheet in brand blue). The storefront's contact bar is blue too.
 - Not done (needs backend that doesn't exist): stock quantities, product
   reviews (only store reviews exist), "Follow store", product variations,
   return policies, real payments. No fake versions were added.
+
+### Product page — premium redesign (28 Oct 2026, owner request)
+
+- Hierarchy instead of a stack of identical cards: gallery → shop line
+  (name, tick, rating) → title (22/600, not shouting) → price (30/700) with
+  an Available/Sold/Reserved status pill → key facts as quiet chips →
+  hairline-separated sections (About this item with Read more, Delivery &
+  pickup, Sold by) → More from this shop → Buy safely (tips in a sheet) →
+  Report.
+- Header: glass buttons over the photo, turning into a solid flat bar
+  with the title once the photo scrolls away.
+- Full-screen gallery: swipe across every photo, pinch-zoom each.
+- One primary action. "Contact" opens a sheet with Message in the app and
+  WhatsApp (when the shop has a number) — this also retires the solid green
+  WhatsApp button from the page. "Add to basket" morphs to "In basket ·
+  View" once added; your own listing shows "Manage in your shop".
+- Adaptive colour: a faint wash of the product photo's colour across the
+  top of the sheet (CLAUDE.md exception, same limits as the profile glow).

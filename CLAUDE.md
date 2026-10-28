@@ -42,6 +42,11 @@ badge or card may take that colour. `PhotoTint` (lib/utils/photo\_tint.dart)
 returns null for green and pink hues and for grey/dull photos, and the
 header is then plain. Do not widen this to whole sections, and do not
 remove the banned-hue check.
+**Extended 28 Oct 2026 (owner-approved): product pages.** The same wash,
+from the product's first photo, across the top of the product details
+sheet (`_tint` in lib/screens/marketplace/product_details_screen.dart).
+Same limits: background only, same alphas, same banned hues. Organization
+Pages and storefronts use `ProfileGlow` from their logo. Nowhere else.
 
 
 

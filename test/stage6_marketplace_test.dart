@@ -88,15 +88,25 @@ void main() {
     await _settle(t);
 
     expect(find.text('Available'), findsOneWidget);
-    expect(find.text('Delivery & payment'), findsOneWidget);
+    expect(find.text('Delivery & pickup'), findsOneWidget);
     expect(find.textContaining('Harare CBD'), findsOneWidget);
     expect(find.text('EcoCash'), findsOneWidget);
-    expect(find.textContaining('4.6'), findsOneWidget);
-    expect(find.text('More from Theopath Healthcare'), findsOneWidget);
+    expect(find.textContaining('4.6'), findsWidgets);
+    expect(find.text('More from this shop'), findsOneWidget);
     expect(find.text('Moringa Powder'), findsOneWidget);
     expect(find.text('Add to basket'), findsOneWidget);
-    // The price is no longer repeated in the action bar.
-    expect(find.text('Price'), findsNothing);
+    expect(find.text('Contact'), findsOneWidget);
+    // Adding morphs the primary action instead of a toast.
+    await t.tap(find.text('Add to basket'));
+    await _settle(t);
+    expect(find.text('In basket · View'), findsOneWidget);
+    // Both contact routes sit behind Contact.
+    await t.tap(find.text('Contact'));
+    await _settle(t);
+    expect(find.text('Message in the app'), findsOneWidget);
+    expect(find.text('WhatsApp'), findsNothing); // no phone on this shop row
+    await t.tapAt(const Offset(10, 10));
+    await _settle(t);
     expect(
       rpcs.where((r) => r.startsWith('record_product_view')),
       hasLength(1),

@@ -1,3 +1,6 @@
+// Render harness, not shipped: seeds PhotoTint like a test does.
+// ignore_for_file: invalid_use_of_visible_for_testing_member
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -8,6 +11,7 @@ import 'package:advent_connect_zw/screens/seller/seller_profile_screen.dart';
 import '../test/helpers/fake_supabase.dart';
 import 'package:advent_connect_zw/models/product_model.dart';
 import 'package:advent_connect_zw/services/cart_service.dart';
+import 'package:advent_connect_zw/utils/photo_tint.dart';
 import 'shot.dart';
 
 final _seller = {
@@ -57,6 +61,8 @@ Map<String, Object?> _p(int id, String title, num price) => {
 void main() {
   setUpAll(() async {
     await loadShotFonts();
+    // What a warm-coloured product photo would give.
+    PhotoTint.debugSeed('https://example.com/21.jpg', const Color(0xFFD08A3A));
     await initFakeSupabase((req) {
       final path = req.url.path;
       final single = (req.headers['Accept'] ?? '').contains('vnd.pgrst.object');
@@ -90,6 +96,32 @@ void main() {
       size: const Size(412, 2000),
     );
     await saveShot(t, 'product_full');
+  });
+
+  testWidgets('product scrolled', (t) async {
+    await pumpShot(t, const ProductDetailsScreen(productId: '21'));
+    await saveShot(t, 'product_top');
+    await t.drag(find.byType(Scrollable).first, const Offset(0, -560));
+    await saveShot(t, 'product_scrolled');
+  });
+
+  testWidgets('product contact + in basket', (t) async {
+    await pumpShot(t, const ProductDetailsScreen(productId: '21'));
+    await saveShot(t, 'product_pre');
+    await t.tap(find.text('Add to basket'));
+    await saveShot(t, 'product_in_basket');
+    await t.tap(find.text('Contact'));
+    await saveShot(t, 'product_contact');
+  });
+
+  testWidgets('product light', (t) async {
+    await pumpShot(
+      t,
+      const ProductDetailsScreen(productId: '21'),
+      size: const Size(412, 2000),
+      dark: false,
+    );
+    await saveShot(t, 'product_full_light');
   });
 
   testWidgets('product narrow', (t) async {

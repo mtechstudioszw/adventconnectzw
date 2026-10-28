@@ -21,7 +21,6 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/cached_image.dart';
-import '../../widgets/full_image_viewer.dart';
 import '../../widgets/marketplace/cart_badge_button.dart';
 import '../../widgets/marketplace/safety_card.dart';
 import '../../widgets/motion/brand_spinner.dart';
@@ -30,6 +29,9 @@ import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/home/report_sheet.dart';
 import '../../widgets/moderation_appeal_sheet.dart';
 import '../../widgets/offline_toast.dart';
+import '../../widgets/expandable_text.dart';
+import '../../widgets/verified_tick.dart';
+import '../../utils/photo_tint.dart';
 
 /// Product detail.
 ///
@@ -69,6 +71,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   int _currentImage = 0;
   final _pageController = PageController();
 
+  /// Drives the header: glass buttons over the photo, then a solid bar
+  /// with the title once the photo has scrolled away.
+  final _scroll = ScrollController();
+  double _scrolled = 0;
+
   /// Guards the in-app contact button — creating the conversation is a
   /// round trip, and a double-tap would open two threads with the seller.
   bool _openingChat = false;
@@ -79,6 +86,20 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   /// The same shop's other listings for sale.
   List<Product> _moreFromShop = const [];
+
+  /// Adaptive colour from the product's first photo (see the sheet).
+  Color? _tint;
+  String? _tintFor;
+
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+
+  Future<void> _loadTint(Product p) async {
+    final url = p.firstImage;
+    if (url.isEmpty || url == _tintFor) return;
+    _tintFor = url;
+    final tint = await PhotoTint.forPhoto(url);
+    if (mounted && _tintFor == url) setState(() => _tint = tint);
+  }
 
   static const double _sheetOverlap = 24;
 
@@ -91,9 +112,22 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     _loadSaved();
     _loadAdmin();
     if (widget.initialProduct != null) _loadShop(widget.initialProduct!);
+    _scroll.addListener(() {
+      final v = _scroll.offset;
+      // Only rebuild across the band where the header is changing.
+      if ((v < 400 || _scrolled < 400) && mounted) {
+        setState(() => _scrolled = v);
+      }
+    });
+    CartService.revision.addListener(_onCartChanged);
+  }
+
+  void _onCartChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadShop(Product p) async {
+    _loadTint(p);
     if (p.sellerId.isEmpty) return;
     try {
       final results = await Future.wait([
@@ -119,6 +153,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   @override
   void dispose() {
     _pageController.dispose();
+    _scroll.dispose();
+    CartService.revision.removeListener(_onCartChanged);
     super.dispose();
   }
 
@@ -342,57 +378,6 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   bool _isOwnListing(Product p) => p.sellerId == AuthService.currentUser?.id;
 
-  /// Report (everyone) and Hide (super admins), under the safety card.
-  ///
-  /// There was no way to report a listing at all — Apple's guideline 1.2
-  /// requires one for user content — and moderators could only reject a
-  /// whole shop. Hide goes through `admin_set_product_status`
-  /// (patch_272), which also tells the seller why.
-  Widget _moderationRow(Product product) {
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpace.md),
-      child: Wrap(
-        alignment: WrapAlignment.center,
-        spacing: AppSpace.sm,
-        children: [
-          TextButton.icon(
-            onPressed: () => showReportSheet(
-              context,
-              contentType: 'product',
-              contentId: product.id,
-              contentLabel: product.title,
-            ),
-            icon: const Icon(Icons.flag_outlined, size: 18),
-            label: const Text('Report listing'),
-            style: TextButton.styleFrom(
-              foregroundColor: context.palette.textMuted,
-            ),
-          ),
-          if (_isSuperAdmin)
-            TextButton.icon(
-              onPressed: _moderating
-                  ? null
-                  : () => product.isModerated
-                        ? _adminRestore(product)
-                        : _adminHide(product),
-              icon: Icon(
-                product.isModerated
-                    ? Icons.visibility_outlined
-                    : Icons.visibility_off_outlined,
-                size: 18,
-              ),
-              label: Text(
-                product.isModerated
-                    ? 'Restore listing (admin)'
-                    : 'Hide listing (admin)',
-              ),
-              style: TextButton.styleFrom(foregroundColor: AppColors.red),
-            ),
-        ],
-      ),
-    );
-  }
-
   bool _isSuperAdmin = false;
   bool _moderating = false;
 
@@ -462,22 +447,118 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
+  // ---------------------------------------------------------------------
+  //  Layout (premium redesign, 28 Oct 2026)
+  //
+  //  One idea per band, separated by space and hairlines rather than a
+  //  stack of identical cards:
+  //    gallery → who sells it → what it is → what it costs → key facts →
+  //    about → how you get it → the shop → more from the shop → buy safely.
+  //  The header is glass over the photo and turns into a solid bar with
+  //  the title once the photo scrolls away. One primary action at the
+  //  bottom; the two ways to reach the seller live behind "Contact".
+  // ---------------------------------------------------------------------
+
+  static const double _galleryAspect = 4 / 5;
+
   @override
   Widget build(BuildContext context) {
     final product = _product;
     return Scaffold(
       backgroundColor: Colors.transparent,
-      extendBodyBehindAppBar: true,
-      body: _buildBody(),
+      body: Stack(
+        children: [
+          _buildBody(),
+          if (product != null && !_gone) _buildTopBar(product),
+        ],
+      ),
       bottomNavigationBar: product == null || _gone
           ? null
-          : _ActionBar(
+          : _BuyBar(
               product: product,
-              onAddToCart: _addToCart,
-              onWhatsApp: _contactSeller,
-              onAdventChat: _messageSellerInApp,
+              own: _isOwnListing(product),
+              inBasket: CartService.contains(product.id),
               chatBusy: _openingChat,
+              onAdd: _addToCart,
+              onViewBasket: () => context.pushNamed('cart'),
+              onContact: _openContactSheet,
+              onManage: () => context.pushNamed('seller_dashboard'),
             ),
+    );
+  }
+
+  /// Glass circles over the photo; past it, a solid flat bar with the
+  /// title. It's pinned over scrolling content, so it is opaque once it
+  /// appears (CLAUDE.md: pinned headers are opaque).
+  Widget _buildTopBar(Product product) {
+    final galleryHeight = MediaQuery.sizeOf(context).width / _galleryAspect;
+    final t = ((_scrolled - (galleryHeight - 140)) / 80).clamp(0.0, 1.0);
+    final palette = context.palette;
+    final solid = t > 0.5;
+    Widget btn(IconData icon, VoidCallback onTap, {Color? tint, String? tip}) =>
+        _HeaderButton(
+          icon: icon,
+          onTap: onTap,
+          tint: tint,
+          solid: solid,
+          tooltip: tip,
+        );
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: Container(
+        decoration: BoxDecoration(
+          color: palette.scaffoldBg.withValues(alpha: t),
+          border: Border(
+            bottom: BorderSide(color: palette.divider.withValues(alpha: t)),
+          ),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+            child: Row(
+              children: [
+                btn(
+                  Icons.arrow_back_rounded,
+                  () => context.canPop()
+                      ? context.pop()
+                      : context.goNamed('marketplace'),
+                  tip: 'Back',
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Opacity(
+                    opacity: t,
+                    child: Text(
+                      product.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleSmall.copyWith(
+                        color: palette.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                btn(
+                  _saved
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  _toggleSave,
+                  tint: _saved ? AppColors.red : null,
+                  tip: _saved ? 'Remove from saved' : 'Save',
+                ),
+                const SizedBox(width: 8),
+                btn(Icons.ios_share_rounded, _shareProduct, tip: 'Share'),
+                const SizedBox(width: 8),
+                CartBadgeButton(onTap: () => context.pushNamed('cart')),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -490,61 +571,104 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       return _buildError();
     }
     final product = _product!;
+    final palette = context.palette;
     return CustomScrollView(
+      controller: _scroll,
       slivers: [
-        SliverToBoxAdapter(child: _buildCarousel(product)),
+        SliverToBoxAdapter(child: _buildGallery(product)),
         SliverToBoxAdapter(
           child: Transform.translate(
             offset: const Offset(0, -_sheetOverlap),
             child: Container(
               decoration: BoxDecoration(
-                color: context.palette.scaffoldBg,
+                color: palette.scaffoldBg,
                 borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(AppRadius.sheet),
+                  top: Radius.circular(28),
                 ),
               ),
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.lg,
-                AppSpace.xl,
-                AppSpace.lg,
-                AppSpace.xl,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
                 children: [
-                  StaggeredReveal(index: 0, child: _buildHeader(product)),
-                  const SizedBox(height: AppSpace.lg),
-                  StaggeredReveal(index: 1, child: _buildFacts(product)),
-                  const SizedBox(height: AppSpace.lg),
-                  StaggeredReveal(index: 2, child: _buildSellerCard(product)),
-                  if (_buildFulfilment() case final card?) ...[
-                    const SizedBox(height: AppSpace.lg),
-                    StaggeredReveal(index: 2, child: card),
-                  ],
-                  if (product.description?.trim().isNotEmpty == true) ...[
-                    const SizedBox(height: AppSpace.lg),
-                    StaggeredReveal(
-                      index: 3,
-                      child: _buildDescription(product),
-                    ),
-                  ],
-                  const SizedBox(height: AppSpace.lg),
-                  StaggeredReveal(
-                    index: 4,
-                    child: const MarketplaceSafetyCard(),
-                  ),
-                  if (product.isModerated && _isOwnListing(product))
-                    Padding(
-                      padding: const EdgeInsets.only(top: AppSpace.md),
-                      child: ModeratedBanner(
-                        kind: ModeratedKind.listing,
-                        itemId: product.id,
-                        title: product.title,
-                        reason: product.moderationReason,
+                  // Adaptive colour (owner-approved, 28 Oct 2026): a faint
+                  // wash of the product photo's own colour across the top
+                  // of the sheet, fading out. Background only — text,
+                  // price and buttons keep the palette. PhotoTint returns
+                  // null for green, pink and dull photos: no wash then.
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 460,
+                    child: IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: _tint == null ? 0 : 1,
+                        duration: const Duration(milliseconds: 500),
+                        child: _tint == null
+                            ? const SizedBox.shrink()
+                            : DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      _tint!.withValues(
+                                        alpha: _isDark ? 0.26 : 0.18,
+                                      ),
+                                      _tint!.withValues(
+                                        alpha: _isDark ? 0.10 : 0.07,
+                                      ),
+                                      _tint!.withValues(alpha: 0),
+                                    ],
+                                    stops: const [0, 0.45, 1],
+                                  ),
+                                ),
+                              ),
                       ),
                     ),
-                  if (!_isOwnListing(product)) _moderationRow(product),
-                  if (_moreFromShop.isNotEmpty) _buildMoreFromShop(product),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        StaggeredReveal(index: 0, child: _buildIntro(product)),
+                        if (product.isModerated && _isOwnListing(product))
+                          Padding(
+                            padding: const EdgeInsets.only(top: AppSpace.lg),
+                            child: ModeratedBanner(
+                              kind: ModeratedKind.listing,
+                              itemId: product.id,
+                              title: product.title,
+                              reason: product.moderationReason,
+                            ),
+                          ),
+                        const SizedBox(height: 18),
+                        StaggeredReveal(index: 1, child: _buildSpecs(product)),
+                        if (product.description?.trim().isNotEmpty == true)
+                          _Section(
+                            title: 'About this item',
+                            child: ExpandableText(
+                              text: product.description!.trim(),
+                              collapsedLines: 5,
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: palette.text,
+                                height: 1.6,
+                              ),
+                            ),
+                          ),
+                        if (_seller != null)
+                          _Section(
+                            title: 'Delivery & pickup',
+                            child: _buildFulfilment(_seller!),
+                          ),
+                        _Section(title: 'Sold by', child: _buildShop(product)),
+                        if (_moreFromShop.isNotEmpty)
+                          _buildMoreFromShop(product),
+                        const SizedBox(height: 28),
+                        _buildFooter(product),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -641,46 +765,43 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
-  Widget _buildCarousel(Product product) {
-    final images = product.imageUrls.isEmpty ? [''] : product.imageUrls;
+  // ----- Gallery --------------------------------------------------------
+
+  Widget _buildGallery(Product product) {
+    final images = product.imageUrls;
     final unavailable = !product.isAvailable;
     return Stack(
       children: [
         AspectRatio(
-          // Portrait, and full-bleed to the screen edges. Goods are
-          // photographed vertically on a phone; a square threw away the
-          // top and bottom of nearly every listing.
-          aspectRatio: 4 / 5,
-          child: PageView.builder(
-            controller: _pageController,
-            itemCount: images.length,
-            onPageChanged: (i) => setState(() => _currentImage = i),
-            itemBuilder: (context, i) => i == 0
-                ? Hero(
-                    tag: 'product_image_${product.id}',
-                    child: _CarouselImage(url: images[i]),
-                  )
-                : _CarouselImage(url: images[i]),
-          ),
-        ),
-
-        if (unavailable)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.4),
+          aspectRatio: _galleryAspect,
+          child: images.isEmpty
+              ? _GalleryPlaceholder(category: product.category)
+              : PageView.builder(
+                  controller: _pageController,
+                  itemCount: images.length,
+                  onPageChanged: (i) => setState(() => _currentImage = i),
+                  itemBuilder: (context, i) {
+                    final image = GestureDetector(
+                      onTap: () => _GalleryViewer.open(context, images, i),
+                      child: CachedImage(
+                        images[i],
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) =>
+                            _GalleryPlaceholder(category: product.category),
+                      ),
+                    );
+                    return i == 0
+                        ? Hero(tag: 'product_image_${product.id}', child: image)
+                        : image;
+                  },
                 ),
-              ),
-            ),
-          ),
-
-        // Scrim so the white header buttons stay legible over bright photos.
+        ),
+        // Soft scrim under the glass buttons only.
         Positioned(
           top: 0,
           left: 0,
           right: 0,
-          height: 140,
+          height: 120,
           child: IgnorePointer(
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -688,7 +809,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withValues(alpha: 0.45),
+                    Colors.black.withValues(alpha: 0.30),
                     Colors.transparent,
                   ],
                 ),
@@ -696,462 +817,425 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             ),
           ),
         ),
-
-        SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpace.md,
-              AppSpace.sm,
-              AppSpace.md,
-              0,
-            ),
-            child: Row(
-              children: [
-                _GlassIconButton(
-                  icon: Icons.arrow_back,
-                  onTap: () => context.canPop()
-                      ? context.pop()
-                      : context.goNamed('marketplace'),
-                ),
-                const Spacer(),
-                _GlassIconButton(
-                  icon: _saved
-                      ? Icons.favorite_rounded
-                      : Icons.favorite_border_rounded,
-                  tint: _saved ? AppColors.red : null,
-                  onTap: _toggleSave,
-                ),
-                const SizedBox(width: AppSpace.sm),
-                _GlassIconButton(
-                  icon: Icons.share_outlined,
-                  onTap: _shareProduct,
-                ),
-                const SizedBox(width: AppSpace.sm),
-                CartBadgeButton(onTap: () => context.pushNamed('cart')),
-              ],
-            ),
-          ),
-        ),
-
         if (unavailable)
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            bottom: _sheetOverlap,
+          Positioned.fill(
             child: IgnorePointer(
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpace.xl,
-                    vertical: AppSpace.md,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.white,
-                    borderRadius: AppRadius.pillAll,
-                  ),
-                  child: Text(
-                    product.isSold ? 'SOLD' : 'RESERVED',
-                    style: AppTextStyles.titleMedium.copyWith(
-                      color: AppColors.darkNavy,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                ),
-              ),
+              child: ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
             ),
           ),
-
-        // Counter rather than dots — a listing can carry many photos and a
-        // row of ten dots is unreadable.
         if (images.length > 1)
           Positioned(
-            right: AppSpace.lg,
-            bottom: _sheetOverlap + AppSpace.md,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpace.md,
-                vertical: 5,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.55),
-                borderRadius: AppRadius.pillAll,
-              ),
-              child: Text(
-                '${_currentImage + 1}/${images.length}',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+            right: 16,
+            bottom: _sheetOverlap + 12,
+            child: _Pill(
+              text: '${_currentImage + 1} / ${images.length}',
+              dark: true,
             ),
           ),
       ],
     );
   }
 
-  Widget _buildHeader(Product product) {
+  // ----- Intro: shop line, title, price, status ----------------------------
+
+  Widget _buildIntro(Product product) {
+    final palette = context.palette;
+    final s = _seller;
+    final status = product.isAvailable
+        ? null
+        : product.isSold
+        ? 'Sold'
+        : 'Reserved';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (product.category?.isNotEmpty == true) ...[
-          Text(
-            product.category!.toUpperCase(),
-            style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.primaryBlue,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.4,
+        // Who sells it, first — the way the best shops do it. Tappable.
+        InkWell(
+          onTap: product.sellerId.isEmpty ? null : () => _openStore(product),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    product.sellerName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (product.sellerVerified) const VerifiedTick(size: 14),
+                if ((s?.ratingCount ?? 0) > 0) ...[
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.star_rounded,
+                    size: 15,
+                    color: AppColors.goldAccent,
+                  ),
+                  Text(
+                    ' ${s!.rating.toStringAsFixed(1)}',
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: palette.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    ' (${s.ratingCount})',
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: palette.textMuted,
+                    ),
+                  ),
+                ],
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: palette.textMuted,
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: AppSpace.sm),
-        ],
+        ),
+        const SizedBox(height: 6),
         Text(
           product.title,
-          style: AppTextStyles.displayMedium.copyWith(
-            color: context.palette.text,
-            fontWeight: FontWeight.w700,
-            height: 1.2,
+          style: AppTextStyles.headlineSmall.copyWith(
+            color: palette.text,
+            fontWeight: FontWeight.w600,
+            fontSize: 22,
+            height: 1.28,
+            letterSpacing: -0.2,
           ),
         ),
-        const SizedBox(height: AppSpace.sm),
+        const SizedBox(height: 12),
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(
               product.formatPrice(),
-              style: AppTextStyles.displayLarge.copyWith(
-                color: context.palette.text,
-                fontWeight: FontWeight.w800,
-                height: 1.1,
+              style: AppTextStyles.displayMedium.copyWith(
+                color: palette.text,
+                fontWeight: FontWeight.w700,
+                fontSize: 30,
+                height: 1,
+                letterSpacing: -0.5,
               ),
             ),
-            if (product.viewCount > 0) ...[
-              const Spacer(),
-              Icon(
-                Icons.visibility_outlined,
-                size: 15,
-                color: context.palette.textMuted,
-              ),
-              const SizedBox(width: AppSpace.xs),
-              Text(
-                '${product.viewCount} views',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: context.palette.textMuted,
-                ),
-              ),
-            ],
+            const SizedBox(width: 12),
+            if (status == null)
+              const _StatusPill(text: 'Available', ok: true)
+            else
+              _StatusPill(text: status, ok: false),
           ],
         ),
       ],
     );
   }
 
-  /// The four columns the old screen collected and threw away —
-  /// condition, subcategory, province and location. They were being
-  /// stored on every product and shown nowhere.
-  Widget _buildFacts(Product product) {
-    final facts = <(IconData, String, String)>[
-      (
-        Icons.inventory_2_outlined,
-        'Availability',
-        product.isAvailable
-            ? 'Available'
-            : product.isSold
-            ? 'Sold'
-            : 'Reserved',
-      ),
-      if (product.conditionLabel != null)
-        (Icons.verified_outlined, 'Condition', product.conditionLabel!),
-      if (product.locationLine != null)
-        (Icons.place_outlined, 'Location', product.locationLine!),
-      if (product.subcategory?.trim().isNotEmpty == true)
-        (Icons.sell_outlined, 'Type', product.subcategory!),
-    ];
-    if (facts.isEmpty) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpace.lg,
-        vertical: AppSpace.sm,
-      ),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: AppRadius.lgAll,
-        boxShadow: AppShadows.card(context),
-      ),
-      child: Column(
-        children: [
-          for (var i = 0; i < facts.length; i++) ...[
-            if (i > 0) Divider(height: 1, color: context.palette.divider),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpace.md),
-              child: Row(
-                children: [
-                  Icon(facts[i].$1, size: 18, color: AppColors.primaryBlue),
-                  const SizedBox(width: AppSpace.md),
-                  Text(
-                    facts[i].$2,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: context.palette.textMuted,
-                    ),
-                  ),
-                  const Spacer(),
-                  Flexible(
-                    child: Text(
-                      facts[i].$3,
-                      textAlign: TextAlign.end,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: context.palette.text,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+  // ----- Key facts as quiet chips --------------------------------------------
 
-  Widget _buildSellerCard(Product product) {
-    return Pressable(
-      onTap: product.sellerId.isEmpty
-          ? null
-          : () => context.pushNamed(
-              'seller_profile',
-              pathParameters: {'userId': product.sellerId},
+  Widget _buildSpecs(Product product) {
+    final chips = <(IconData, String)>[
+      if (product.conditionLabel != null)
+        (Icons.auto_awesome_outlined, product.conditionLabel!),
+      if (product.category?.isNotEmpty == true)
+        (Icons.category_outlined, _categoryLabel(product.category!)),
+      if (product.subcategory?.trim().isNotEmpty == true)
+        (Icons.sell_outlined, product.subcategory!.trim()),
+      if (product.locationLine != null)
+        (Icons.place_outlined, product.locationLine!),
+    ];
+    if (chips.isEmpty) return const SizedBox.shrink();
+    final palette = context.palette;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final c in chips)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: palette.card,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: palette.divider),
             ),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpace.lg),
-        decoration: BoxDecoration(
-          color: context.palette.card,
-          borderRadius: AppRadius.lgAll,
-          boxShadow: AppShadows.card(context),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: const Icon(
-                Icons.storefront,
-                color: AppColors.white,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: AppSpace.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'SELLER',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: context.palette.textMuted,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          product.sellerName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.titleSmall.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      if (product.sellerVerified) ...[
-                        const SizedBox(width: 6),
-                        const Icon(
-                          Icons.verified,
-                          size: 16,
-                          color: AppColors.goldAccent,
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  // Reputation from real reviews only; a shop with none
-                  // says so instead of showing a zero.
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        if ((_seller?.ratingCount ?? 0) > 0) ...[
-                          const WidgetSpan(
-                            alignment: PlaceholderAlignment.middle,
-                            child: Icon(
-                              Icons.star_rounded,
-                              size: 14,
-                              color: AppColors.goldAccent,
-                            ),
-                          ),
-                          TextSpan(
-                            text:
-                                ' ${_seller!.rating.toStringAsFixed(1)} · '
-                                '${_seller!.ratingCount} review'
-                                '${_seller!.ratingCount == 1 ? '' : 's'} · ',
-                            style: TextStyle(color: context.palette.text),
-                          ),
-                        ] else if (_seller != null)
-                          TextSpan(
-                            text: 'No reviews yet · ',
-                            style: TextStyle(color: context.palette.textMuted),
-                          ),
-                        const TextSpan(
-                          text: 'View store',
-                          style: TextStyle(
-                            color: AppColors.primaryBlue,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(c.$1, size: 15, color: AppColors.primaryBlue),
+                const SizedBox(width: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 220),
+                  child: Text(
+                    c.$2,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.bodySmall,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: palette.text,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Icon(Icons.chevron_right, color: context.palette.textMuted),
-          ],
-        ),
-      ),
+          ),
+      ],
     );
   }
 
-  /// Delivery, collection, payment and Sabbath hours — exactly what the
-  /// store entered when it set up, nothing assumed. Null when the store
-  /// hasn't loaded, so nothing is guessed.
-  Widget? _buildFulfilment() {
-    final s = _seller;
-    if (s == null) return null;
+  // ----- Delivery & pickup ----------------------------------------------------
+
+  Widget _buildFulfilment(Seller s) {
     final rows = <(IconData, String, String)>[
       if (s.offersDelivery)
         (
           Icons.local_shipping_outlined,
-          'Delivery',
+          'Delivery available',
           [
             if ((s.deliveryArea ?? '').trim().isNotEmpty)
-              s.deliveryArea!.trim()
-            else
-              'Available — ask the shop',
+              s.deliveryArea!.trim(),
             if ((s.deliveryFee ?? '').trim().isNotEmpty)
-              'Fee: ${s.deliveryFee!.trim()}',
-          ].join('\n'),
+              'Fee ${s.deliveryFee!.trim()}',
+          ].join(' · ').ifEmpty('Ask the shop about your area'),
         )
       else
         (
           Icons.storefront_outlined,
           'Collection',
-          'Collect from the shop${(s.city ?? '').isEmpty ? '' : ' in ${s.city}'}',
+          'Pick up from the shop${(s.city ?? '').isEmpty ? '' : ' in ${s.city}'}',
         ),
       if ((s.paymentMethods ?? '').trim().isNotEmpty)
-        (Icons.payments_outlined, 'Payment', s.paymentMethods!.trim()),
+        (
+          Icons.account_balance_wallet_outlined,
+          'Payment',
+          s.paymentMethods!.trim(),
+        ),
       if (s.observesSabbath)
         (
           Icons.brightness_3_outlined,
-          'Sabbath',
+          'Keeps the Sabbath',
           (s.sabbathNoticeText ?? '').trim().isNotEmpty
               ? s.sabbathNoticeText!.trim()
-              : 'Closed from Friday sunset to Saturday sunset',
+              : 'Closed Friday sunset to Saturday sunset',
         ),
     ];
     final palette = context.palette;
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      decoration: BoxDecoration(
-        color: palette.card,
-        borderRadius: AppRadius.lgAll,
-        boxShadow: AppShadows.card(context),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Delivery & payment',
-            style: AppTextStyles.titleMedium.copyWith(
-              fontWeight: FontWeight.w700,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final r in rows)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(r.$1, size: 18, color: AppColors.primaryBlue),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        r.$2,
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: palette.text,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        r.$3,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: palette.textMuted,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          for (final r in rows)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpace.md),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        Text(
+          'You arrange payment and handover with the shop directly — '
+          'Adventist Super App never takes payment.',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: palette.textMuted,
+            fontSize: 11.5,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ----- The shop ---------------------------------------------------------------
+
+  void _openStore(Product product) => context.pushNamed(
+    'seller_profile',
+    pathParameters: {'userId': product.sellerId},
+  );
+
+  Widget _buildShop(Product product) {
+    final palette = context.palette;
+    final s = _seller;
+    final logo = s?.profilePhotoUrl;
+    final rated = (s?.ratingCount ?? 0) > 0;
+    final meta = [
+      if (rated)
+        '${s!.rating.toStringAsFixed(1)} · ${s.ratingCount} review${s.ratingCount == 1 ? '' : 's'}'
+      else if (s != null)
+        'New shop',
+      if ((s?.city ?? '').isNotEmpty) s!.city!,
+      if (s?.createdAt != null) 'Since ${s!.createdAt!.year}',
+    ].join('  ·  ');
+    final initials = product.sellerName.trim().isEmpty
+        ? '?'
+        : product.sellerName.trim()[0].toUpperCase();
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(
+            width: 52,
+            height: 52,
+            child: (logo ?? '').isEmpty
+                ? DecoratedBox(
+                    decoration: const BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                    ),
+                    child: Center(
+                      child: Text(
+                        initials,
+                        style: AppTextStyles.titleLarge.copyWith(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  )
+                : CachedImage(logo!, fit: BoxFit.cover),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Icon(r.$1, size: 18, color: AppColors.primaryBlue),
-                  const SizedBox(width: AppSpace.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          r.$2,
-                          style: AppTextStyles.labelMedium.copyWith(
-                            color: palette.textMuted,
-                          ),
-                        ),
-                        Text(
-                          r.$3,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: palette.text,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
+                  Flexible(
+                    child: Text(
+                      product.sellerName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleSmall.copyWith(
+                        color: palette.text,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
+                  if (product.sellerVerified) const VerifiedTick(size: 14),
                 ],
               ),
-            ),
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpace.md),
-            child: Text(
-              'You arrange payment and handover with the shop directly. '
-              'Adventist Super App doesn\'t take payments.',
-              style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+              if (meta.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    if (rated) ...[
+                      const Icon(
+                        Icons.star_rounded,
+                        size: 14,
+                        color: AppColors.goldAccent,
+                      ),
+                      const SizedBox(width: 3),
+                    ],
+                    Flexible(
+                      child: Text(
+                        meta,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: palette.textMuted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton(
+          onPressed: product.sellerId.isEmpty
+              ? null
+              : () => _openStore(product),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: palette.text,
+            side: BorderSide(color: palette.divider),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            // The theme's buttons are full-width; this one sits in a row.
+            minimumSize: const Size(0, 40),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
           ),
-        ],
-      ),
+          child: Text(
+            'Visit',
+            style: AppTextStyles.labelLarge.copyWith(
+              color: palette.text,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildMoreFromShop(Product product) {
     return Padding(
-      padding: const EdgeInsets.only(top: AppSpace.xl),
+      padding: const EdgeInsets.only(top: 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'More from ${product.sellerName}',
-            style: AppTextStyles.titleMedium.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'More from this shop',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: context.palette.text,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => _openStore(product),
+                child: const Text('See all'),
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpace.md),
+          const SizedBox(height: 8),
           SizedBox(
             height: 252,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
               itemCount: _moreFromShop.length,
-              separatorBuilder: (_, _) => const SizedBox(width: AppSpace.md),
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
               itemBuilder: (context, i) {
                 final p = _moreFromShop[i];
                 return SizedBox(
@@ -1173,29 +1257,253 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     );
   }
 
-  Widget _buildDescription(Product product) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: AppRadius.lgAll,
-        boxShadow: AppShadows.card(context),
+  // ----- Footer: buy safely, report, admin -------------------------------------
+
+  Widget _buildFooter(Product product) {
+    final palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (!_isOwnListing(product))
+          Material(
+            color: palette.card,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => showModalBottomSheet<void>(
+                context: context,
+                backgroundColor: palette.sheet,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                builder: (_) => const SafeArea(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(16, 20, 16, 16),
+                    child: MarketplaceSafetyCard(),
+                  ),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.shield_outlined,
+                      color: AppColors.primaryBlue,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Buy safely',
+                            style: AppTextStyles.labelLarge.copyWith(
+                              color: palette.text,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            'Meet in public and inspect before you pay.',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: palette.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.chevron_right_rounded, color: palette.textMuted),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        if (!_isOwnListing(product))
+          Wrap(
+            alignment: WrapAlignment.center,
+            children: [
+              TextButton.icon(
+                onPressed: () => showReportSheet(
+                  context,
+                  contentType: 'product',
+                  contentId: product.id,
+                  contentLabel: product.title,
+                ),
+                icon: const Icon(Icons.flag_outlined, size: 16),
+                label: const Text('Report this listing'),
+                style: TextButton.styleFrom(foregroundColor: palette.textMuted),
+              ),
+              if (_isSuperAdmin)
+                TextButton.icon(
+                  onPressed: _moderating
+                      ? null
+                      : () => product.isModerated
+                            ? _adminRestore(product)
+                            : _adminHide(product),
+                  icon: Icon(
+                    product.isModerated
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    size: 16,
+                  ),
+                  label: Text(
+                    product.isModerated
+                        ? 'Restore listing (admin)'
+                        : 'Hide listing (admin)',
+                  ),
+                  style: TextButton.styleFrom(foregroundColor: AppColors.red),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  // ----- Contact sheet ----------------------------------------------------------
+
+  Future<void> _openContactSheet() async {
+    final product = _product;
+    if (product == null) return;
+    final palette = context.palette;
+    final hasPhone = (product.sellerPhone ?? '').trim().isNotEmpty;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: palette.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Contact ${product.sellerName}',
+                style: AppTextStyles.titleLarge.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Ask about the item, delivery or a time to collect.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: palette.textMuted,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _ContactOption(
+                icon: Icons.forum_rounded,
+                title: 'Message in the app',
+                subtitle: 'The listing is attached to your message',
+                onTap: () => Navigator.pop(ctx, 'chat'),
+              ),
+              if (hasPhone) ...[
+                const SizedBox(height: 10),
+                _ContactOption(
+                  icon: Icons.chat_rounded,
+                  title: 'WhatsApp',
+                  subtitle: 'Opens WhatsApp with a link to this listing',
+                  onTap: () => Navigator.pop(ctx, 'whatsapp'),
+                ),
+              ],
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (choice == 'chat') await _messageSellerInApp();
+    if (choice == 'whatsapp') await _contactSeller();
+  }
+}
+
+String _categoryLabel(String id) {
+  for (final c in ProductCategory.all) {
+    if (c.id == id) return c.label;
+  }
+  return id[0].toUpperCase() + id.substring(1);
+}
+
+extension on String {
+  String ifEmpty(String other) => isEmpty ? other : this;
+}
+
+/// A titled band: generous space above, a hairline, then the content.
+class _Section extends StatelessWidget {
+  const _Section({required this.title, required this.child});
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Divider(height: 1, color: palette.divider),
+          const SizedBox(height: 20),
           Text(
-            'Description',
+            title,
             style: AppTextStyles.titleMedium.copyWith(
+              color: palette.text,
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: AppSpace.sm),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.text, required this.ok});
+  final String text;
+  final bool ok;
+
+  @override
+  Widget build(BuildContext context) {
+    // Success green is for status badges — this is one.
+    final color = ok ? AppColors.successGreen : AppColors.red;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
           Text(
-            product.description!,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: context.palette.textMuted,
-              height: 1.55,
+            text,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -1204,392 +1512,400 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 }
 
-/// Pinned action bar. Price and the button that acts on it stay together
-/// no matter how long the description runs.
-class _ActionBar extends StatelessWidget {
-  const _ActionBar({
-    required this.product,
-    required this.onAddToCart,
-    required this.onWhatsApp,
-    required this.onAdventChat,
-    required this.chatBusy,
-  });
-
-  final Product product;
-  final VoidCallback onAddToCart;
-  final VoidCallback onWhatsApp;
-  final VoidCallback onAdventChat;
-  final bool chatBusy;
+class _Pill extends StatelessWidget {
+  const _Pill({required this.text, this.dark = false});
+  final String text;
+  final bool dark;
 
   @override
   Widget build(BuildContext context) {
-    final unavailable = !product.isAvailable;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        text,
+        style: AppTextStyles.labelSmall.copyWith(
+          color: AppColors.white,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderButton extends StatelessWidget {
+  const _HeaderButton({
+    required this.icon,
+    required this.onTap,
+    required this.solid,
+    this.tint,
+    this.tooltip,
+  });
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool solid;
+  final Color? tint;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final button = Pressable(
+      onTap: onTap,
+      pressedScale: 0.9,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: solid ? palette.card : Colors.black.withValues(alpha: 0.32),
+          shape: BoxShape.circle,
+          border: solid ? Border.all(color: palette.divider) : null,
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: tint ?? (solid ? palette.text : AppColors.white),
+        ),
+      ),
+    );
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
+  }
+}
+
+class _GalleryPlaceholder extends StatelessWidget {
+  const _GalleryPlaceholder({this.category});
+  final String? category;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: context.palette.cardMuted,
+      child: Center(
+        child: Icon(
+          Icons.shopping_bag_outlined,
+          size: 72,
+          color: context.palette.textMuted.withValues(alpha: 0.5),
+        ),
+      ),
+    );
+  }
+}
+
+/// Full-screen gallery: swipe between every photo, pinch to zoom each.
+class _GalleryViewer extends StatefulWidget {
+  const _GalleryViewer({required this.images, required this.initial});
+  final List<String> images;
+  final int initial;
+
+  static Future<void> open(BuildContext context, List<String> images, int i) {
+    return Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierColor: Colors.black,
+        pageBuilder: (_, _, _) => _GalleryViewer(images: images, initial: i),
+        transitionsBuilder: (_, a, _, child) =>
+            FadeTransition(opacity: a, child: child),
+      ),
+    );
+  }
+
+  @override
+  State<_GalleryViewer> createState() => _GalleryViewerState();
+}
+
+class _GalleryViewerState extends State<_GalleryViewer> {
+  late final _controller = PageController(initialPage: widget.initial);
+  late int _index = widget.initial;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _controller,
+            itemCount: widget.images.length,
+            onPageChanged: (i) => setState(() => _index = i),
+            itemBuilder: (_, i) => InteractiveViewer(
+              minScale: 1,
+              maxScale: 4,
+              child: Center(
+                child: CachedImage(widget.images[i], fit: BoxFit.contain),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: AppColors.white,
+                    ),
+                    tooltip: 'Close',
+                  ),
+                  const Spacer(),
+                  if (widget.images.length > 1)
+                    _Pill(text: '${_index + 1} / ${widget.images.length}'),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContactOption extends StatelessWidget {
+  const _ContactOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Material(
+      color: palette.card,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: palette.divider),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: AppColors.primaryBlue, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: palette.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: palette.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: palette.textMuted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The pinned purchase bar: one secondary (Contact) and one primary action.
+/// The primary morphs once the item is in the basket, so the tap has a
+/// visible answer without a toast.
+class _BuyBar extends StatelessWidget {
+  const _BuyBar({
+    required this.product,
+    required this.own,
+    required this.inBasket,
+    required this.chatBusy,
+    required this.onAdd,
+    required this.onViewBasket,
+    required this.onContact,
+    required this.onManage,
+  });
+
+  final Product product;
+  final bool own;
+  final bool inBasket;
+  final bool chatBusy;
+  final VoidCallback onAdd;
+  final VoidCallback onViewBasket;
+  final VoidCallback onContact;
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final available = product.isAvailable;
+
+    Widget primary;
+    if (own) {
+      primary = _PrimaryButton(
+        icon: Icons.storefront_outlined,
+        label: 'Manage in your shop',
+        onTap: onManage,
+      );
+    } else if (!available) {
+      primary = _PrimaryButton(
+        icon: Icons.block_rounded,
+        label: product.isSold ? 'Sold' : 'Reserved',
+        onTap: null,
+      );
+    } else if (inBasket) {
+      primary = _PrimaryButton(
+        icon: Icons.check_rounded,
+        label: 'In basket · View',
+        onTap: onViewBasket,
+        tonal: true,
+      );
+    } else {
+      primary = _PrimaryButton(
+        icon: Icons.add_shopping_cart_rounded,
+        label: 'Add to basket',
+        onTap: onAdd,
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
-        color: context.palette.card,
+        color: palette.card,
+        border: Border(top: BorderSide(color: palette.divider)),
         boxShadow: AppShadows.floating(context),
       ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpace.lg,
-            AppSpace.md,
-            AppSpace.lg,
-            AppSpace.md,
-          ),
-          child: unavailable
-              ? _UnavailableBar(
-                  product: product,
-                  onWhatsApp: onWhatsApp,
-                  onAdventChat: onAdventChat,
-                  chatBusy: chatBusy,
-                )
-              // Two rows, not one. Both contact routes are back and both
-              // are SPELLED OUT — the reason in-app chat was dropped was
-              // that it and WhatsApp were two near-identical unlabelled
-              // speech bubbles, which is a labelling problem, not a
-              // reason to leave buyers without WhatsApp unable to ask a
-              // question. Three buttons plus a price will not fit on one
-              // row of a 360dp phone without shrinking "Add" to nothing.
-              // One row (redesign, 28 Oct 2026): both contact routes stay
-              // labelled and equal, and "Add to basket" takes the extra
-              // width. The price used to sit here too — it's already the
-              // biggest thing under the photo, and the second copy cost a
-              // whole row of screen.
-              : Row(
-                  children: [
-                    Expanded(
-                      flex: 5,
-                      child: _AdventChatButton(
-                        onTap: onAdventChat,
-                        busy: chatBusy,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpace.sm),
-                    Expanded(
-                      flex: 5,
-                      child: _WhatsAppButton(onTap: onWhatsApp),
-                    ),
-                    const SizedBox(width: AppSpace.sm),
-                    Expanded(
-                      flex: 7,
-                      child: Semantics(
-                        button: true,
-                        label: 'Add to basket',
-                        child: Pressable(
-                          onTap: onAddToCart,
-                          haptics: true,
-                          child: Container(
-                            height: 48,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpace.sm,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              if (!own) ...[
+                Expanded(
+                  flex: 2,
+                  child: SizedBox(
+                    height: 52,
+                    child: OutlinedButton.icon(
+                      onPressed: chatBusy ? null : onContact,
+                      icon: chatBusy
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: BrandSpinner(size: 16),
+                            )
+                          : const Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 18,
                             ),
-                            decoration: BoxDecoration(
-                              gradient: AppColors.primaryGradient,
-                              borderRadius: AppRadius.buttonAll,
-                              boxShadow: AppShadows.glow(context),
-                            ),
-                            alignment: Alignment.center,
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.add_shopping_cart_rounded,
-                                    color: AppColors.white,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: AppSpace.sm),
-                                  Text(
-                                    'Add to basket',
-                                    style: AppTextStyles.buttonText.copyWith(
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                      label: const Text('Contact'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: palette.text,
+                        side: BorderSide(color: palette.divider),
+                        minimumSize: const Size(0, 52),
+                        textStyle: AppTextStyles.labelLarge.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The two ways to reach a seller, side by side and equally weighted.
-///
-/// Order is deliberate: Chat first because it always works — every
-/// member has it — and WhatsApp second because it depends on a number the
-/// seller may not have shared and an app the buyer may not have installed.
-class _ContactRow extends StatelessWidget {
-  const _ContactRow({
-    required this.onWhatsApp,
-    required this.onAdventChat,
-    required this.chatBusy,
-  });
-
-  final VoidCallback onWhatsApp;
-  final VoidCallback onAdventChat;
-  final bool chatBusy;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _AdventChatButton(onTap: onAdventChat, busy: chatBusy),
-        ),
-        const SizedBox(width: AppSpace.sm),
-        Expanded(child: _WhatsAppButton(onTap: onWhatsApp)),
-      ],
-    );
-  }
-}
-
-/// "Message" — the in-app route, in brand blue.
-///
-/// Solid and 48dp tall to match [_WhatsAppButton] exactly. The point of
-/// this pair is that neither route looks like the afterthought: an
-/// outlined button next to a solid green one reads as "the real button and
-/// the other one", which is the state the founder asked to fix.
-class _AdventChatButton extends StatelessWidget {
-  const _AdventChatButton({required this.onTap, required this.busy});
-
-  final VoidCallback onTap;
-  final bool busy;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: 'Message the seller in Chat',
-      child: Pressable(
-        onTap: busy ? null : onTap,
-        haptics: true,
-        pressedScale: 0.94,
-        child: Container(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.primaryBlue,
-            borderRadius: AppRadius.buttonAll,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primaryBlue.withValues(alpha: 0.32),
-                blurRadius: 12,
-                offset: const Offset(0, 5),
-              ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(flex: 3, child: primary),
             ],
           ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (busy)
-                  const SizedBox(
-                    width: 17,
-                    height: 17,
-                    child: BrandSpinner(size: 17),
-                  )
-                else
-                  const Icon(
-                    Icons.forum_rounded,
-                    color: AppColors.white,
-                    size: 17,
-                  ),
-                const SizedBox(width: AppSpace.sm - 2),
-                Text(
-                  busy ? 'Opening…' : 'Message',
-                  style: AppTextStyles.labelMedium.copyWith(
-                    color: AppColors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
   }
 }
 
-class _UnavailableBar extends StatelessWidget {
-  const _UnavailableBar({
-    required this.product,
-    required this.onWhatsApp,
-    required this.onAdventChat,
-    required this.chatBusy,
+class _PrimaryButton extends StatelessWidget {
+  const _PrimaryButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.tonal = false,
   });
-
-  final Product product;
-
-  /// Both routes, so "ask the shop" means the same thing on a sold listing
-  /// as it does on an available one.
-  final VoidCallback onWhatsApp;
-  final VoidCallback onAdventChat;
-  final bool chatBusy;
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final bool tonal;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          product.isSold ? 'This item is sold' : 'This item is reserved',
-          style: AppTextStyles.titleSmall.copyWith(fontWeight: FontWeight.w800),
-        ),
-        Text(
-          'Ask the shop if more are coming.',
-          style: AppTextStyles.bodySmall.copyWith(
-            color: context.palette.textMuted,
-          ),
-        ),
-        const SizedBox(height: AppSpace.sm),
-        _ContactRow(
-          onWhatsApp: onWhatsApp,
-          onAdventChat: onAdventChat,
-          chatBusy: chatBusy,
-        ),
-      ],
-    );
-  }
-}
-
-/// "Contact on WhatsApp", in WhatsApp's own green and spelled out.
-///
-/// **Deliberate palette exception.** CLAUDE.md forbids green outside status
-/// badges, and this breaks that rule on purpose: WhatsApp is how every sale in
-/// this marketplace actually closes, and members recognise the destination by
-/// its colour before they read anything. A brand-blue button here does not
-/// tell anyone which app is about to open. Treat this as scoped to third-party
-/// brand affordances — do not let green leak anywhere else.
-///
-/// The word mark, not the logo: shipping WhatsApp's glyph would mean bundling
-/// a trademarked asset, and the label plus the colour is unambiguous already.
-class _WhatsAppButton extends StatelessWidget {
-  const _WhatsAppButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  /// WhatsApp brand green.
-  static const Color _brand = Color(0xFF25D366);
-
-  @override
-  Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    final fg = tonal ? AppColors.primaryBlue : AppColors.white;
     return Semantics(
       button: true,
-      label: 'Contact the seller on WhatsApp',
+      label: label,
       child: Pressable(
         onTap: onTap,
         haptics: true,
-        pressedScale: 0.94,
-        child: Container(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
-          alignment: Alignment.center,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          height: 52,
           decoration: BoxDecoration(
-            color: _brand,
-            borderRadius: AppRadius.buttonAll,
-            boxShadow: [
-              BoxShadow(
-                color: _brand.withValues(alpha: 0.32),
-                blurRadius: 12,
-                offset: const Offset(0, 5),
-              ),
-            ],
+            gradient: tonal || disabled ? null : AppColors.primaryGradient,
+            color: tonal
+                ? AppColors.primaryBlue.withValues(alpha: 0.12)
+                : disabled
+                ? context.palette.cardMuted
+                : null,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: tonal || disabled ? null : AppShadows.glow(context),
           ),
+          alignment: Alignment.center,
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.chat_bubble_rounded,
-                  color: AppColors.white,
-                  size: 17,
+                Icon(
+                  icon,
+                  size: 19,
+                  color: disabled ? context.palette.textMuted : fg,
                 ),
-                const SizedBox(width: AppSpace.sm - 2),
+                const SizedBox(width: 8),
                 Text(
-                  'WhatsApp',
-                  style: AppTextStyles.labelMedium.copyWith(
-                    color: AppColors.white,
-                    fontWeight: FontWeight.w800,
+                  label,
+                  style: AppTextStyles.buttonText.copyWith(
+                    fontSize: 15,
+                    color: disabled ? context.palette.textMuted : fg,
                   ),
                 ),
               ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GlassIconButton extends StatelessWidget {
-  const _GlassIconButton({required this.icon, required this.onTap, this.tint});
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final Color? tint;
-
-  @override
-  Widget build(BuildContext context) {
-    return Pressable(
-      onTap: onTap,
-      pressedScale: 0.9,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.38),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: tint ?? AppColors.white, size: 20),
-      ),
-    );
-  }
-}
-
-class _CarouselImage extends StatelessWidget {
-  const _CarouselImage({required this.url});
-  final String url;
-
-  @override
-  Widget build(BuildContext context) {
-    if (url.isEmpty) {
-      return Container(
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-        child: Center(
-          child: Icon(
-            Icons.shopping_bag_outlined,
-            color: AppColors.white.withValues(alpha: 0.55),
-            size: 80,
-          ),
-        ),
-      );
-    }
-    return GestureDetector(
-      onTap: () => FullImageViewer.show(context, url),
-      child: CachedImage(
-        url,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => Container(
-          decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-          child: Center(
-            child: Icon(
-              Icons.broken_image_outlined,
-              color: AppColors.white.withValues(alpha: 0.55),
-              size: 56,
             ),
           ),
         ),

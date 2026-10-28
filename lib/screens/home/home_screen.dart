@@ -1357,6 +1357,7 @@ class _HomeScreenState extends State<HomeScreen>
             delegate: HomeHeaderDelegate(
               branded: _headerBranded,
               snapConfiguration: _headerSnap,
+              vsync: this,
               topInset: MediaQuery.paddingOf(context).top,
               greeting: _greeting(),
               firstName: _firstName(),

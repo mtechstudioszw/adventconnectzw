@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:advent_connect_zw/theme/app_text_styles.dart';
@@ -82,13 +83,17 @@ Future<void> pumpShot(
   await t.pumpWidget(
     RepaintBoundary(
       key: _boundary,
-      child: MaterialApp(
+      // A real router, as in the app: screens that call GoRouter.of (the
+      // Premium promo, PopScopes) would otherwise throw in the harness.
+      child: MaterialApp.router(
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: dark ? ThemeMode.dark : ThemeMode.light,
         builder: (context, child) => AmbientBackground(child: child!),
-        home: screen,
+        routerConfig: GoRouter(
+          routes: [GoRoute(path: '/', builder: (_, _) => screen)],
+        ),
       ),
     ),
   );

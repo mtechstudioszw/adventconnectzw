@@ -110,7 +110,7 @@ void main() {
     await saveShot(t, 'product_pre');
     await t.tap(find.text('Add to basket'));
     await saveShot(t, 'product_in_basket');
-    await t.tap(find.text('Contact'));
+    await t.tap(find.text('Chat'));
     await saveShot(t, 'product_contact');
   });
 

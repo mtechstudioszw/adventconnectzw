@@ -96,6 +96,7 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.onBellTap,
     this.branded = false,
     this.snapConfiguration,
+    this.vsync,
   });
 
   /// Scrolled far enough that the greeting is no longer the point.
@@ -127,6 +128,14 @@ class HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
   /// Needs a TickerProvider, so the screen supplies it.
   @override
   final FloatingHeaderSnapConfiguration? snapConfiguration;
+
+  /// The ticker for that snap — and for the size change when [branded]
+  /// flips while the floating header is on screen (it does when it floats
+  /// back in mid-feed). Without it Flutter skipped the snap and threw
+  /// "vsync must not be null if the floating header changes size
+  /// animatedly" on that flip.
+  @override
+  final TickerProvider? vsync;
 
   // Body heights excluding the status-bar inset. Expanded carries the
   // greeting + status line; collapsed keeps the member's name.

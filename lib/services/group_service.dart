@@ -108,7 +108,7 @@ class GroupService {
             ? (p!['full_name'] as String).trim()
             : 'Member',
         photoUrl: p?['profile_photo_url'] as String?,
-        isVerified: p?['is_verified'] == true || p?['is_verified_admin'] == true,
+        isVerified: p?['is_verified'] == true,
       );
     }).toList();
     list.sort((a, b) {
@@ -136,7 +136,7 @@ class GroupService {
             : 'Member',
         photoUrl: map['photo_url'] as String?,
         isVerified:
-            map['is_verified'] == true || map['is_verified_admin'] == true,
+            map['is_verified'] == true,
       );
     }).toList();
   }

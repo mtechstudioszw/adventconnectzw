@@ -210,7 +210,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .eq('id', id)
           .maybeSingle();
       final v =
-          row?['is_verified'] == true || row?['is_verified_admin'] == true;
+          row?['is_verified'] == true;
       if (mounted) setState(() => _isVerified = v);
     } catch (_) {
       // ignore — tick stays hidden.

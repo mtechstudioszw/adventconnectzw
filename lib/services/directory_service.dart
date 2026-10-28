@@ -130,8 +130,7 @@ class DirectoryService {
               bio: row['bio'] as String?,
               churchId: row['church_id']?.toString(),
               churchName: church is Map ? church['name'] as String? : null,
-              isVerified: row['is_verified'] == true ||
-                  row['is_verified_admin'] == true,
+              isVerified: row['is_verified'] == true,
             );
           })
           .where((e) => (e.fullName ?? '').trim().isNotEmpty)
@@ -204,8 +203,7 @@ class DirectoryService {
                 province: row['province'] as String?,
                 city: row['city'] as String?,
                 bio: row['bio'] as String?,
-                isVerified: row['is_verified'] == true ||
-                    row['is_verified_admin'] == true,
+                isVerified: row['is_verified'] == true,
               ))
           .toList()
         ..sort(_byNameCi);
@@ -257,8 +255,7 @@ class DirectoryService {
                   isVisible: true,
                   fullName: row['full_name'] as String?,
                   profilePhotoUrl: row['profile_photo_url'] as String?,
-                  isVerified: row['is_verified'] == true ||
-                      row['is_verified_admin'] == true,
+                  isVerified: row['is_verified'] == true,
                 ))
             .toList(),
         // Every row carries the same total; absent when there are none.
@@ -310,8 +307,7 @@ class DirectoryService {
                 province: row['province'] as String?,
                 city: row['city'] as String?,
                 bio: row['bio'] as String?,
-                isVerified: row['is_verified'] == true ||
-                    row['is_verified_admin'] == true,
+                isVerified: row['is_verified'] == true,
               ))
           .toList();
     } catch (_) {
@@ -355,8 +351,7 @@ class DirectoryService {
                 province: row['province'] as String?,
                 city: row['city'] as String?,
                 bio: row['bio'] as String?,
-                isVerified: row['is_verified'] == true ||
-                    row['is_verified_admin'] == true,
+                isVerified: row['is_verified'] == true,
               ))
           .toList();
     } catch (_) {

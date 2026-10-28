@@ -155,7 +155,7 @@ class Conversation {
     final pa = json['participant_a'];
     final pb = json['participant_b'];
     bool verifiedOf(dynamic p) =>
-        p is Map && (p['is_verified'] == true || p['is_verified_admin'] == true);
+        p is Map && (p['is_verified'] == true);
     bool otherVerified;
     if (selfChat) {
       otherPhoto = (pa is Map ? pa['profile_photo_url'] : null) as String?;

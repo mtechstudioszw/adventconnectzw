@@ -90,9 +90,7 @@ class MemberDirectoryEntry {
           ? DateTime.tryParse(json['created_at'].toString())
           : null,
       isVerified: json['is_verified'] == true ||
-          json['is_verified_admin'] == true ||
-          profileMap?['is_verified'] == true ||
-          profileMap?['is_verified_admin'] == true,
+          profileMap?['is_verified'] == true,
     );
   }
 }

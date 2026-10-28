@@ -84,8 +84,7 @@ class Story {
       authorId: (json['author_id'] ?? '').toString(),
       authorName: (authorMap?['full_name'] as String?) ?? 'Member',
       authorPhotoUrl: authorMap?['profile_photo_url'] as String?,
-      authorIsVerified: authorMap?['is_verified'] == true ||
-          authorMap?['is_verified_admin'] == true,
+      authorIsVerified: authorMap?['is_verified'] == true,
       mediaUrl: (json['media_url'] ?? '').toString(),
       caption: json['caption'] as String?,
       kind: (json['kind'] as String?) ?? 'photo',

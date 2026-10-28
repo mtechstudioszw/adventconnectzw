@@ -1,7 +1,7 @@
 -- ============================================================================
 --  patch_280 — product options (sizes/colours), stock, specifications;
 --              checkout checks and deducts stock; orders only via checkout
---  STATUS: DRAFT, NOT YET RUN.
+--  STATUS: APPLIED to the live database 28 Oct 2026 (owner approved).
 -- ============================================================================
 --
 --  Owner, 28 Oct 2026: "start with product sizes stock specs".

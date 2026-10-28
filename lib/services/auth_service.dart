@@ -956,7 +956,7 @@ class AuthService {
           .maybeSingle()
           .timeout(const Duration(seconds: 4));
       final verified =
-          row?['is_verified'] == true || row?['is_verified_admin'] == true;
+          row?['is_verified'] == true;
       _verifiedCache = verified;
       return verified;
     } catch (_) {

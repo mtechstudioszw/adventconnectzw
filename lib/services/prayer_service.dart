@@ -341,8 +341,7 @@ class PrayerService {
         'author_id': map['user_id'],
         'author_name': name?.isNotEmpty == true ? name : 'A friend',
         'author_photo_url': profile?['profile_photo_url'],
-        'author_is_verified': profile?['is_verified'] == true ||
-            profile?['is_verified_admin'] == true,
+        'author_is_verified': profile?['is_verified'] == true,
         'content': map['message'] ?? '',
         'created_at': map['created_at'],
         'parent_comment_id': map['parent_response_id'],
@@ -429,8 +428,7 @@ class PrayerService {
           isAnonymous ? null : (photo?.isNotEmpty == true ? photo : null),
       // Verified tick — never for anonymous posts (hides the identity).
       'author_is_verified': !isAnonymous &&
-          (author?['is_verified'] == true ||
-              author?['is_verified_admin'] == true),
+          (author?['is_verified'] == true),
     };
     return Prayer.fromJson(masked);
   }

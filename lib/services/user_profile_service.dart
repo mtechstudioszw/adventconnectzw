@@ -63,7 +63,12 @@ class PublicUserProfile {
   final bool isPrivate;
 
   /// Whether to show the gold verified tick next to this user's name.
-  bool get showsVerifiedTick => isVerified || isVerifiedAdmin;
+  ///
+  /// Owner, 28 Oct 2026: church admins no longer get the tick for their
+  /// appointment — the gold tick is becoming a paid badge that also needs
+  /// an ID check. [isVerifiedAdmin] still grants their church-admin
+  /// powers; it just isn't shown as a tick.
+  bool get showsVerifiedTick => isVerified;
 
   int? get age {
     if (dateOfBirth == null) return null;

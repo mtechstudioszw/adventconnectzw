@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/church_model.dart';
 import '../../services/auth_service.dart';
+import '../../services/follow_service.dart';
+import '../../services/user_profile_service.dart';
 import '../../services/church_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
@@ -35,6 +37,14 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   final _surnameController = TextEditingController();
   final _bioController = TextEditingController();
   final _usernameController = TextEditingController();
+  final _websiteController = TextEditingController();
+
+  /// patch_274 settings. [_hasLinkSettings] stays false until the columns
+  /// answer, and the fields stay hidden until then.
+  bool _hasLinkSettings = false;
+  bool _isPrivate = false;
+  String? _initialWebsite;
+  bool _initialPrivate = false;
   DateTime? _dob; // current date of birth (for the age editor)
 
   late final AnimationController _entrance;
@@ -43,6 +53,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
 
   List<Church> _churches = [];
   String? _selectedChurchId;
+
   /// ISO alpha-2. Seeded from auth metadata; falls back to ZW, which is what
   /// patch_213 backfilled every pre-rebrand profile to.
   String _country = Countries.defaultCode;
@@ -74,19 +85,24 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       duration: const Duration(milliseconds: 500),
     )..forward();
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
+    _slide = Tween<double>(
+      begin: 12,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
 
     final meta = AuthService.currentUser?.userMetadata ?? const {};
     // Stored as one string, so split it back the way signup joined it:
     // everything before the last space is the first name (middle names stay
     // with it), the last word is the surname.
     final storedName = ((meta['full_name'] as String?) ?? '').trim();
-    final nameParts =
-        storedName.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final nameParts = storedName
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (nameParts.length >= 2) {
-      _nameController.text = nameParts.sublist(0, nameParts.length - 1).join(' ');
+      _nameController.text = nameParts
+          .sublist(0, nameParts.length - 1)
+          .join(' ');
       _surnameController.text = nameParts.last;
     } else {
       _nameController.text = storedName;
@@ -106,6 +122,21 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     _initialChurchId = _selectedChurchId;
     _loadChurches();
     _loadProfileFields();
+    _loadLinkSettings();
+  }
+
+  Future<void> _loadLinkSettings() async {
+    try {
+      final settings = await UserProfileService.fetchOwnSettings();
+      if (settings == null || !mounted) return;
+      setState(() {
+        _hasLinkSettings = true;
+        _initialWebsite = settings.website;
+        _initialPrivate = settings.isPrivate;
+        _isPrivate = settings.isPrivate;
+        _websiteController.text = settings.website ?? '';
+      });
+    } catch (_) {}
   }
 
   /// The fields whose source of truth is the profiles ROW, not auth
@@ -153,6 +184,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     _surnameController.dispose();
     _bioController.dispose();
     _usernameController.dispose();
+    _websiteController.dispose();
     super.dispose();
   }
 
@@ -176,7 +208,9 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   String? _validateSurname(String? v) => NameValidator.namePart(v, 'Surname');
 
   String? _validateBio(String? v) {
-    if (v != null && v.length > 280) return 'Bio must be 280 characters or fewer';
+    if (v != null && v.length > 280) {
+      return 'Bio must be 280 characters or fewer';
+    }
     return null;
   }
 
@@ -192,8 +226,18 @@ class _EditProfileScreenState extends State<EditProfileScreen>
 
   String _formatDob(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
@@ -227,8 +271,8 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     //
     // The original intent still holds: an account that HAS a church must
     // not end up with none. So only block the clearing case.
-    final hadChurch = (AuthService.currentUser
-                ?.userMetadata?['church_id'] as String?)
+    final hadChurch =
+        (AuthService.currentUser?.userMetadata?['church_id'] as String?)
             ?.isNotEmpty ==
         true;
     final clearingChurch =
@@ -240,7 +284,10 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     // Client-side age guard (the server enforces it too, patch_107).
     if (_dob != null) {
       final sixteenAgo = DateTime(
-          DateTime.now().year - 16, DateTime.now().month, DateTime.now().day);
+        DateTime.now().year - 16,
+        DateTime.now().month,
+        DateTime.now().day,
+      );
       if (_dob!.isAfter(sixteenAgo)) {
         setState(() => _error = 'You must be at least 16 years old.');
         return;
@@ -274,8 +321,36 @@ class _EditProfileScreenState extends State<EditProfileScreen>
       country: _country == _initialCountry ? null : _country,
       dateOfBirth: _dob,
     );
+    // Link + private account live only on the profiles row (patch_274).
+    // Saved after the main update and only when changed; a failure here is
+    // reported, never swallowed into "Profile updated".
+    String? linkError;
+    if (result.isSuccess && _hasLinkSettings) {
+      final website = UserProfileService.normalizeWebsite(
+        _websiteController.text,
+      );
+      if (website != _initialWebsite || _isPrivate != _initialPrivate) {
+        try {
+          await UserProfileService.saveOwnSettings(
+            website: website,
+            isPrivate: _isPrivate,
+          );
+          _initialWebsite = website;
+          _initialPrivate = _isPrivate;
+          FollowService.revision.value++;
+        } catch (_) {
+          linkError =
+              'Your profile saved, but the website / private account '
+              'setting did not. Please try again.';
+        }
+      }
+    }
     if (!mounted) return;
     setState(() => _saving = false);
+    if (linkError != null) {
+      setState(() => _error = linkError);
+      return;
+    }
     if (result.isSuccess) {
       // Mirror the home-church choice into church_followers so the home
       // screen actually reflects the user's pick. Unfollow the previous
@@ -349,10 +424,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                         _ErrorBanner(message: _error!),
                       ],
                       const SizedBox(height: 24),
-                      _SaveButton(
-                        busy: _saving,
-                        onTap: _saving ? null : _save,
-                      ),
+                      _SaveButton(busy: _saving, onTap: _saving ? null : _save),
                     ],
                   ),
                 ),
@@ -416,8 +488,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   }
 
   Widget _buildPhotoUploader() {
-    final hasPhoto =
-        _profilePhotoUrl != null && _profilePhotoUrl!.isNotEmpty;
+    final hasPhoto = _profilePhotoUrl != null && _profilePhotoUrl!.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -454,8 +525,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                       image: CachedNetworkImageProvider(
                         photoUrlAtSize(
                           _profilePhotoUrl,
-                          (72 * MediaQuery.devicePixelRatioOf(context))
-                              .round(),
+                          (72 * MediaQuery.devicePixelRatioOf(context)).round(),
                         ),
                       ),
                       fit: BoxFit.cover,
@@ -514,8 +584,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   }
 
   Widget _buildCoverUploader() {
-    final hasCover =
-        _coverPhotoUrl != null && _coverPhotoUrl!.isNotEmpty;
+    final hasCover = _coverPhotoUrl != null && _coverPhotoUrl!.isNotEmpty;
     return Container(
       decoration: BoxDecoration(
         color: context.palette.card,
@@ -595,8 +664,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                     ),
                     if (hasCover)
                       TextButton(
-                        onPressed: () =>
-                            setState(() => _coverPhotoUrl = ''),
+                        onPressed: () => setState(() => _coverPhotoUrl = ''),
                         style: TextButton.styleFrom(
                           foregroundColor: AppColors.red,
                           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -684,9 +752,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                   hint: 'Date of birth',
                 ),
                 child: Text(
-                  _dob != null
-                      ? _formatDob(_dob!)
-                      : 'Set your date of birth',
+                  _dob != null ? _formatDob(_dob!) : 'Set your date of birth',
                   style: AppTextStyles.bodyLarge.copyWith(
                     fontSize: 15,
                     color: _dob != null
@@ -715,6 +781,31 @@ class _EditProfileScreenState extends State<EditProfileScreen>
               ),
             ),
           ),
+          if (_hasLinkSettings) ...[
+            const SizedBox(height: 18),
+            _LabeledField(
+              label: 'Website',
+              child: TextFormField(
+                controller: _websiteController,
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                textInputAction: TextInputAction.next,
+                style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                validator: (v) {
+                  try {
+                    UserProfileService.normalizeWebsite(v ?? '');
+                    return null;
+                  } on FormatException catch (e) {
+                    return e.message;
+                  }
+                },
+                decoration: _filledDecoration(
+                  icon: Icons.link_rounded,
+                  hint: 'yourministry.org',
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           // Every pre-rebrand profile was backfilled to Zimbabwe by
           // patch_213. This row is how those members — and anyone who
@@ -755,26 +846,61 @@ class _EditProfileScreenState extends State<EditProfileScreen>
           ),
         ],
       ),
-      child: SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        activeThumbColor: AppColors.primaryBlue,
-        value: _showAge,
-        onChanged: (v) => setState(() => _showAge = v),
-        title: Text(
-          'Show my age',
-          style: AppTextStyles.titleSmall.copyWith(
-            fontWeight: FontWeight.w700,
+      child: Column(
+        children: [
+          if (_hasLinkSettings) ...[
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              activeThumbColor: AppColors.primaryBlue,
+              value: _isPrivate,
+              onChanged: (v) => setState(() => _isPrivate = v),
+              title: Text(
+                'Private account',
+                style: AppTextStyles.titleSmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                _isPrivate
+                    ? 'You approve who follows you. Only friends and approved '
+                          'followers see your posts.'
+                    : 'Anyone can follow you and see your public posts.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: context.palette.textMuted,
+                ),
+              ),
+              secondary: const Icon(
+                Icons.lock_outline_rounded,
+                color: AppColors.primaryBlue,
+              ),
+            ),
+            Divider(height: 1, color: context.palette.divider),
+          ],
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            activeThumbColor: AppColors.primaryBlue,
+            value: _showAge,
+            onChanged: (v) => setState(() => _showAge = v),
+            title: Text(
+              'Show my age',
+              style: AppTextStyles.titleSmall.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            subtitle: Text(
+              _showAge
+                  ? 'Your age is visible on your profile.'
+                  : 'Your age is hidden from others.',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.palette.textMuted,
+              ),
+            ),
+            secondary: const Icon(
+              Icons.cake_outlined,
+              color: AppColors.primaryBlue,
+            ),
           ),
-        ),
-        subtitle: Text(
-          _showAge
-              ? 'Your age is visible on your profile.'
-              : 'Your age is hidden from others.',
-          style: AppTextStyles.bodySmall.copyWith(
-            color: context.palette.textMuted,
-          ),
-        ),
-        secondary: const Icon(Icons.cake_outlined, color: AppColors.primaryBlue),
+        ],
       ),
     );
   }
@@ -818,11 +944,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
 }
 
 class _LabeledField extends StatelessWidget {
-  const _LabeledField({
-    required this.label,
-    required this.child,
-    this.helper,
-  });
+  const _LabeledField({required this.label, required this.child, this.helper});
 
   final String label;
   final Widget child;
@@ -905,12 +1027,7 @@ class _ChurchDropdown extends StatelessWidget {
     }
     final selected = churches.firstWhere(
       (c) => c.id == selectedId,
-      orElse: () => const Church(
-        id: '',
-        name: '',
-        city: '',
-        membersCount: 0,
-      ),
+      orElse: () => const Church(id: '', name: '', city: '', membersCount: 0),
     );
     final hasSelection = selected.id.isNotEmpty;
     return Material(
@@ -921,10 +1038,8 @@ class _ChurchDropdown extends StatelessWidget {
             context: context,
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
-            builder: (ctx) => _ChurchPickerSheet(
-              churches: churches,
-              selectedId: selectedId,
-            ),
+            builder: (ctx) =>
+                _ChurchPickerSheet(churches: churches, selectedId: selectedId),
           );
           // null = sheet was dismissed (no change). The sheet returns
           // an empty string when the user picks "No church" so we can
@@ -934,14 +1049,11 @@ class _ChurchDropdown extends StatelessWidget {
         },
         borderRadius: BorderRadius.circular(14),
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
             color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: context.palette.divider,
-            ),
+            border: Border.all(color: context.palette.divider),
           ),
           child: Row(
             children: [
@@ -966,10 +1078,7 @@ class _ChurchDropdown extends StatelessWidget {
                   ),
                 ),
               ),
-              Icon(
-                Icons.expand_more,
-                color: context.palette.textMuted,
-              ),
+              Icon(Icons.expand_more, color: context.palette.textMuted),
             ],
           ),
         ),
@@ -979,10 +1088,7 @@ class _ChurchDropdown extends StatelessWidget {
 }
 
 class _ChurchPickerSheet extends StatefulWidget {
-  const _ChurchPickerSheet({
-    required this.churches,
-    required this.selectedId,
-  });
+  const _ChurchPickerSheet({required this.churches, required this.selectedId});
 
   final List<Church> churches;
   final String? selectedId;
@@ -1031,8 +1137,9 @@ class _ChurchPickerSheetState extends State<_ChurchPickerSheet> {
           return Container(
             decoration: BoxDecoration(
               color: context.palette.sheet,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
             ),
             child: Column(
               children: [
@@ -1057,15 +1164,13 @@ class _ChurchPickerSheetState extends State<_ChurchPickerSheet> {
                 ),
                 const SizedBox(height: 12),
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: TextField(
                     controller: _searchController,
                     onChanged: (v) => setState(() => _query = v),
                     autofocus: true,
                     textInputAction: TextInputAction.search,
-                    style:
-                        AppTextStyles.bodyLarge.copyWith(fontSize: 15),
+                    style: AppTextStyles.bodyLarge.copyWith(fontSize: 15),
                     decoration: InputDecoration(
                       hintText: 'Search by name or city',
                       hintStyle: AppTextStyles.bodyMedium.copyWith(
@@ -1120,8 +1225,7 @@ class _ChurchPickerSheetState extends State<_ChurchPickerSheet> {
                         )
                       : ListView.separated(
                           controller: scrollController,
-                          padding: const EdgeInsets.fromLTRB(
-                              8, 4, 8, 24),
+                          padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
                           // A home church is MANDATORY — no "No church"
                           // option (every account must belong to one).
                           itemCount: filtered.length,
@@ -1133,8 +1237,7 @@ class _ChurchPickerSheetState extends State<_ChurchPickerSheet> {
                               title: c.name,
                               subtitle: c.city,
                               selected: c.id == widget.selectedId,
-                              onTap: () =>
-                                  Navigator.of(ctx).pop(c.id),
+                              onTap: () => Navigator.of(ctx).pop(c.id),
                             );
                           },
                         ),
@@ -1169,8 +1272,7 @@ class _PickerRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: selected
                 ? AppColors.primaryBlue.withValues(alpha: 0.08)
@@ -1183,17 +1285,13 @@ class _PickerRow extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  gradient: selected
-                      ? AppColors.primaryGradient
-                      : null,
+                  gradient: selected ? AppColors.primaryGradient : null,
                   color: selected ? null : context.palette.cardMuted,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   Icons.church,
-                  color: selected
-                      ? AppColors.white
-                      : AppColors.primaryBlue,
+                  color: selected ? AppColors.white : AppColors.primaryBlue,
                   size: 18,
                 ),
               ),

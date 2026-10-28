@@ -50,6 +50,7 @@ import '../screens/profile/notification_preferences_screen.dart';
 import '../screens/profile/sabbath_timer_screen.dart';
 import '../screens/profile/saved_listings_screen.dart';
 import '../screens/profile/saved_posts_screen.dart';
+import '../screens/profile/follow_list_screen.dart';
 import '../screens/utility/report_submitted_screen.dart';
 import '../services/church_service.dart';
 import '../models/church_model.dart';
@@ -218,10 +219,7 @@ String? _shareLinkRedirect(GoRouterState state) {
   if (target == null) return '/splash';
 
   try {
-    return appRouter.namedLocation(
-      target.$1,
-      pathParameters: {target.$2: id},
-    );
+    return appRouter.namedLocation(target.$1, pathParameters: {target.$2: id});
   } catch (_) {
     return '/splash';
   }
@@ -404,7 +402,7 @@ final GoRouter appRouter = GoRouter(
                         : null;
                     final from =
                         int.tryParse(state.uri.queryParameters['from'] ?? '') ??
-                            0;
+                        0;
                     return SeriesScreen(
                       playlistId: id,
                       initial: initial,
@@ -472,8 +470,9 @@ final GoRouter appRouter = GoRouter(
                   parentNavigatorKey: rootNavigatorKey,
                   path: 'new-group',
                   name: 'create_group',
-                  builder: (context, state) =>
-                      CreateGroupScreen(preselectUserId: state.extra as String?),
+                  builder: (context, state) => CreateGroupScreen(
+                    preselectUserId: state.extra as String?,
+                  ),
                 ),
                 GoRoute(
                   parentNavigatorKey: rootNavigatorKey,
@@ -772,9 +771,8 @@ final GoRouter appRouter = GoRouter(
       // no row is written until the first send.
       path: '/advent-ai',
       name: 'advent_ai',
-      builder: (context, state) => AdventAiScreen(
-        conversationId: state.uri.queryParameters['c'],
-      ),
+      builder: (context, state) =>
+          AdventAiScreen(conversationId: state.uri.queryParameters['c']),
     ),
     GoRoute(
       path: '/prayer',
@@ -865,6 +863,24 @@ final GoRouter appRouter = GoRouter(
       name: 'user_profile',
       builder: (context, state) =>
           UserProfileScreen(userId: state.pathParameters['userId'] ?? ''),
+    ),
+    // Followers / Following for any member (patch_274). `tab` is
+    // 'followers' (default) or 'following'; `name` titles the screen.
+    GoRoute(
+      path: '/users/:userId/follows',
+      name: 'follows',
+      builder: (context, state) => FollowListScreen(
+        userId: state.pathParameters['userId'] ?? '',
+        initialTab: state.uri.queryParameters['tab'] == 'following'
+            ? FollowListTab.following
+            : FollowListTab.followers,
+        name: state.uri.queryParameters['name'],
+      ),
+    ),
+    GoRoute(
+      path: '/follow-requests',
+      name: 'follow_requests',
+      builder: (context, state) => const FollowListScreen.requests(),
     ),
     GoRoute(
       path: '/library',

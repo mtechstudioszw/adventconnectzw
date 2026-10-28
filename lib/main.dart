@@ -374,6 +374,17 @@ Future<void> _initBackgroundServices() async {
           case 'seller':
             appRouter.pushNamed('seller_dashboard');
             break;
+          case 'user':
+            // patch_274 follows — mirrors the notification centre.
+            if ((msg.data['type'] ?? '').toString() == 'follow_request') {
+              appRouter.pushNamed('follow_requests');
+            } else if (id.isNotEmpty) {
+              appRouter.pushNamed(
+                'user_profile',
+                pathParameters: {'userId': id},
+              );
+            }
+            break;
           case 'moderated_product':
           case 'moderated_post':
             // The appeal opens from the notification centre, which has the
@@ -672,51 +683,51 @@ class _AdventConnectAppState extends State<AdventConnectApp>
           // widget's doc comment before making any Scaffold opaque again.
           builder: (context, child) => AmbientBackground(
             child: Stack(
-            children: [
-              OfflineBanner(child: child ?? const SizedBox.shrink()),
-              // The bars below sit ABOVE the router's Navigator, so they
-              // inherit no Overlay. Anything that resolves an Overlay lazily
-              // — Tooltip, Slider's value indicator, popup menus — throws
-              // "No Overlay widget found" there, and the ErrorWidget that
-              // replaces the failed subtree expands to its biggest
-              // constraints, which is where the giant bottom overflow came
-              // from. Give the layer its own Overlay instead of banning
-              // those widgets from it one at a time.
-              Positioned.fill(
-                child: Overlay(
-                  initialEntries: [
-                    OverlayEntry(
-                      builder: (_) => const Stack(
-                        children: [
-                          // Global voice-note bar — shows at the top whenever
-                          // a note plays outside its own chat (WhatsApp).
-                          Align(
-                            alignment: Alignment.topCenter,
-                            child: VoiceMiniBar(),
-                          ),
-                          // Docked video + music windows — whatever is still
-                          // playing stays reachable from anywhere.
-                          //
-                          // Positioned.fill, NOT an Align: both windows are
-                          // draggable now and position themselves anywhere in
-                          // this rect. Bottom clearance for the navigation
-                          // island is applied per-window inside
-                          // GlobalMediaBars, because the Watch player and the
-                          // music card park independently.
-                          Positioned.fill(child: GlobalMediaBars()),
-                          // No Advent AI layer here (founder, 27 Oct 2026).
-                          // Its only entry point is the stationary button
-                          // on the Chat tab's inbox (conversations_screen).
-                          // An app-wide bubble decided where to hide from
-                          // the router's URL, which `push` never updates —
-                          // so it floated over chats opened from a profile.
-                        ],
+              children: [
+                OfflineBanner(child: child ?? const SizedBox.shrink()),
+                // The bars below sit ABOVE the router's Navigator, so they
+                // inherit no Overlay. Anything that resolves an Overlay lazily
+                // — Tooltip, Slider's value indicator, popup menus — throws
+                // "No Overlay widget found" there, and the ErrorWidget that
+                // replaces the failed subtree expands to its biggest
+                // constraints, which is where the giant bottom overflow came
+                // from. Give the layer its own Overlay instead of banning
+                // those widgets from it one at a time.
+                Positioned.fill(
+                  child: Overlay(
+                    initialEntries: [
+                      OverlayEntry(
+                        builder: (_) => const Stack(
+                          children: [
+                            // Global voice-note bar — shows at the top whenever
+                            // a note plays outside its own chat (WhatsApp).
+                            Align(
+                              alignment: Alignment.topCenter,
+                              child: VoiceMiniBar(),
+                            ),
+                            // Docked video + music windows — whatever is still
+                            // playing stays reachable from anywhere.
+                            //
+                            // Positioned.fill, NOT an Align: both windows are
+                            // draggable now and position themselves anywhere in
+                            // this rect. Bottom clearance for the navigation
+                            // island is applied per-window inside
+                            // GlobalMediaBars, because the Watch player and the
+                            // music card park independently.
+                            Positioned.fill(child: GlobalMediaBars()),
+                            // No Advent AI layer here (founder, 27 Oct 2026).
+                            // Its only entry point is the stationary button
+                            // on the Chat tab's inbox (conversations_screen).
+                            // An app-wide bubble decided where to hide from
+                            // the router's URL, which `push` never updates —
+                            // so it floated over chats opened from a profile.
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
             ),
           ),
         );

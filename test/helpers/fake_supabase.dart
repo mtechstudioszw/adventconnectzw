@@ -15,6 +15,14 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Return one of these from a handler to answer with an error status, e.g.
+/// `FakeError(400, {'code': '42703', 'message': 'column does not exist'})`.
+class FakeError {
+  const FakeError(this.status, this.body);
+  final int status;
+  final Map<String, Object?> body;
+}
+
 /// May return a Future, to simulate a slow response.
 typedef FakeHandler = FutureOr<Object?> Function(http.Request request);
 
@@ -76,6 +84,14 @@ Future<void> initFakeSupabase([FakeHandler? handler]) async {
     httpClient: MockClient((request) async {
       fakeSupabaseRequests.add(request);
       final body = await _handler(request) ?? const <Object>[];
+      if (body is FakeError) {
+        return http.Response(
+          jsonEncode(body.body),
+          body.status,
+          headers: {'content-type': 'application/json'},
+          request: request,
+        );
+      }
       return http.Response(
         jsonEncode(body),
         200,

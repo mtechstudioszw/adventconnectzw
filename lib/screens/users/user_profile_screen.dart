@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/countries.dart';
@@ -29,6 +28,10 @@ import '../../widgets/screen_shell.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../services/seller_service.dart';
 import '../../widgets/moderation_actions.dart';
+import '../../config/share_config.dart';
+import '../../services/follow_service.dart';
+import '../../widgets/profile/profile_header.dart';
+import 'package:share_plus/share_plus.dart';
 
 /// Viewing another user's profile (not the logged-in user — that's the
 /// regular ProfileScreen). Surfaces:
@@ -72,6 +75,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   /// returns nothing for a non-discoverable profile, so this stays
   /// empty and the section renders nothing.
   List<MinistryTag> _tags = const [];
+
+  /// patch_274. Null until loaded, and stays null when following isn't
+  /// available yet — the header then leaves Follow out instead of
+  /// showing a button that can't work.
+  FollowStats? _follow;
+  bool _followBusy = false;
+
+  /// Whether the VIEWER blocked this member (for the ⋯ menu's
+  /// Block / Unblock). If they blocked the viewer, the screen never gets
+  /// this far.
+  bool _iBlocked = false;
 
   String? get _viewerId => AuthService.currentUser?.id;
   bool get _isSelf => _viewerId == widget.userId;
@@ -149,6 +163,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       }
       if (profile != null) {
         _loadMinistryTags();
+        _loadFollow();
+        if (!_isSelf) _loadBlocked();
       }
     } catch (_) {
       if (!mounted) return;
@@ -189,6 +205,228 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       _mutuals = mutual.people;
       _mutualTotal = mutual.total;
     });
+  }
+
+  Future<void> _loadFollow() async {
+    try {
+      final stats = await FollowService.stats(widget.userId);
+      if (!mounted) return;
+      setState(() => _follow = stats);
+    } catch (_) {
+      // Before patch_274 (or offline) the header simply has no follow
+      // numbers or button.
+    }
+  }
+
+  Future<void> _loadBlocked() async {
+    try {
+      final mine = await BlockService.fetchMyBlocked();
+      if (!mounted) return;
+      setState(() => _iBlocked = mine.any((b) => b.blockedId == widget.userId));
+    } catch (_) {}
+  }
+
+  /// Private accounts (patch_274) show posts to the owner, friends and
+  /// approved followers. The server enforces it; this only decides
+  /// whether to explain the empty space.
+  bool get _canSeeContent {
+    final p = _profile;
+    if (p == null) return false;
+    if (_isSelf || !p.isPrivate) return true;
+    if (_friendship?.isAccepted ?? false) return true;
+    return _follow?.state == FollowState.following;
+  }
+
+  Future<void> _toggleFollow() async {
+    final current = _follow;
+    if (current == null || _followBusy) return;
+    if (current.state != FollowState.none) {
+      final following = current.state == FollowState.following;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(
+            following ? 'Unfollow?' : 'Withdraw request?',
+            style: AppTextStyles.titleLarge.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          content: Text(
+            following
+                ? "You'll stop seeing ${_profile!.fullName}'s public posts "
+                      'in your feed. They are not told.'
+                : 'Your request to follow ${_profile!.fullName} will be '
+                      'withdrawn.',
+            style: AppTextStyles.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(
+                'Keep',
+                style: AppTextStyles.buttonText.copyWith(
+                  color: ctx.palette.text,
+                ),
+              ),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+              child: Text(following ? 'Unfollow' : 'Withdraw'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    setState(() => _followBusy = true);
+    try {
+      FollowState next;
+      if (current.state == FollowState.none) {
+        next = await FollowService.follow(widget.userId);
+      } else {
+        await FollowService.unfollow(widget.userId);
+        next = FollowState.none;
+      }
+      if (!mounted) return;
+      final wasCounted = current.state == FollowState.following;
+      final nowCounted = next == FollowState.following;
+      setState(() {
+        _followBusy = false;
+        _follow = FollowStats(
+          followers:
+              current.followers + (nowCounted ? 1 : 0) - (wasCounted ? 1 : 0),
+          following: current.following,
+          state: next,
+          followsMe: current.followsMe,
+        );
+      });
+      // Following a private account that just let you in, or leaving one,
+      // changes what the posts list may show.
+      if (nowCounted != wasCounted && _profile!.isPrivate) _loadPosts();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _followBusy = false);
+      _showError(
+        FollowService.available
+            ? 'Could not update follow. Please try again.'
+            : 'Following needs a database update before it can be used.',
+      );
+    }
+  }
+
+  Future<void> _shareProfile() async {
+    final p = _profile;
+    if (p == null) return;
+    await Share.share(
+      '${p.fullName} on Adventist Super App\n${friendShareUrl(p.id)}',
+      subject: p.fullName,
+    );
+  }
+
+  Future<void> _toggleBlock() async {
+    final name = _profile?.fullName ?? 'this member';
+    final blocking = !_iBlocked;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          blocking ? 'Block $name?' : 'Unblock $name?',
+          style: AppTextStyles.titleLarge.copyWith(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          blocking
+              ? "They won't be able to message you, follow you or see your "
+                    "posts. They aren't told."
+              : 'They will be able to find you, message you and follow you '
+                    'again.',
+          style: AppTextStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: AppTextStyles.buttonText.copyWith(color: ctx.palette.text),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: blocking ? AppColors.red : AppColors.primaryBlue,
+            ),
+            child: Text(blocking ? 'Block' : 'Unblock'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      if (blocking) {
+        await BlockService.block(widget.userId);
+      } else {
+        await BlockService.unblock(widget.userId);
+      }
+      if (!mounted) return;
+      setState(() => _iBlocked = blocking);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(blocking ? '$name blocked.' : '$name unblocked.'),
+        ),
+      );
+    } catch (_) {
+      if (mounted) _showError('Could not update. Please try again.');
+    }
+  }
+
+  Future<void> _openMoreMenu() async {
+    final palette = context.palette;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.ios_share_rounded),
+              title: const Text('Share profile'),
+              onTap: () => Navigator.pop(ctx, 'share'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.flag_outlined),
+              title: const Text('Report'),
+              onTap: () => Navigator.pop(ctx, 'report'),
+            ),
+            ListTile(
+              leading: Icon(
+                _iBlocked ? Icons.lock_open_rounded : Icons.block_rounded,
+                color: _iBlocked ? null : AppColors.red,
+              ),
+              title: Text(
+                _iBlocked ? 'Unblock' : 'Block',
+                style: TextStyle(color: _iBlocked ? null : AppColors.red),
+              ),
+              onTap: () => Navigator.pop(ctx, 'block'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    switch (choice) {
+      case 'share':
+        await _shareProfile();
+      case 'report':
+        await _reportUser();
+      case 'block':
+        await _toggleBlock();
+    }
   }
 
   Future<void> _loadMinistryTags() async {
@@ -375,20 +613,19 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHero(),
-            const SizedBox(height: 8),
-            _buildNameBlock(),
-            const SizedBox(height: 16),
-            if (!_isSelf) _buildActionToolbar(),
+            _buildTopBar(),
+            _buildHeader(),
             const SizedBox(height: 18),
             // Shared church + mutual friends, above the bio — it is the
             // context you read the rest of the profile through.
             ?_buildPeerContextStrip(),
             ?_buildMutualFriendsRow(),
-            if (_profile!.isDiscoverable)
-              ..._buildPublicSections()
+            if (!_profile!.isDiscoverable)
+              _buildPrivateNotice()
+            else if (!_canSeeContent)
+              _buildPrivateNotice(followGate: true)
             else
-              _buildPrivateNotice(),
+              ..._buildPublicSections(),
             const SizedBox(height: 32),
           ],
         ),
@@ -396,147 +633,28 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  /// Flat header + optional cover band + avatar. Mirrors the own-profile
-  /// header: no navy slab when there's no cover photo, and the back /
-  /// report controls are header chips on the scaffold colour rather than
-  /// translucent circles floating on a gradient.
-  Widget _buildHero() {
-    final cover = _profile!.coverPhotoUrl;
-    final hasCover = cover != null && cover.isNotEmpty;
+  /// Back + title row. Flat, transparent, in the normal flow (CLAUDE.md).
+  Widget _buildTopBar() {
     return FlatStatusBar(
-      child: Container(
-        // Transparent — mirrors the own-profile header. An opaque slab here
-        // covered the ambient field across the top of the screen; this sits
-        // in the normal flow, so there is nothing scrolling under it.
-        color: Colors.transparent,
-        child: SafeArea(
-          bottom: false,
-          child: Column(
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 16, 12),
+          child: Row(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 16, 0),
-                child: Row(
-                  children: [
-                    const ScreenHeroBackButton(),
-                    const Spacer(),
-                    if (!_isSelf)
-                      HeaderIconButton(
-                        icon: Icons.flag_outlined,
-                        tooltip: 'Report this profile',
-                        onTap: _reportUser,
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: hasCover ? 190 : 124,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.bottomCenter,
-                  children: [
-                    if (hasCover)
-                      Positioned(
-                        top: 0,
-                        left: 16,
-                        right: 16,
-                        height: 132,
-                        child: GestureDetector(
-                          onTap: () => FullImageViewer.show(context, cover),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: CachedImage(
-                              cover,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Container(color: context.palette.cardMuted),
-                            ),
-                          ),
-                        ),
-                      ),
-                    Positioned(
-                      bottom: 0,
-                      // Painted as a DecorationImage, NOT as a clipped child.
-                      //
-                      // This is the pattern edit_profile_screen already uses,
-                      // and it is the one that actually produces a circle.
-                      // A decoration paints its image THROUGH its own shape,
-                      // so the result is a mathematically exact circle with
-                      // the photo filling it edge to edge.
-                      //
-                      // The previous version put the image inside as a child
-                      // and relied on `clipBehavior: Clip.antiAlias` on the
-                      // Container to round it off. That clip only
-                      // APPROXIMATES the curve — with a 5px border over it,
-                      // the straight segments show, which is the founder's
-                      // "it looks like a pentagon with sides" — and anywhere
-                      // the child did not exactly fill the box, the
-                      // Container's own colour showed through as the dark
-                      // gaps in the corners.
-                      //
-                      // The initials stay as the CHILD. A DecorationImage
-                      // paints over its child, so the initials show while the
-                      // photo loads and remain if it never does — which also
-                      // replaces the errorBuilder this pattern cannot take.
-                      child: GestureDetector(
-                        onTap: _hasAvatarPhoto
-                            ? () => FullImageViewer.show(
-                                context,
-                                _profile!.profilePhotoUrl,
-                              )
-                            : null,
-                        child: Container(
-                          width: 118,
-                          height: 118,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            // The blue belongs to the CIRCLE, not to a child
-                            // inside it. It used to be painted by
-                            // `_initialAvatar()` on an unshaped, unsized
-                            // Container — and `alignment: Alignment.center`
-                            // here hands a child LOOSE constraints, so that
-                            // Container shrank to the size of the letter and
-                            // painted a blue SQUARE floating in the middle of
-                            // the ring. That is the founder's "it looks like a
-                            // square, not a circle" (25 Aug 2026). Same fix as
-                            // profile_screen's own avatar, which never had the
-                            // bug because it fills the circle from here.
-                            gradient: _hasAvatarPhoto
-                                ? null
-                                : AppColors.primaryGradient,
-                            color: _hasAvatarPhoto
-                                ? context.palette.cardMuted
-                                : null,
-                            border: Border.all(
-                              color: context.palette.scaffoldBg,
-                              width: 5,
-                            ),
-                            image: _hasAvatarPhoto
-                                ? DecorationImage(
-                                    image: CachedNetworkImageProvider(
-                                      photoUrlAtSize(
-                                        _profile!.profilePhotoUrl,
-                                        320,
-                                      ),
-                                      cacheManager: adventImageCacheManager,
-                                    ),
-                                    fit: BoxFit.cover,
-                                  )
-                                : null,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.10),
-                                blurRadius: 18,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
-                          ),
-                          child: _hasAvatarPhoto ? null : _initialAvatar(),
-                        ),
-                      ),
-                    ),
-                  ],
+              const ScreenHeroBackButton(),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _profile!.username != null
+                      ? '@${_profile!.username}'
+                      : _profile!.fullName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: context.palette.text,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
@@ -544,6 +662,183 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ),
       ),
     );
+  }
+
+  String get _initials {
+    final words = _profile!.fullName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    return words.isEmpty
+        ? '?'
+        : words.take(2).map((w) => w[0].toUpperCase()).join();
+  }
+
+  Widget _buildHeader() {
+    final p = _profile!;
+    final cover = p.coverPhotoUrl;
+    final photo = p.profilePhotoUrl;
+    final follow = _follow;
+    final age = p.age;
+    final place = <String?>[
+      p.city,
+      Countries.nameOf(p.country),
+    ].where((s) => (s ?? '').isNotEmpty).join(', ');
+    // A non-discoverable profile shows name and age only — that rule
+    // predates the redesign and still holds.
+    final open = p.isDiscoverable;
+
+    String? note;
+    if (!_isSelf) {
+      if (_friendship?.isAccepted ?? false) {
+        note = follow?.followsMe == true ? 'Friends · Follows you' : 'Friends';
+      } else if (follow?.followsMe == true) {
+        note = 'Follows you';
+      }
+    }
+
+    void openList(String tab) => context.pushNamed(
+      'follows',
+      pathParameters: {'userId': p.id},
+      queryParameters: {'tab': tab, 'name': p.fullName},
+    );
+
+    return ProfileHeader(
+      name: p.fullName,
+      initials: _initials,
+      username: p.username,
+      photoUrl: photo,
+      coverUrl: open ? cover : null,
+      bio: open ? p.bio : null,
+      verified: p.showsVerifiedTick,
+      relationNote: note,
+      badges: [
+        if (p.isBusiness)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              'Business',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.primaryBlue,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        if (p.isPrivate)
+          Icon(
+            Icons.lock_outline_rounded,
+            size: 16,
+            color: context.palette.textMuted,
+          ),
+      ],
+      facts: [
+        if (open && (p.churchName ?? '').isNotEmpty)
+          ProfileFact(Icons.church_outlined, p.churchName!),
+        if (open && place.isNotEmpty)
+          ProfileFact(
+            Icons.location_on_outlined,
+            '${Countries.flagOf(p.country)} $place'.trim(),
+          ),
+        if (open && p.website != null)
+          ProfileFact(
+            Icons.link_rounded,
+            websiteLabel(p.website!),
+            onTap: () => openProfileWebsite(p.website!),
+          ),
+        if (age != null && (_isSelf || p.showAge))
+          ProfileFact(Icons.cake_outlined, '$age years old'),
+        if (open && p.joinedAt != null)
+          ProfileFact(
+            Icons.calendar_today_outlined,
+            'Joined ${formatJoinDate(p.joinedAt!)}',
+          ),
+      ],
+      stats: [
+        ProfileStat(
+          _posts.length == 1 ? 'Post' : 'Posts',
+          open && _canSeeContent ? _posts.length : null,
+        ),
+        ProfileStat(
+          'Followers',
+          follow?.followers,
+          onTap: () => openList('followers'),
+        ),
+        ProfileStat(
+          'Following',
+          follow?.following,
+          onTap: () => openList('following'),
+        ),
+      ],
+      onAvatarTap: (photo ?? '').isEmpty
+          ? null
+          : () => FullImageViewer.show(context, photoUrlAtSize(photo, 1024)),
+      onCoverTap: (cover ?? '').isEmpty
+          ? null
+          : () => FullImageViewer.show(context, cover),
+      actions: _isSelf ? _selfActions() : _visitorActions(),
+    );
+  }
+
+  /// Opened your own profile through search or a link: send them to the
+  /// real one rather than offering to follow yourself.
+  List<Widget> _selfActions() => [
+    ProfileActionButton(
+      label: 'Open my profile',
+      icon: Icons.person_outline,
+      primary: true,
+      onTap: () => context.goNamed('profile'),
+    ),
+  ];
+
+  List<Widget> _visitorActions() {
+    final follow = _follow;
+    final f = _friendship;
+    final incoming =
+        f != null && _viewerId != null && f.isIncomingPendingFor(_viewerId!);
+    final (String friendLabel, VoidCallback friendTap) = (() {
+      if (f == null) return ('Add friend', _addFriend);
+      if (f.isAccepted) return ('Friends', _cancelOrUnfriend);
+      if (incoming) return ('Accept', _acceptIncoming);
+      return ('Requested', _cancelOrUnfriend);
+    })();
+    return [
+      if (follow != null)
+        ProfileActionButton(
+          label: switch (follow.state) {
+            FollowState.none => follow.followsMe ? 'Follow back' : 'Follow',
+            FollowState.requested => 'Requested',
+            FollowState.following => 'Following',
+          },
+          primary: follow.state == FollowState.none,
+          busy: _followBusy,
+          onTap: _toggleFollow,
+        ),
+      ProfileActionButton(
+        label: friendLabel,
+        // Primary when following isn't available, so the row still has
+        // one clear first action.
+        primary: follow == null && (f == null || incoming),
+        icon: follow == null ? Icons.person_add_alt_1 : null,
+        busy: _friendBusy,
+        onTap: friendTap,
+      ),
+      ProfileActionButton.icon(
+        icon: Icons.chat_bubble_outline,
+        label: 'Message',
+        onTap: _openChat,
+      ),
+      ProfileActionButton.icon(
+        icon: Icons.more_horiz,
+        label: 'More',
+        onTap: _openMoreMenu,
+      ),
+    ];
   }
 
   /// Overlapping faces + names of the friends you have in common, the way
@@ -598,8 +893,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               fit: BoxFit.cover,
                               width: 28,
                               height: 28,
-                              errorBuilder: (_, _, _) =>
-                                  Center(child: _miniInitial(shown[i].fullName)),
+                              errorBuilder: (_, _, _) => Center(
+                                child: _miniInitial(shown[i].fullName),
+                              ),
                             ),
                     ),
                   ),
@@ -706,209 +1002,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  bool get _hasAvatarPhoto => (_profile?.profilePhotoUrl ?? '').isNotEmpty;
-
-  /// Just the letters. The blue circle behind them is the avatar Container
-  /// itself — see the note on its `gradient`. Nothing here may carry a
-  /// decoration of its own, or it paints its own shape inside the ring.
-  ///
-  /// One initial per word, up to two ("Anesu Chirwa" → "AC"), because that
-  /// is what a 118px circle has room for and what everyone else's photo
-  /// slot shows. [FittedBox] guarantees the pair stays inside the circle at
-  /// any system font scale rather than clipping against the ring.
-  Widget _initialAvatar() {
-    final name = _profile?.fullName.trim() ?? '';
-    final words = name
-        .split(RegExp(r'\s+'))
-        .where((w) => w.isNotEmpty)
-        .toList();
-    final initials = words.isEmpty
-        ? '?'
-        : words.take(2).map((w) => w[0].toUpperCase()).join();
-    return Padding(
-      // Keeps the letters off the inside of the 5px ring.
-      padding: const EdgeInsets.all(14),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Text(
-          initials,
-          textAlign: TextAlign.center,
-          style: AppTextStyles.displayLarge.copyWith(
-            color: AppColors.white,
-            fontWeight: FontWeight.w700,
-            fontSize: 42,
-            height: 1,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNameBlock() {
-    final age = _profile!.age;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Text(
-                  _profile!.fullName,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.displayMedium.copyWith(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 22,
-                  ),
-                ),
-              ),
-              if (_profile!.showsVerifiedTick) ...[
-                const SizedBox(width: 6),
-                const Icon(
-                  Icons.verified,
-                  color: AppColors.goldAccent,
-                  size: 20,
-                ),
-              ],
-              if (_profile!.isBusiness) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    'Business',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          if (age != null && (_isSelf || _profile!.showAge)) ...[
-            const SizedBox(height: 4),
-            Text(
-              '$age years old',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: context.palette.textMuted,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionToolbar() {
-    final f = _friendship;
-    final isIncomingPending =
-        f != null && _viewerId != null && f.isIncomingPendingFor(_viewerId!);
-
-    final (String label, IconData icon, VoidCallback? onTap) = (() {
-      if (_friendBusy) return ('Working…', Icons.hourglass_empty, null);
-      if (f == null) return ('Add friend', Icons.person_add_alt_1, _addFriend);
-      if (f.isAccepted) return ('Friends', Icons.check, _cancelOrUnfriend);
-      if (isIncomingPending) return ('Accept', Icons.check, _acceptIncoming);
-      return ('Requested', Icons.hourglass_top_rounded, _cancelOrUnfriend);
-    })();
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 4,
-            child: _PrimaryButton(
-              icon: icon,
-              label: label,
-              onTap: onTap,
-              highlighted: f?.isAccepted ?? false,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            flex: 1,
-            child: _SquareButton(
-              icon: Icons.chat_bubble_outline,
-              onTap: _openChat,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-
   List<Widget> _buildPublicSections() {
     return [
-      if ((_profile!.bio ?? '').trim().isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text(
-            _profile!.bio!.trim(),
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(height: 1.5),
-          ),
-        ),
-      const SizedBox(height: 14),
-      if ((_profile!.city ?? '').isNotEmpty ||
-          (_profile!.province ?? '').isNotEmpty ||
-          (_profile!.country ?? '').isNotEmpty ||
-          (_profile!.churchName ?? '').isNotEmpty ||
-          _profile!.joinedAt != null)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if ((_profile!.churchName ?? '').isNotEmpty)
-                _InfoChip(
-                  icon: Icons.church_outlined,
-                  label: _profile!.churchName!,
-                ),
-              // One location chip, flag-led. The flag replaces the pin
-              // icon rather than sitting beside it — on a global app the
-              // country IS the location signal, and a pin plus a flag is
-              // two marks saying the same thing.
-              //
-              // Province is deliberately dropped from this line. It only
-              // ever appeared next to city, where for most Zimbabwean
-              // members it rendered "Harare, Harare"; the country is the
-              // half that actually tells you something now.
-              if ((_profile!.city ?? '').isNotEmpty ||
-                  (_profile!.country ?? '').isNotEmpty)
-                _InfoChip(
-                  emoji: Countries.flagOf(_profile!.country),
-                  icon: Icons.location_on_outlined,
-                  label: <String?>[
-                    _profile!.city,
-                    Countries.nameOf(_profile!.country),
-                  ].where((s) => (s ?? '').isNotEmpty).join(', '),
-                ),
-              if (_profile!.joinedAt != null)
-                _InfoChip(
-                  icon: Icons.calendar_today_outlined,
-                  label: 'Joined ${formatJoinDate(_profile!.joinedAt!)}',
-                ),
-            ],
-          ),
-        ),
       // Ministry & gifts (patch_168) — read-only here. Turns "who is
       // this" into "who can help with this", which is the question a
       // church directory exists to answer.
       if (_tags.isNotEmpty) ...[
-        const SizedBox(height: 20),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: MinistrySection(tags: _tags, isOwn: false),
@@ -965,8 +1064,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   contentId: post.id,
                   contentLabel: 'this post',
                 ),
-                onAdminModerate:
-                    _isSuperAdmin ? () => _adminModeratePost(post) : null,
+                onAdminModerate: _isSuperAdmin
+                    ? () => _adminModeratePost(post)
+                    : null,
               ),
           ],
         ),
@@ -1032,7 +1132,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  Widget _buildPrivateNotice() {
+  Widget _buildPrivateNotice({bool followGate = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Container(
@@ -1051,15 +1151,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'This profile is private',
+              followGate
+                  ? 'This account is private'
+                  : 'This profile is private',
               style: AppTextStyles.titleMedium.copyWith(
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              'Only their name and age are shown. Send a friend request '
-              'to see their bio, posts and more.',
+              followGate
+                  ? 'Follow this account or become friends to see their '
+                        'posts.'
+                  : 'Only their name and age are shown. Send a friend '
+                        'request to see their bio, posts and more.',
               textAlign: TextAlign.center,
               style: AppTextStyles.bodySmall.copyWith(
                 color: context.palette.textMuted,
@@ -1079,134 +1184,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       context,
       imageUrl: url,
       heroTag: 'post_image_${post.id}',
-    );
-  }
-}
-
-class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.highlighted = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  final bool highlighted;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            gradient: highlighted ? null : AppColors.primaryGradient,
-            color: highlighted ? context.palette.cardMuted : null,
-            borderRadius: BorderRadius.circular(12),
-            border: highlighted
-                ? Border.all(color: context.palette.divider)
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                color: highlighted ? context.palette.text : AppColors.white,
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: AppTextStyles.buttonText.copyWith(
-                  color: highlighted ? context.palette.text : AppColors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SquareButton extends StatelessWidget {
-  const _SquareButton({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: context.palette.cardMuted,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: context.palette.divider),
-          ),
-          child: Icon(icon, color: AppColors.primaryBlue, size: 20),
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({this.icon, this.emoji, required this.label})
-      : assert(icon != null || emoji != null, 'chip needs a leading mark');
-
-  final IconData? icon;
-
-  /// Leading emoji, used instead of [icon] for the country chip. A flag
-  /// carries the country faster than any icon could, and it means adding
-  /// a country costs no asset — see `Country.flag`.
-  final String? emoji;
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: context.palette.divider),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (emoji != null)
-            Text(emoji!, style: const TextStyle(fontSize: 13))
-          else
-            Icon(icon, size: 13, color: AppColors.primaryBlue),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: AppTextStyles.labelMedium.copyWith(
-              color: context.palette.text,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

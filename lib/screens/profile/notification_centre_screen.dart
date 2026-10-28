@@ -226,6 +226,17 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       case 'seller':
         context.pushNamed('seller_dashboard');
         return true;
+      case 'user':
+        // patch_274 follows: reference_id is the OTHER member. A request
+        // opens the list where it can be approved; a new follower or an
+        // approval opens their profile.
+        if (n.type == 'follow_request') {
+          context.pushNamed('follow_requests');
+          return true;
+        }
+        if (id.isEmpty) return false;
+        context.pushNamed('user_profile', pathParameters: {'userId': id});
+        return true;
       case 'church_admin':
         context.pushNamed('admin_login');
         return true;
@@ -573,7 +584,9 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
     }
     if (ref == 'friend_request' ||
         ref == 'friendship' ||
-        type.contains('friend')) {
+        ref == 'user' ||
+        type.contains('friend') ||
+        type.contains('follow')) {
       return _NotifCategory.social;
     }
     if (ref == 'announcement' ||
@@ -593,7 +606,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       case _NotifCategory.messages:
         return 'Messages';
       case _NotifCategory.social:
-        return 'Friends & requests';
+        return 'Friends & followers';
       case _NotifCategory.engagement:
         return 'Likes & comments';
       case _NotifCategory.announcements:
@@ -651,6 +664,9 @@ class _NotificationRow extends StatelessWidget {
         return Icons.play_circle_outline;
       case 'friend_accepted':
       case 'social':
+      case 'new_follower':
+      case 'follow_request':
+      case 'follow_approved':
         return Icons.person_add_alt_outlined;
       case 'announcement':
       case 'announcement_urgent':

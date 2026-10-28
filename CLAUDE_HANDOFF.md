@@ -397,6 +397,14 @@ to so those batches don't redo or overlook it:
   decisions needing approval, then wait for decisions.
 
 ### Resume point (exact)
+**Major redesign brief governs (docs/REDESIGN_PLAN.md).** Stages 1–3 code
+done (28 Oct 2026). Stage 3 = shared `ProfileHeader`
+(lib/widgets/profile/profile_header.dart) on both profile screens,
+one-way follows (`FollowService`, patch_274), Followers / Following /
+Requests screen, Edit profile Website + Private account, post-menu
+Follow/Unfollow. **Next: Stage 4 — Organization Pages (patch_275).**
+
+Older note, kept for the record:
 **Batch 2 is IN PROGRESS (awaiting owner device check). Next: Batch 3 — Library information architecture &
 design** (see the master prompt). Owner items from the Batch 2 report
 (patch_270 review, Supabase region, repo missing the orders schema) are
@@ -414,6 +422,11 @@ Batch 2 items that were planned (kept for the record):
 ---
 
 ## 5. Pending owner actions
+
+0. **Run patches 270–274 in the Supabase SQL editor, in order.** The app
+   degrades honestly without them (features say a database update is
+   needed), but Save/Hide (273), moderation hide + appeal (272) and
+   following/private accounts (274) only work once they run.
 
 1. **Run `database/patch_269_country_metadata_resync.sql`** in Supabase
    (preview query first). Repairs members whose auth metadata kept a

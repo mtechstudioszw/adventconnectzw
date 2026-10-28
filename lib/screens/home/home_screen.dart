@@ -34,6 +34,7 @@ import '../../services/quiz_home_signal.dart';
 import '../../services/devotion_service.dart';
 import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
+import '../../services/follow_service.dart';
 import '../../services/force_update_service.dart';
 import '../../services/job_service.dart';
 import '../../services/library_service.dart';
@@ -248,6 +249,7 @@ class _HomeScreenState extends State<HomeScreen>
     _postChangesSub = FeedService.postChanges.listen(_onPostChange);
     FeedService.hiddenPostIds.addListener(_onHiddenChanged);
     FeedService.loadSavedAndHidden();
+    FollowService.loadMyFollowing();
     // Tapping Home while already on Home returns to the top — the only way
     // back up from an endless feed. The shared island calls this.
     TabShell.registerReselect(TabShell.homeIndex, _scrollToTop);

@@ -12,6 +12,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../../services/feed_service.dart';
+import '../../services/follow_service.dart';
 import '../cached_image.dart';
 import '../expandable_text.dart';
 import '../motion/pressable.dart';
@@ -102,10 +103,7 @@ class _PostCardState extends State<PostCard>
   @override
   void initState() {
     super.initState();
-    _bloom = AnimationController(
-      vsync: this,
-      duration: AppMotion.celebrate,
-    );
+    _bloom = AnimationController(vsync: this, duration: AppMotion.celebrate);
   }
 
   @override
@@ -115,7 +113,8 @@ class _PostCardState extends State<PostCard>
   }
 
   Post get post => widget.post;
-  bool get _isOwner => widget.viewerId != null && widget.viewerId == post.authorId;
+  bool get _isOwner =>
+      widget.viewerId != null && widget.viewerId == post.authorId;
   List<String> get _images => post.imageUrls;
 
   void _select(PostReaction? reaction) {
@@ -146,7 +145,10 @@ class _PostCardState extends State<PostCard>
   Future<void> _openReactionTray() async {
     if (widget.onReactionSelected == null) return;
     HapticFeedback.selectionClick();
-    final chosen = await showReactionTray(context, current: post.viewerReaction);
+    final chosen = await showReactionTray(
+      context,
+      current: post.viewerReaction,
+    );
     if (!mounted || chosen == null) return;
     // `clear` comes back as a sentinel so "tapped my current reaction" can
     // mean remove rather than re-apply.
@@ -155,7 +157,9 @@ class _PostCardState extends State<PostCard>
 
   Future<void> _share() async {
     final text = (post.body ?? '').trim();
-    final author = post.isChurchPost ? post.churchName!.trim() : post.authorName;
+    final author = post.isChurchPost
+        ? post.churchName!.trim()
+        : post.authorName;
     // A PUBLIC post now shares a real link that unfurls an OG preview card in
     // WhatsApp, the way event and product links already do (the phase-2 TODO
     // that used to sit here).
@@ -309,26 +313,69 @@ class _PostCardState extends State<PostCard>
           ),
           ValueListenableBuilder<Set<String>>(
             valueListenable: FeedService.savedPostIds,
-            builder: (context, savedIds, _) => _PostMenu(
-              isOwner: _isOwner,
-              isFriendsOnly: post.visibility == PostVisibility.friendsOnly,
-              saved: savedIds.contains(post.id),
-              onToggleSaved: _toggleSaved,
-              onCopyLink: _copyLink,
-              onHide: _isOwner ? null : _hide,
-              onEdit: widget.onEdit,
-              onDelete: widget.onDelete,
-              onToggleVisibility: widget.onToggleVisibility,
-              onSaveImage: _images.isNotEmpty ? widget.onSaveImage : null,
-              photoCount: _images.length,
-              onReport: widget.onReport,
-              onAdminModerate: widget.onAdminModerate,
-              isModerated: post.isModerated,
-            ),
+            builder: (context, savedIds, _) =>
+                ValueListenableBuilder<Set<String>?>(
+                  valueListenable: FollowService.followingIds,
+                  builder: (context, followingIds, _) => _PostMenu(
+                    isOwner: _isOwner,
+                    authorFirstName: _authorFirstName,
+                    // Null = not known yet (or following isn't available), and
+                    // the item is left out rather than guessed.
+                    followsAuthor: _isOwner || followingIds == null
+                        ? null
+                        : followingIds.contains(post.authorId),
+                    onToggleFollow: _toggleFollow,
+                    isFriendsOnly:
+                        post.visibility == PostVisibility.friendsOnly,
+                    saved: savedIds.contains(post.id),
+                    onToggleSaved: _toggleSaved,
+                    onCopyLink: _copyLink,
+                    onHide: _isOwner ? null : _hide,
+                    onEdit: widget.onEdit,
+                    onDelete: widget.onDelete,
+                    onToggleVisibility: widget.onToggleVisibility,
+                    onSaveImage: _images.isNotEmpty ? widget.onSaveImage : null,
+                    photoCount: _images.length,
+                    onReport: widget.onReport,
+                    onAdminModerate: widget.onAdminModerate,
+                    isModerated: post.isModerated,
+                  ),
+                ),
           ),
         ],
       ),
     );
+  }
+
+  String get _authorFirstName {
+    final first = post.authorName.trim().split(RegExp(r'\s+')).first;
+    return first.isEmpty ? 'this member' : first;
+  }
+
+  /// One-way follow from the post itself (patch_274). A private account
+  /// answers "requested", and the toast says so.
+  Future<void> _toggleFollow() async {
+    final following =
+        FollowService.followingIds.value?.contains(post.authorId) ?? false;
+    try {
+      if (following) {
+        await FollowService.unfollow(post.authorId);
+        _toast('Unfollowed $_authorFirstName.');
+      } else {
+        final state = await FollowService.follow(post.authorId);
+        _toast(
+          state == FollowState.requested
+              ? 'Follow request sent to $_authorFirstName.'
+              : 'Following $_authorFirstName.',
+        );
+      }
+    } catch (_) {
+      _toast(
+        FollowService.available
+            ? "Couldn't update. Try again."
+            : 'Following needs a database update (patch_274).',
+      );
+    }
   }
 
   void _toast(String message, {SnackBarAction? action}) {
@@ -343,7 +390,9 @@ class _PostCardState extends State<PostCard>
     final saving = !FeedService.savedPostIds.value.contains(post.id);
     try {
       await FeedService.setSaved(post.id, saving);
-      _toast(saving ? 'Saved. Find it in Profile → Saved.' : 'Removed from Saved.');
+      _toast(
+        saving ? 'Saved. Find it in Profile → Saved.' : 'Removed from Saved.',
+      );
     } catch (_) {
       _toast(
         !FeedService.savedPostsAvailable
@@ -526,10 +575,10 @@ class _PostCardState extends State<PostCard>
   }
 
   static IconData _glyphFor(PostReaction r) => switch (r) {
-        PostReaction.like => Icons.favorite,
-        PostReaction.amen => Icons.volunteer_activism,
-        PostReaction.praying => Icons.front_hand,
-      };
+    PostReaction.like => Icons.favorite,
+    PostReaction.amen => Icons.volunteer_activism,
+    PostReaction.praying => Icons.front_hand,
+  };
 
   static String _formatTimeAgo(DateTime when) {
     final diff = DateTime.now().difference(when);
@@ -688,10 +737,7 @@ class _NaturalMediaState extends State<_NaturalMedia> {
             fit: StackFit.expand,
             children: [
               if (!multi)
-                Hero(
-                  tag: widget.heroTag,
-                  child: _photo(widget.urls.first),
-                )
+                Hero(tag: widget.heroTag, child: _photo(widget.urls.first))
               else
                 PageView.builder(
                   controller: _pc,
@@ -762,17 +808,17 @@ class _NaturalMediaState extends State<_NaturalMedia> {
   }
 
   Widget _photo(String url) => CachedImage(
-        url,
-        fit: BoxFit.cover,
-        errorBuilder: (ctx, _, _) => Container(
-          color: ctx.palette.cardMuted,
-          alignment: Alignment.center,
-          child: const Icon(
-            Icons.broken_image_outlined,
-            color: AppColors.primaryBlue,
-          ),
-        ),
-      );
+    url,
+    fit: BoxFit.cover,
+    errorBuilder: (ctx, _, _) => Container(
+      color: ctx.palette.cardMuted,
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.broken_image_outlined,
+        color: AppColors.primaryBlue,
+      ),
+    ),
+  );
 }
 
 class _CountPill extends StatelessWidget {
@@ -1107,12 +1153,7 @@ class _ActionButton extends StatelessWidget {
               switchOutCurve: AppMotion.easeIn,
               transitionBuilder: (child, animation) =>
                   ScaleTransition(scale: animation, child: child),
-              child: Icon(
-                icon,
-                key: ValueKey(icon),
-                size: 18,
-                color: color,
-              ),
+              child: Icon(icon, key: ValueKey(icon), size: 18, color: color),
             ),
             const SizedBox(width: AppSpace.sm),
             Flexible(
@@ -1142,6 +1183,9 @@ class _ActionButton extends StatelessWidget {
 class _PostMenu extends StatelessWidget {
   const _PostMenu({
     required this.isOwner,
+    required this.authorFirstName,
+    required this.followsAuthor,
+    required this.onToggleFollow,
     required this.isFriendsOnly,
     required this.saved,
     required this.onToggleSaved,
@@ -1158,6 +1202,9 @@ class _PostMenu extends StatelessWidget {
   });
 
   final bool isOwner;
+  final String authorFirstName;
+  final bool? followsAuthor;
+  final VoidCallback onToggleFollow;
   final bool isFriendsOnly;
   final bool saved;
   final VoidCallback onToggleSaved;
@@ -1198,8 +1245,9 @@ class _PostMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final photosLabel =
-        photoCount > 1 ? 'Save all $photoCount photos' : 'Save to gallery';
+    final photosLabel = photoCount > 1
+        ? 'Save all $photoCount photos'
+        : 'Save to gallery';
     return PopupMenuButton<String>(
       icon: Icon(Icons.more_horiz, color: context.palette.textMuted, size: 20),
       tooltip: isOwner ? 'Manage post' : 'More',
@@ -1214,6 +1262,8 @@ class _PostMenu extends StatelessWidget {
             onCopyLink();
           case 'hide':
             onHide?.call();
+          case 'follow':
+            onToggleFollow();
           case 'edit':
             onEdit?.call();
           case 'visibility':
@@ -1243,8 +1293,20 @@ class _PostMenu extends StatelessWidget {
               isFriendsOnly ? Icons.public : Icons.people_alt_outlined,
               isFriendsOnly ? 'Make public' : 'Show friends only',
             ),
-        ] else if (onHide != null)
-          _item('hide', Icons.visibility_off_outlined, 'Hide post'),
+        ] else ...[
+          if (followsAuthor != null)
+            _item(
+              'follow',
+              followsAuthor!
+                  ? Icons.person_remove_outlined
+                  : Icons.person_add_alt_1_outlined,
+              followsAuthor!
+                  ? 'Unfollow $authorFirstName'
+                  : 'Follow $authorFirstName',
+            ),
+          if (onHide != null)
+            _item('hide', Icons.visibility_off_outlined, 'Hide post'),
+        ],
         if (onSaveImage != null)
           _item('save_image', Icons.download_outlined, photosLabel),
         if (isOwner && onDelete != null)
@@ -1264,4 +1326,3 @@ class _PostMenu extends StatelessWidget {
     );
   }
 }
-

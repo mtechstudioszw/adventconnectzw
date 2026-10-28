@@ -15,7 +15,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/auth_service.dart';
 import '../../services/premium_service.dart';
 import '../../widgets/premium/premium_badge.dart';
-import '../../widgets/verified_tick.dart';
 import '../../utils/date_format.dart';
 import '../../services/cache_service.dart';
 import '../../services/church_service.dart';
@@ -44,6 +43,12 @@ import '../../utils/photo_url.dart';
 import '../../widgets/home/composer_sheet.dart';
 import '../../theme/app_tokens.dart';
 import '../widgets/tab_shell.dart';
+import '../../config/countries.dart';
+import '../../config/share_config.dart';
+import '../../services/follow_service.dart';
+import '../../services/user_profile_service.dart';
+import '../../widgets/profile/profile_header.dart';
+import 'package:share_plus/share_plus.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -71,10 +76,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isVerified = false;
   int _tabIndex = 0;
 
+  /// patch_274 follower numbers. Null until loaded / before the patch, in
+  /// which case the header leaves those cells out rather than show zeros.
+  FollowStats? _follow;
+
+  /// The public-facing row (username, website, private flag) — auth
+  /// metadata doesn't carry these.
+  PublicUserProfile? _publicRow;
+
   @override
   void initState() {
     super.initState();
     _bootstrap();
+    _loadPublicRow();
+    FollowService.revision.addListener(_loadPublicRow);
     _loadAdminRoles();
     _loadVerified();
     _loadMinistryTags();
@@ -85,6 +100,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void dispose() {
     TabShell.activeIndex.removeListener(_onTabChanged);
+    FollowService.revision.removeListener(_loadPublicRow);
     _postChangesSub?.cancel();
     super.dispose();
   }
@@ -257,8 +273,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _loadPublicRow() async {
+    final me = AuthService.currentUser?.id;
+    if (me == null) return;
+    try {
+      final row = await UserProfileService.fetch(me);
+      if (mounted && row != null) setState(() => _publicRow = row);
+    } catch (_) {}
+    try {
+      final stats = await FollowService.stats(me);
+      if (mounted) setState(() => _follow = stats);
+    } catch (_) {}
+  }
+
+  Future<void> _shareProfile() async {
+    final me = AuthService.currentUser?.id;
+    if (me == null) return;
+    await Share.share(
+      '${_displayName()} on Adventist Super App\n${friendShareUrl(me)}',
+      subject: _displayName(),
+    );
+  }
+
   Future<void> _bootstrap() async {
     _hydrateFromCache();
+    unawaited(_loadPublicRow());
     final viewerId = AuthService.currentUser?.id;
     try {
       final results = await Future.wait([
@@ -386,28 +425,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         .toUpperCase();
   }
 
-  /// The initials glyph for the big profile avatar. One builder for both
-  /// the "no photo" and the "photo failed" paths so they can't drift.
-  Widget _avatarInitials() => Text(
-    _initials(),
-    textAlign: TextAlign.center,
-    style: AppTextStyles.displayMedium.copyWith(
-      color: AppColors.white,
-      fontWeight: FontWeight.w700,
-      fontSize: 38,
-    ),
-  );
-
   String _bio() {
     final user = AuthService.currentUser;
     final meta = user?.userMetadata ?? const {};
     final bio = (meta['bio'] as String?)?.trim() ?? '';
     if (bio.isNotEmpty) return bio;
     return 'Add a bio to tell the community about yourself.';
-  }
-
-  String _email() {
-    return AuthService.currentUser?.email ?? '';
   }
 
   /// The date this account joined, from the Supabase auth user's created_at.
@@ -529,24 +552,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             children: [
               StaggeredReveal(index: 0, rise: 14, child: _buildHeader()),
-              StaggeredReveal(
-                index: 1,
-                child: Column(
-                  children: [
-                    _buildIdentity(),
-                    const SizedBox(height: 10),
-                    _buildInlineStats(),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              StaggeredReveal(
-                index: 2,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _buildActionToolbar(),
-                ),
-              ),
+              StaggeredReveal(index: 1, child: _buildProfileHeader()),
               const SizedBox(height: 18),
               // Ministry & gifts (patch_168) — what you serve in and
               // what you bring. Sits above the tabs because it is
@@ -600,66 +606,136 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return _myChurches.isEmpty ? null : _myChurches.first.name;
   }
 
-  Widget _buildInlineStats() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: ScreenCard(
-        padding: EdgeInsets.zero,
-        child: Row(
-          children: [
-            _StatCell(
-              value: _friendCount,
-              label: 'Friends',
-              onTap: () => context.pushNamed('friends'),
-            ),
-            _StatDivider(),
-            _StatCell(
-              value: _myPosts.length,
-              label: _myPosts.length == 1 ? 'Post' : 'Posts',
-              onTap: () => setState(() => _tabIndex = 0),
-            ),
-            // The home church moved out of this strip (28 Oct 2026) to its
-            // own line under the name — see _buildIdentity. Set as a
-            // "stat", a church name sat between numbers and an unset one
-            // read "Not set CHURCH".
-            _StatDivider(),
-            // Kept from the old strip: "Going" reads as an RSVP count,
-            // which is what it is. "Events" was being misread as
-            // authorship every time someone RSVP'd to one event.
-            _StatCell(
-              value: _eventsGoing,
-              label: 'Going',
-              onTap: () => context.pushNamed('events'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  /// The shared profile header (also used for other people's profiles),
+  /// fed from this screen's own data. Every number is real: posts and
+  /// friends from loaded data, followers from patch_274 — left out, not
+  /// zeroed, when that isn't available.
+  Widget _buildProfileHeader() {
+    final row = _publicRow;
+    final follow = _follow;
+    final church = _homeChurchName;
+    final age = _age();
+    final place = <String?>[
+      row?.city,
+      Countries.nameOf(row?.country),
+    ].where((s) => (s ?? '').isNotEmpty).join(', ');
+    final me = AuthService.currentUser?.id ?? '';
+    final meta = AuthService.currentUser?.userMetadata ?? const {};
+    final bio = (meta['bio'] as String?)?.trim();
 
-  Widget _buildActionToolbar() {
-    return Row(
-      children: [
-        Expanded(
-          flex: 4,
-          child: _ToolbarButton(
-            icon: Icons.edit_outlined,
+    void openList(String tab) => context.pushNamed(
+      'follows',
+      pathParameters: {'userId': me},
+      queryParameters: {'tab': tab},
+    );
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: PremiumService.isPremium,
+      builder: (context, isPremium, _) => ProfileHeader(
+        name: _displayName(),
+        initials: _initials(),
+        username: row?.username,
+        photoUrl: _profilePhotoUrl(),
+        coverUrl: _coverPhotoUrl(),
+        bio: bio,
+        verified: _isVerified,
+        // Premium sits AFTER the verified tick: verification says who you
+        // are, premium says you support the app — paid is not verified.
+        badges: [
+          if (isPremium) const PremiumBadge(size: 20),
+          if (row?.isPrivate ?? false)
+            Icon(
+              Icons.lock_outline_rounded,
+              size: 16,
+              color: context.palette.textMuted,
+            ),
+        ],
+        completion: _profileCompletion(),
+        onAvatarTap: () {
+          final photo = _profilePhotoUrl();
+          // The ring means "unfinished": tapping it goes to finish it.
+          if (photo == null || _profileCompletion() < 1.0) {
+            context.pushNamed('edit_profile');
+          } else {
+            FullImageViewer.show(context, photoUrlAtSize(photo, 1024));
+          }
+        },
+        onCoverTap: _coverPhotoUrl() == null
+            ? null
+            : () => FullImageViewer.show(context, _coverPhotoUrl()),
+        facts: [
+          ProfileFact(
+            Icons.church_outlined,
+            church ?? 'Add your church',
+            highlight: church == null,
+            onTap: () => setState(() => _tabIndex = 3),
+          ),
+          if (place.isNotEmpty)
+            ProfileFact(
+              Icons.location_on_outlined,
+              '${Countries.flagOf(row?.country)} $place'.trim(),
+            ),
+          if (row?.website != null)
+            ProfileFact(
+              Icons.link_rounded,
+              websiteLabel(row!.website!),
+              onTap: () => openProfileWebsite(row.website!),
+            ),
+          if (_isBirthdayToday())
+            const ProfileFact(
+              Icons.cake_outlined,
+              'Happy birthday!',
+              highlight: true,
+            )
+          else if (age != null)
+            ProfileFact(Icons.cake_outlined, '$age years old'),
+          if (_joinedAt() != null)
+            ProfileFact(
+              Icons.calendar_today_outlined,
+              'Joined ${formatJoinDate(_joinedAt()!)}',
+            ),
+        ],
+        stats: [
+          ProfileStat(
+            _myPosts.length == 1 ? 'Post' : 'Posts',
+            _myPosts.length,
+            onTap: () => setState(() => _tabIndex = 0),
+          ),
+          ProfileStat(
+            'Followers',
+            follow?.followers,
+            onTap: () => openList('followers'),
+          ),
+          ProfileStat(
+            'Following',
+            follow?.following,
+            onTap: () => openList('following'),
+          ),
+          ProfileStat(
+            _friendCount == 1 ? 'Friend' : 'Friends',
+            _friendCount,
+            onTap: () => context.pushNamed('friends'),
+          ),
+        ],
+        actions: [
+          ProfileActionButton(
             label: 'Edit profile',
+            icon: Icons.edit_outlined,
             primary: true,
             onTap: () => context.pushNamed('edit_profile'),
           ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          flex: 1,
-          child: _ToolbarButton(
+          ProfileActionButton(
+            label: 'Share',
+            icon: Icons.ios_share_rounded,
+            onTap: _shareProfile,
+          ),
+          ProfileActionButton.icon(
             icon: Icons.more_horiz,
-            label: '',
-            primary: false,
+            label: 'More',
             onTap: _openMoreMenu,
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -704,6 +780,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: () => Navigator.pop(ctx, 'premium'),
                   ),
                 ),
+              if (_publicRow?.isPrivate ?? false)
+                _MoreMenuRow(
+                  icon: Icons.how_to_reg_outlined,
+                  label: 'Follow requests',
+                  onTap: () => Navigator.pop(ctx, 'follow_requests'),
+                ),
+              _MoreMenuRow(
+                icon: Icons.event_available_outlined,
+                label: _eventsGoing > 0
+                    ? "Events I'm going to ($_eventsGoing)"
+                    : "Events I'm going to",
+                onTap: () => Navigator.pop(ctx, 'events'),
+              ),
               _MoreMenuRow(
                 icon: Icons.bookmark_border_rounded,
                 label: 'Saved posts',
@@ -750,6 +839,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         break;
       case 'saved_posts':
         context.pushNamed('saved_posts');
+        break;
+      case 'follow_requests':
+        context.pushNamed('follow_requests');
+        break;
+      case 'events':
+        context.pushNamed('events');
         break;
       case 'saved_listings':
         context.pushNamed('saved_listings');
@@ -1441,8 +1536,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// that collapses to zero height and paints nothing, which is exactly
   /// how the Watch header's gradient vanished.
   Widget _buildHeader() {
-    final coverUrl = _coverPhotoUrl();
-    final hasCover = coverUrl != null;
     return FlatStatusBar(
       child: Container(
         // Transparent so the app-wide ambient field runs behind the header
@@ -1518,298 +1611,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              // Cover + avatar. When there's no cover the stack is just
-              // the avatar, so the height collapses to the avatar itself.
-              SizedBox(
-                height: hasCover ? 190 : 124,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.bottomCenter,
-                  children: [
-                    if (hasCover)
-                      Positioned(
-                        top: 0,
-                        left: 16,
-                        right: 16,
-                        height: 132,
-                        child: GestureDetector(
-                          onTap: () => FullImageViewer.show(context, coverUrl),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: CachedImage(
-                              coverUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Container(color: context.palette.cardMuted),
-                            ),
-                          ),
-                        ),
-                      ),
-                    Positioned(bottom: 0, child: _buildAvatar()),
-                  ],
-                ),
-              ),
+              const SizedBox(height: 8),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildAvatar() {
-    final photoUrl = _profilePhotoUrl();
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // Completeness ring — only while the profile is incomplete. Gold
-        // on the scaffold rather than on navy, so the track needs a
-        // visible-on-light backing.
-        if (_profileCompletion() < 1.0)
-          SizedBox(
-            width: 132,
-            height: 132,
-            child: CircularProgressIndicator(
-              value: _profileCompletion(),
-              strokeWidth: 4,
-              backgroundColor: context.palette.divider,
-              // Blue, not gold: the verified tick is this screen's gold,
-              // and the colour rules allow one gold highlight per screen.
-              valueColor: const AlwaysStoppedAnimation<Color>(
-                AppColors.primaryBlue,
-              ),
-            ),
-          ),
-        Container(
-          width: 118,
-          height: 118,
-          clipBehavior: Clip.antiAlias,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            gradient: photoUrl == null ? AppColors.primaryGradient : null,
-            color: photoUrl == null ? null : context.palette.cardMuted,
-            shape: BoxShape.circle,
-            border: Border.all(color: context.palette.scaffoldBg, width: 5),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.10),
-                blurRadius: 18,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: photoUrl == null
-              // No photo is itself an incomplete profile, so the tap
-              // always goes to the editor here.
-              ? GestureDetector(
-                  onTap: () => context.pushNamed('edit_profile'),
-                  child: Center(child: _avatarInitials()),
-                )
-              : GestureDetector(
-                  // The avatar wears the completeness ring, so tapping it
-                  // acts on that ring: an unfinished profile opens the
-                  // editor to finish it, a finished one opens the photo.
-                  onTap: () => _profileCompletion() < 1.0
-                      ? context.pushNamed('edit_profile')
-                      // Full size for the viewer: the stored Google URL is
-                      // 96px, which is a smear at full screen.
-                      : FullImageViewer.show(
-                          context,
-                          photoUrlAtSize(photoUrl, 1024),
-                        ),
-                  // Explicitly sized. The parent Container sets
-                  // `alignment: Alignment.center`, which hands its child
-                  // LOOSE constraints — so an unsized CachedImage laid
-                  // itself out at the photo's own size and sat centred
-                  // inside the circle, leaving a ring of card colour
-                  // around it. That ring is the "white edges". With the
-                  // box pinned to the circle, BoxFit.cover fills it.
-                  child: CachedImage(
-                    // The raw URL was used here, and Google's stored size
-                    // is 96px — stretched into a 118dp circle (~354px on a
-                    // 3x screen) it was visibly soft on the member's own
-                    // profile, the one place they look hardest.
-                    photoUrlAtSize(
-                      photoUrl,
-                      (118 * MediaQuery.devicePixelRatioOf(context)).round(),
-                    ),
-                    fit: BoxFit.cover,
-                    width: 118,
-                    height: 118,
-                    // Centred, because the error widget is handed TIGHT
-                    // constraints of the image box and a bare Text then
-                    // paints at the top-left of it — which is why the
-                    // initial sat at the top of the circle whenever the
-                    // photo failed to load (i.e. offline).
-                    errorBuilder: (context, error, stackTrace) =>
-                        Center(child: _avatarInitials()),
-                  ),
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildIdentity() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-      child: Column(
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Text(
-                  _displayName(),
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.headlineLarge.copyWith(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              if (_isVerified) const VerifiedTick(size: 20, leftGap: 6),
-              // Premium sits AFTER the verified tick: verification says
-              // who you are, premium says you support the app, and the
-              // identity claim should come first.
-              ValueListenableBuilder<bool>(
-                valueListenable: PremiumService.isPremium,
-                builder: (context, isPremium, _) => isPremium
-                    ? const Padding(
-                        padding: EdgeInsets.only(left: 6),
-                        child: PremiumBadge(size: 20),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          // Which church — the thing worth showing, now as a line of its
-          // own. Tapping it opens the Churches tab, as the stat cell did.
-          InkWell(
-            onTap: () => setState(() => _tabIndex = 3),
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.church_outlined,
-                    size: 15,
-                    color: AppColors.primaryBlue,
-                  ),
-                  const SizedBox(width: 5),
-                  Flexible(
-                    child: Text(
-                      _homeChurchName ?? 'Add your church',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: _homeChurchName == null
-                            ? AppColors.primaryBlue
-                            : context.palette.text,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.email_outlined,
-                size: 14,
-                color: context.palette.textMuted,
-              ),
-              const SizedBox(width: 5),
-              Flexible(
-                child: Text(
-                  _email(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: context.palette.textMuted,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (_joinedAt() != null) ...[
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.calendar_today_outlined,
-                  size: 13,
-                  color: context.palette.textMuted,
-                ),
-                const SizedBox(width: 5),
-                Flexible(
-                  child: Text(
-                    'Joined Adventist Super App · ${formatJoinDate(_joinedAt()!)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.palette.textMuted,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-          if (_age() != null) ...[
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${_age()} years old',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                if (_isBirthdayToday()) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.goldAccent.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '🎉 Happy Birthday!',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.goldAccent,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ],
       ),
     );
   }
@@ -2096,131 +1901,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// One cell of the profile stat strip — a number set as a number, with
-/// its label beneath. [onTap] is null where no destination exists, and
-/// the cell then renders identically but inert.
-class _StatCell extends StatelessWidget {
-  const _StatCell({required this.value, required this.label, this.onTap});
-
-  final int value;
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
-            child: Column(
-              children: [
-                Text(
-                  '$value',
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.headlineMedium.copyWith(
-                    color: context.palette.text,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 19,
-                    height: 1.1,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  label.toUpperCase(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: context.palette.textMuted,
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.7,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatDivider extends StatelessWidget {
-  const _StatDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(width: 1, height: 30, color: context.palette.divider);
-  }
-}
-
-class _ToolbarButton extends StatelessWidget {
-  const _ToolbarButton({
-    required this.icon,
-    required this.label,
-    required this.primary,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool primary;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressEffect(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: primary ? AppColors.primaryGradient : null,
-              color: primary ? null : context.palette.card,
-              borderRadius: BorderRadius.circular(12),
-              border: primary
-                  ? null
-                  : Border.all(color: context.palette.divider),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: primary ? 16 : 20,
-                  color: primary ? AppColors.white : AppColors.primaryBlue,
-                ),
-                if (label.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: AppTextStyles.buttonText.copyWith(
-                      color: primary ? AppColors.white : AppColors.primaryBlue,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
         ),
       ),
     );

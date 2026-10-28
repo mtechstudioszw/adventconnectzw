@@ -66,8 +66,8 @@ to run in the SQL editor; app features depending on it say so until it runs
 | # | Stage | Needs DB patch | Status |
 |---|---|---|---|
 | 1 | Audit + design foundation (tokens, remove dots/outlines/glow noise) | no | done (quiet field); tokens continue per stage |
-| 2 | Shared post card + menu: own posts in Home, Save (+ Saved screen), Hide, Copy link, Report; feed/profile consistency; comment reply-to-reply | **patch_273** saved_posts, hidden_posts | code done; Unfollow item waits for stage 3 |
-| 3 | Profile redesign + followers (one-way) alongside friends; privacy | **patch_274** follows, profile links/privacy | |
+| 2 | Shared post card + menu: own posts in Home, Save (+ Saved screen), Hide, Copy link, Report; feed/profile consistency; comment reply-to-reply | **patch_273** saved_posts, hidden_posts | code done (Unfollow added in stage 3) |
+| 3 | Profile redesign + followers (one-way) alongside friends; privacy | **patch_274** follows, profile links/privacy | code done (shared `ProfileHeader`, follow lists + requests, Edit profile link + private toggle, post-menu Follow/Unfollow, notification routing); waits on patch_274 |
 | 4 | Organization Pages (create/manage/follow), church associations | **patch_275** pages, page_admins, page_follows; migrate churches carefully (no auto-migration) | |
 | 5 | Marketplace discovery: sections, server-side search/filters/pagination, deterministic ranking + exploration, labelled sponsorship | maybe (indexes, ranking view) | |
 | 6 | Product detail, storefront, seller tools, product form, cart/checkout review | maybe (stock, product reviews) | |
@@ -82,3 +82,17 @@ to run in the SQL editor; app features depending on it say so until it runs
 - Paid ≠ verified. Promotion never bypasses moderation; prices unset.
 - Don't delete or silently migrate existing relationships/verification.
 - Existing ad-free Premium (Play billing) keeps working untouched.
+
+## Stage 3 notes
+
+- Friends and followers are separate. Friends stay mutual (`friendships`,
+  untouched). Following is one-way; a private account (`profiles.is_private`)
+  approves each follower. `is_discoverable` is unchanged and still means
+  "hide my whole profile from strangers".
+- Before patch_274 runs, the app keeps working: profiles load without the
+  new columns (`UserProfileService.fetch` falls back), Follow buttons and
+  follower counts are left out, and Edit profile hides Website / Private
+  account. Nothing pretends to work.
+- postgrest 2.7 loses the Postgres error code on `.maybeSingle()` failures
+  (it reports the HTTP status). `UserProfileService._isMissingColumn`
+  checks the message too — copy that if you write another fallback.

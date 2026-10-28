@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
+import '../../utils/photo_tint.dart';
 import '../../utils/photo_url.dart';
 import '../cached_image.dart';
 import '../verified_tick.dart';
@@ -528,5 +529,79 @@ class ProfileActionButton extends StatelessWidget {
       ),
     );
     return iconOnly ? button : Expanded(child: button);
+  }
+}
+
+/// A faint wash of the member's photo colour behind the top of a profile
+/// (owner-approved, 28 Oct 2026). Paints BEHIND [child] only; nothing in
+/// the header reads its colour, so text and buttons keep the palette and
+/// stay legible whatever the photo. No photo, a dull photo or a banned
+/// hue → no glow, and the header is exactly as before.
+class ProfileGlow extends StatefulWidget {
+  const ProfileGlow({super.key, required this.photoUrl, required this.child});
+
+  final String? photoUrl;
+  final Widget child;
+
+  @override
+  State<ProfileGlow> createState() => _ProfileGlowState();
+}
+
+class _ProfileGlowState extends State<ProfileGlow> {
+  Color? _tint;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(ProfileGlow old) {
+    super.didUpdateWidget(old);
+    if (old.photoUrl != widget.photoUrl) _resolve();
+  }
+
+  Future<void> _resolve() async {
+    final url = widget.photoUrl;
+    final tint = await PhotoTint.forPhoto(url);
+    if (!mounted || url != widget.photoUrl) return;
+    setState(() => _tint = tint);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final tint = _tint;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: tint == null ? 0 : 1,
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOut,
+              child: tint == null
+                  ? const SizedBox.shrink()
+                  : DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            tint.withValues(alpha: dark ? 0.26 : 0.18),
+                            tint.withValues(alpha: dark ? 0.10 : 0.07),
+                            tint.withValues(alpha: 0),
+                          ],
+                          stops: const [0, 0.45, 1],
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+        ),
+        widget.child,
+      ],
+    );
   }
 }

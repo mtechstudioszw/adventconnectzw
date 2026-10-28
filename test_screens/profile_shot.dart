@@ -1,4 +1,11 @@
+// Render harness, not shipped: seeds PhotoTint like a test does.
+// ignore_for_file: invalid_use_of_visible_for_testing_member
+
+import 'dart:io';
+
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:advent_connect_zw/utils/photo_tint.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:advent_connect_zw/screens/profile/profile_screen.dart';
@@ -14,6 +21,7 @@ Map<String, Object?> _row(String id) => {
   'bio': id == 'me'
       ? null
       : 'Pathfinder leader. Singing in the Glen View choir.',
+  'profile_photo_url': 'https://x.test/$id.jpg',
   'city': 'Harare',
   'country': 'ZW',
   'website': id == 'me' ? 'https://adventconnect.app' : null,
@@ -26,19 +34,43 @@ Map<String, Object?> _row(String id) => {
   'churches': {'name': 'Glen View SDA Church'},
 };
 
+/// Sample photo URLs can't load in the renderer; don't fail the shot on it.
+void _ignoreImageErrors() {
+  final orig = FlutterError.onError;
+  FlutterError.onError = (d) {
+    if (d.library == 'image resource service') return;
+    orig?.call(d);
+  };
+  addTearDown(() => FlutterError.onError = orig);
+}
+
 void main() {
   setUpAll(() async {
     await loadShotFonts();
     await initFakeSupabase();
-    await signInFake('me', metadata: {
-      'full_name': 'Tanatswa Michael Mikuwa',
-      'date_of_birth': '2008-03-01',
-      'bio': 'Building the Adventist Super App for our church family.',
-    });
+    // The image cache wants a folder; photos still fail to load (no
+    // network), which is what the seeded tints stand in for.
+    final tmp = Directory.systemTemp.createTempSync('shots');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (_) async => tmp.path,
+        );
+    await signInFake(
+      'me',
+      metadata: {
+        'full_name': 'Tanatswa Michael Mikuwa',
+        'date_of_birth': '2008-03-01',
+        'bio': 'Building the Adventist Super App for our church family.',
+        'profile_photo_url': 'https://x.test/me.jpg',
+      },
+    );
+    // Photos can't load in the renderer; seed what the glow would derive.
+    PhotoTint.debugSeed('https://x.test/me.jpg', const Color(0xFF3F7FD6));
+    PhotoTint.debugSeed('https://x.test/them.jpg', const Color(0xFFD08A3A));
     setFakeSupabaseHandler((req) {
       final path = req.url.path;
-      final single =
-          (req.headers['Accept'] ?? '').contains('vnd.pgrst.object');
+      final single = (req.headers['Accept'] ?? '').contains('vnd.pgrst.object');
       if (path.endsWith('/rpc/profile_follow_stats')) {
         return [
           {
@@ -73,14 +105,26 @@ void main() {
   });
 
   testWidgets('profile', (t) async {
+    _ignoreImageErrors();
     await pumpShot(t, const ProfileScreen());
+    await t.pump(const Duration(seconds: 1));
     await saveShot(t, 'profile');
     await t.drag(find.byType(Scrollable).first, const Offset(0, -600));
     await saveShot(t, 'profile_scrolled');
+    await t.pump(const Duration(seconds: 30));
   });
 
   testWidgets('user profile', (t) async {
+    _ignoreImageErrors();
     await pumpShot(t, const UserProfileScreen(userId: 'them'));
+    await t.pump(const Duration(seconds: 1));
     await saveShot(t, 'user_profile');
+  });
+
+  testWidgets('user profile light', (t) async {
+    _ignoreImageErrors();
+    await pumpShot(t, const UserProfileScreen(userId: 'them'), dark: false);
+    await t.pump(const Duration(seconds: 1));
+    await saveShot(t, 'user_profile_light');
   });
 }

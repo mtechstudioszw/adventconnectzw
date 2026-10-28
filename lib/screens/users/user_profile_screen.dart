@@ -613,8 +613,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildTopBar(),
-            _buildHeader(),
+            ProfileGlow(
+              photoUrl: _profile!.profilePhotoUrl,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [_buildTopBar(), _buildHeader()],
+              ),
+            ),
             const SizedBox(height: 18),
             // Shared church + mutual friends, above the bio — it is the
             // context you read the rest of the profile through.

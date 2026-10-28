@@ -34,6 +34,15 @@ Success Green:  #2E7D32  // Status badges ONLY
 
 \- Use any color outside this scheme
 
+\*\*ONE EXCEPTION (28 Oct 2026, owner-approved): the profile photo glow.\*\*
+`ProfileGlow` (lib/widgets/profile/profile\_header.dart) paints a faint wash
+(18% light / 26% dark, fading to nothing) of the member's photo colour
+behind the top of a profile. It is background only — no text, button,
+badge or card may take that colour. `PhotoTint` (lib/utils/photo\_tint.dart)
+returns null for green and pink hues and for grey/dull photos, and the
+header is then plain. Do not widen this to whole sections, and do not
+remove the banned-hue check.
+
 
 
 \## DESIGN RULES

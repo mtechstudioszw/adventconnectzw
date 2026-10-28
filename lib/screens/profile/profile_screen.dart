@@ -551,8 +551,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Sections cascade in instead of the old one-block fade.
           child: Column(
             children: [
-              StaggeredReveal(index: 0, rise: 14, child: _buildHeader()),
-              StaggeredReveal(index: 1, child: _buildProfileHeader()),
+              // Soft glow from the profile photo behind the top section
+              // only (owner-approved exception — see ProfileGlow).
+              ProfileGlow(
+                photoUrl: _profilePhotoUrl(),
+                child: Column(
+                  children: [
+                    StaggeredReveal(
+                      index: 0,
+                      rise: 14,
+                      child: _buildHeader(),
+                    ),
+                    StaggeredReveal(index: 1, child: _buildProfileHeader()),
+                  ],
+                ),
+              ),
               const SizedBox(height: 18),
               // Ministry & gifts (patch_168) — what you serve in and
               // what you bring. Sits above the tabs because it is

@@ -65,7 +65,21 @@ class _MarketplaceGuidelinesScreenState
           '• Occult / horoscope / divination items\n'
           '• Violent or sexually explicit media\n'
           '• Counterfeit / pirated / stolen goods\n'
+          '• Prescription medicines\n'
           '• Anything illegal where you or your buyer live',
+    ),
+    // Added 28 Oct 2026. Herbal and wellness products are welcome; claims
+    // that they treat a disease are not. Those claims can lead someone to
+    // skip real treatment, and app stores remove apps that carry them.
+    _Rule(
+      icon: Icons.health_and_safety_outlined,
+      title: 'No medical claims',
+      body:
+          'Health and wellness products are welcome, but never claim that '
+          'a product treats, cures or prevents a disease or condition — '
+          'diabetes, high blood pressure, cancer, HIV, infections and the '
+          'like. Describe what it is and how to use it. Listings that make '
+          'medical claims are hidden by the moderators.',
     ),
     _Rule(
       icon: Icons.security_outlined,

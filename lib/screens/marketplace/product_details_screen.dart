@@ -12,6 +12,7 @@ import '../../services/auth_service.dart';
 import '../../services/cart_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/messaging_service.dart';
+import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -23,6 +24,7 @@ import '../../widgets/marketplace/safety_card.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
+import '../../widgets/home/report_sheet.dart';
 import '../../widgets/offline_toast.dart';
 
 /// Product detail.
@@ -76,6 +78,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     _loading = widget.initialProduct == null;
     _bootstrap();
     _loadSaved();
+    _loadAdmin();
   }
 
   @override
@@ -294,6 +297,82 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     }
   }
 
+  bool _isOwnListing(Product p) =>
+      p.sellerId == AuthService.currentUser?.id;
+
+  /// Report (everyone) and Hide (super admins), under the safety card.
+  ///
+  /// There was no way to report a listing at all — Apple's guideline 1.2
+  /// requires one for user content — and moderators could only reject a
+  /// whole shop. Hide goes through `admin_set_product_status`
+  /// (patch_272), which also tells the seller why.
+  Widget _moderationRow(Product product) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.md),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: AppSpace.sm,
+        children: [
+          TextButton.icon(
+            onPressed: () => showReportSheet(
+              context,
+              contentType: 'product',
+              contentId: product.id,
+              contentLabel: product.title,
+            ),
+            icon: const Icon(Icons.flag_outlined, size: 18),
+            label: const Text('Report listing'),
+            style: TextButton.styleFrom(
+              foregroundColor: context.palette.textMuted,
+            ),
+          ),
+          if (_isSuperAdmin)
+            TextButton.icon(
+              onPressed: _moderating ? null : () => _adminHide(product),
+              icon: const Icon(Icons.visibility_off_outlined, size: 18),
+              label: const Text('Hide listing (admin)'),
+              style: TextButton.styleFrom(foregroundColor: AppColors.red),
+            ),
+        ],
+      ),
+    );
+  }
+
+  bool _isSuperAdmin = false;
+  bool _moderating = false;
+
+  Future<void> _loadAdmin() async {
+    final admin = await SellerService.isCurrentUserSuperAdmin();
+    if (mounted && admin) setState(() => _isSuperAdmin = true);
+  }
+
+  Future<void> _adminHide(Product product) async {
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => const _HideReasonDialog(),
+    );
+    if (reason == null || !mounted) return;
+    setState(() => _moderating = true);
+    try {
+      await SellerService.adminSetProductStatus(
+        productId: product.id,
+        hidden: true,
+        reason: reason,
+      );
+      if (!mounted) return;
+      _toast('Listing hidden. The seller has been told why.');
+      Navigator.of(context).maybePop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _moderating = false);
+      _toast(
+        e.toString().contains('admin_set_product_status')
+            ? 'Hiding needs database patch_272 to be run first.'
+            : 'Could not hide this listing. Try again.',
+      );
+    }
+  }
+
   void _toast(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -373,6 +452,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     index: 4,
                     child: const MarketplaceSafetyCard(),
                   ),
+                  if (!_isOwnListing(product)) _moderationRow(product),
                 ],
               ),
             ),
@@ -1239,6 +1319,51 @@ class _CarouselImage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Asks the moderator why, with the common case pre-filled. The reason is
+/// sent to the seller, so it should read as an explanation, not a verdict.
+class _HideReasonDialog extends StatefulWidget {
+  const _HideReasonDialog();
+
+  @override
+  State<_HideReasonDialog> createState() => _HideReasonDialogState();
+}
+
+class _HideReasonDialogState extends State<_HideReasonDialog> {
+  final _controller = TextEditingController(
+    text: 'It claims to treat or cure a medical condition, which the '
+        'marketplace guidelines do not allow.',
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Hide this listing?'),
+      content: TextField(
+        controller: _controller,
+        maxLines: 4,
+        decoration: const InputDecoration(labelText: 'Reason sent to the seller'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          style: TextButton.styleFrom(foregroundColor: AppColors.red),
+          child: const Text('Hide'),
+        ),
+      ],
     );
   }
 }

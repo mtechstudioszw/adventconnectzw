@@ -309,6 +309,24 @@ Owner decisions taken in this session:
   limit is far off.
 - Full suite: **799 passed**; `flutter analyze` clean.
 
+### Marketplace medical claims (28 Oct 2026, founder: "do it")
+- Rule "No medical claims" + "Prescription medicines" in the seller Code of
+  Conduct (`marketplace_guidelines_screen.dart`).
+- `utils/medical_claims.dart` blocks saving a listing whose title,
+  description or subcategory names a disease (list of conditions, not
+  verbs — see its comment for words deliberately left out).
+- "Report listing" on every product not your own → `reports` with
+  content_type 'product' (already supported; shows in admin-web Reports).
+- "Hide listing (admin)" for super admins → RPC `admin_set_product_status`
+  in **`database/patch_272_admin_product_moderation.sql` — DRAFT, NOT RUN.**
+  Until it runs the button says so. It also notifies the seller.
+- Theopath not banned (founder agreed). Once patch_272 is run, hide the
+  disease-claim listings from the app.
+- Tests: `medical_claims_test`, `product_moderation_test`.
+- Supabase `apply_migration` approval prompts timed out 3× (never reached
+  the founder). Patches 270/271/272 are for the founder to run in the SQL
+  editor; read-only checks work fine.
+
 ### Resume point (exact)
 **Batch 2 is DONE. Next: Batch 3 — Library information architecture &
 design** (see the master prompt). Owner items from the Batch 2 report

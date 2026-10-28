@@ -17,6 +17,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/country_picker_sheet.dart';
 import '../../widgets/marketplace/product_tile.dart';
 import '../../widgets/preview_sheet.dart';
+import '../../utils/medical_claims.dart';
 import '../widgets/post_form_widgets.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -243,6 +244,36 @@ class _AddProductScreenState extends State<AddProductScreen>
   Future<void> _save() async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
+
+    // Medical claims are refused before the preview, not after it: the
+    // seller fixes the wording here instead of a moderator hiding the
+    // listing later. See the "No medical claims" marketplace rule.
+    final claims = findMedicalClaims([
+      _titleController.text,
+      _descriptionController.text,
+      _subcategoryController.text,
+    ]);
+    if (claims.isNotEmpty) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Please remove medical claims'),
+          content: Text(
+            'Your listing mentions: ${claims.join(', ')}.\n\n'
+            'Health and wellness products are welcome, but listings may not '
+            'say a product treats, cures or prevents a disease or condition. '
+            'Describe what it is and how to use it instead.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Edit listing'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
 
     // Preview before it goes live — same deal the post composer gets.
     final confirmed = await showEntityPreview(

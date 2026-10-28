@@ -403,6 +403,21 @@ class SellerService {
   // Super-admin operations (patch_031)
   // ────────────────────────────────────────────────────────────────
 
+  /// Super admin: hide one listing from buyers (or show it again) and
+  /// notify its seller. Backed by `admin_set_product_status` (patch_272),
+  /// which refuses anyone who isn't a super admin.
+  static Future<void> adminSetProductStatus({
+    required String productId,
+    required bool hidden,
+    String? reason,
+  }) async {
+    await _client.rpc('admin_set_product_status', params: {
+      'p_product_id': int.parse(productId),
+      'p_status': hidden ? 'removed' : 'available',
+      'p_reason': reason,
+    });
+  }
+
   /// True when the signed-in user has `profiles.is_super_admin = TRUE`.
   /// Used to gate the Seller Approvals entry in Settings + the route.
   /// Returns false on any error so a transient network blip never

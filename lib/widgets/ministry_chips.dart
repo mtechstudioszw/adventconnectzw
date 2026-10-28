@@ -36,6 +36,20 @@ class MinistrySection extends StatelessWidget {
     // Nothing to say and no way to say it → render nothing.
     if (tags.isEmpty && !isOwn) return const SizedBox.shrink();
 
+    // Your own profile with nothing claimed yet: ONE heading and ONE
+    // invitation. The intent was always "one invitation rather than two",
+    // but an empty gifts group still drew its own heading and add chip, so
+    // a new profile carried two labelled empty blocks.
+    if (tags.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _heading(context, 'How you serve'),
+          _AddChip(label: 'Add your ministry and gifts', onTap: onEdit),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -45,8 +59,7 @@ class MinistrySection extends StatelessWidget {
             label: MinistryTagKind.ministry.sectionLabel,
             tags: ministries,
             tint: AppColors.primaryBlue,
-            // The add affordance lives on the first group only, so an
-            // empty profile shows one invitation rather than two.
+            // One "Edit" for both groups, on the first one shown.
             showAdd: isOwn,
             emptyHint: 'Add what you serve in',
           ),
@@ -56,8 +69,10 @@ class MinistrySection extends StatelessWidget {
             context,
             label: MinistryTagKind.gift.sectionLabel,
             tags: gifts,
-            tint: AppColors.goldAccent,
-            showAdd: isOwn && ministries.isNotEmpty,
+            // Neutral, not gold: gold is the verified tick's on a
+            // profile, and the colour rules allow one gold per screen.
+            tint: context.palette.text,
+            showAdd: false,
             emptyHint: 'Add how you serve',
           ),
         ],
@@ -76,18 +91,7 @@ class MinistrySection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(
-            label.toUpperCase(),
-            style: AppTextStyles.labelSmall.copyWith(
-              color: context.palette.textMuted,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.4,
-            ),
-          ),
-        ),
+        _heading(context, label),
         Wrap(
           spacing: 7,
           runSpacing: 7,
@@ -102,6 +106,19 @@ class MinistrySection extends StatelessWidget {
       ],
     );
   }
+
+  Widget _heading(BuildContext context, String label) => Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 8),
+        child: Text(
+          label.toUpperCase(),
+          style: AppTextStyles.labelSmall.copyWith(
+            color: context.palette.textMuted,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.4,
+          ),
+        ),
+      );
 }
 
 class _Chip extends StatelessWidget {

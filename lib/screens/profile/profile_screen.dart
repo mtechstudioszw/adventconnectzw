@@ -592,16 +592,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               label: _myPosts.length == 1 ? 'Post' : 'Posts',
               onTap: () => setState(() => _tabIndex = 0),
             ),
-            _StatDivider(),
-            // The NAME, not a count. "Churches: 1" was true and useless —
-            // you can only belong to one home church, so the number was
-            // always 1 or 0 and told the member nothing they didn't know.
-            // Which church they are part of is the thing worth showing.
-            _StatCell.text(
-              text: _homeChurchName ?? 'Not set',
-              label: 'Church',
-              onTap: () => setState(() => _tabIndex = 3),
-            ),
+            // The home church moved out of this strip (28 Oct 2026) to its
+            // own line under the name — see _buildIdentity. Set as a
+            // "stat", a church name sat between numbers and an unset one
+            // read "Not set CHURCH".
             _StatDivider(),
             // Kept from the old strip: "Going" reads as an RSVP count,
             // which is what it is. "Events" was being misread as
@@ -1466,8 +1460,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               value: _profileCompletion(),
               strokeWidth: 4,
               backgroundColor: context.palette.divider,
+              // Blue, not gold: the verified tick is this screen's gold,
+              // and the colour rules allow one gold highlight per screen.
               valueColor: const AlwaysStoppedAnimation<Color>(
-                AppColors.goldAccent,
+                AppColors.primaryBlue,
               ),
             ),
           ),
@@ -1576,6 +1572,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 4),
+          // Which church — the thing worth showing, now as a line of its
+          // own. Tapping it opens the Churches tab, as the stat cell did.
+          InkWell(
+            onTap: () => setState(() => _tabIndex = 3),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.church_outlined,
+                    size: 15,
+                    color: AppColors.primaryBlue,
+                  ),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      _homeChurchName ?? 'Add your church',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: _homeChurchName == null
+                            ? AppColors.primaryBlue
+                            : context.palette.text,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -1963,27 +1993,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 /// its label beneath. [onTap] is null where no destination exists, and
 /// the cell then renders identically but inert.
 class _StatCell extends StatelessWidget {
-  const _StatCell({required this.value, required this.label, this.onTap})
-    : text = null;
-
-  /// A cell whose figure is a word rather than a number — the home church
-  /// name. Set smaller and over two lines, because "Avondale SDA Church"
-  /// in a quarter of a phone's width has nowhere near the room a count
-  /// needs, and truncating it to "Avo…" would defeat the point of showing
-  /// it at all.
-  const _StatCell.text({required this.text, required this.label, this.onTap})
-    : value = 0;
+  const _StatCell({required this.value, required this.label, this.onTap});
 
   final int value;
-
-  /// When non-null this is rendered instead of [value].
-  final String? text;
   final String label;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final isText = text != null;
     return Expanded(
       child: Material(
         color: Colors.transparent,
@@ -1995,15 +2012,15 @@ class _StatCell extends StatelessWidget {
             child: Column(
               children: [
                 Text(
-                  isText ? text! : '$value',
+                  '$value',
                   textAlign: TextAlign.center,
-                  maxLines: isText ? 2 : 1,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.headlineMedium.copyWith(
                     color: context.palette.text,
-                    fontWeight: FontWeight.w800,
-                    fontSize: isText ? 11.5 : 19,
-                    height: isText ? 1.25 : 1.1,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 19,
+                    height: 1.1,
                   ),
                 ),
                 const SizedBox(height: 3),

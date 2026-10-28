@@ -16,6 +16,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:advent_connect_zw/theme/app_text_styles.dart';
 import 'package:advent_connect_zw/theme/app_theme.dart';
 import 'package:advent_connect_zw/widgets/ambient_background.dart';
 
@@ -60,6 +61,9 @@ Future<void> pumpShot(
   t.view.devicePixelRatio = 2.0;
   t.view.padding = const FakeViewPadding(top: 48, bottom: 32);
   addTearDown(t.view.reset);
+  // main.dart does this before every MaterialApp build; without it every
+  // direct AppTextStyles use keeps light-mode text colours.
+  AppTextStyles.applyBrightness(dark ? Brightness.dark : Brightness.light);
   await t.pumpWidget(RepaintBoundary(
     key: _boundary,
     child: MaterialApp(

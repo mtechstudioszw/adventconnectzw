@@ -31,7 +31,11 @@ void setFakeSupabaseHandler(FakeHandler handler) {
 
 /// Signs in as [userId] by answering GoTrue's password grant locally, so
 /// services that need `auth.currentUser` work. Call after [initFakeSupabase].
-Future<void> signInFake(String userId, {String country = 'ZW'}) async {
+Future<void> signInFake(
+  String userId, {
+  String country = 'ZW',
+  Map<String, Object?> metadata = const {},
+}) async {
   final previous = _handler;
   _handler = (req) {
     if (req.url.path.endsWith('/auth/v1/token')) {
@@ -47,7 +51,7 @@ Future<void> signInFake(String userId, {String country = 'ZW'}) async {
           'role': 'authenticated',
           'email': '$userId@example.test',
           'app_metadata': <String, Object?>{},
-          'user_metadata': {'country': country},
+          'user_metadata': {'country': country, ...metadata},
           'created_at': '2026-01-01T00:00:00Z',
         },
       };

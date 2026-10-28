@@ -280,7 +280,7 @@ class _CreateScreenState extends State<_CreateScreen>
                               loop: _ambient.value,
                               film: 0,
                               dark: Theme.of(context).brightness == Brightness.dark,
-                              ghosts: false,
+                              quiet: true,
                             ),
                             size: Size.infinite,
                           ),

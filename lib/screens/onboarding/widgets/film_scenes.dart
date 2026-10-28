@@ -103,17 +103,18 @@ class AmbientPainter extends CustomPainter {
     required this.loop,
     required this.film,
     required this.dark,
-    this.ghosts = true,
+    this.quiet = false,
   });
 
-  /// Draw the ghost UI fragments (outlined rounded rects).
+  /// The calm field for behind real screens: no ghost outlines, no dust
+  /// dots, glow at half strength.
   ///
-  /// Off for the app-wide field behind every screen (28 Oct 2026): over
-  /// real content the empty outlines read as broken layout — leftover
-  /// boxes beside a profile's stats, under a header, between cards — not
-  /// as depth. They stay on the splash and onboarding film, where there
-  /// is no real UI for them to be mistaken for.
-  final bool ghosts;
+  /// Owner's redesign brief (28 Oct 2026): "Do not retain the existing
+  /// decorative floating outlines, random dots, excessive glowing effects".
+  /// Over real content the outlines read as broken layout and the dots as
+  /// specks on the screen. The splash and onboarding film keep the full
+  /// field — there is no real UI there for them to be mistaken for.
+  final bool quiet;
 
   final double loop; // 0→1 repeating (~14s)
   final double film; // master film position, for parallax drift
@@ -132,6 +133,7 @@ class AmbientPainter extends CustomPainter {
   /// film breathing, collapsed into a flat dead slab in dark mode. Lift
   /// the hue toward white and roughly double the alpha so it still glows.
   Color _lift(Color c) => dark ? Color.lerp(c, Colors.white, 0.42)! : c;
+  double get _glow => quiet ? 0.5 : 1.0;
   double _a(double alpha) => dark ? alpha * 2.1 : alpha;
 
   @override
@@ -161,19 +163,19 @@ class AmbientPainter extends CustomPainter {
       Offset(w * 0.82 - pan + math.cos(a) * 30, h * 0.16 + math.sin(a) * 22),
       w * 0.55,
       _lift(AppColors.primaryBlue),
-      _a(0.07),
+      _a(0.07) * _glow,
     );
     blob(
       Offset(w * 0.05 - pan * 0.6 + math.sin(a * 0.8) * 26, h * 0.62),
       w * 0.48,
       _lift(AppColors.primaryBlue),
-      _a(0.05),
+      _a(0.05) * _glow,
     );
     blob(
       Offset(w * 0.55 - pan * 0.8, h * 0.88 + math.cos(a * 0.7) * 18),
       w * 0.42,
       _lift(AppColors.goldAccent),
-      _a(0.06),
+      _a(0.06) * _glow,
     );
 
     // Ghost UI fragments — faint rounded rects floating at 3 depths.
@@ -181,7 +183,7 @@ class AmbientPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
     const depths = [0.35, 0.6, 1.0];
-    for (var i = 0; ghosts && i < 6; i++) {
+    for (var i = 0; !quiet && i < 6; i++) {
       final d = depths[i % 3];
       final phase = a * (0.5 + d * 0.5) + i * 1.1;
       final x =
@@ -205,7 +207,7 @@ class AmbientPainter extends CustomPainter {
 
     // A sparse gold dust field, drifting upward forever.
     final dust = Paint();
-    for (var i = 0; i < 10; i++) {
+    for (var i = 0; !quiet && i < 10; i++) {
       final d = depths[i % 3];
       final x = w * ((i * 0.37 + 0.08) % 1.0) + math.sin(a + i) * 8 * d;
       final y = h * ((i * 0.61 + loop * (0.10 + 0.12 * d)) % 1.0);
@@ -223,7 +225,7 @@ class AmbientPainter extends CustomPainter {
       old.loop != loop ||
       old.film != film ||
       old.dark != dark ||
-      old.ghosts != ghosts;
+      old.quiet != quiet;
 }
 
 // ---------------------------------------------------------------------------

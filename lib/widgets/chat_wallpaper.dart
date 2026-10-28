@@ -67,7 +67,7 @@ class _ChatAmbient extends CustomPainter {
     loop: 0,
     film: 0,
     dark: dark,
-    ghosts: false,
+    quiet: true,
   );
 
   @override

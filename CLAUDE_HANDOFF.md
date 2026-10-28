@@ -374,6 +374,13 @@ Owner decisions taken in this session:
   the founder). Patches 270/271/272 are for the founder to run in the SQL
   editor; read-only checks work fine.
 
+### MAJOR REDESIGN BRIEF (owner, 28 Oct 2026) — now the governing scope
+for Home, Profile, Marketplace, storefronts, product detail and Jobs. Plan,
+audit and stage table: **`docs/REDESIGN_PLAN.md`** (read it first). The
+13-batch prompt still governs everything else. Ghost outlines question is
+settled by the brief: removed, plus dust dots, glow halved
+(`AmbientPainter(quiet: true)`).
+
 ### Prompt-compliance notes (28 Oct 2026, owner asked)
 Work done OUTSIDE the current batch, recorded against the batch it belongs
 to so those batches don't redo or overlook it:
@@ -385,10 +392,7 @@ to so those batches don't redo or overlook it:
 - Owner-requested, not in any batch: moderation + appeals (patch_272),
   report on all user content, medical-claims rule, order-status guard
   (patch_270).
-- **Pending owner approval (rule 2):** ghost outlines removed from the
-  ambient field behind screens — reverses the 18 Aug design decision.
-  Revert = `ghosts: true` (or delete the param) in AmbientBackground,
-  ChatWallpaper, create_sheet.
+- Ghost outlines: settled by the owner's redesign brief (remove).
 - Before each batch: post objective, systems touched, files, risks and
   decisions needing approval, then wait for decisions.
 

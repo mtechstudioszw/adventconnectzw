@@ -14,7 +14,6 @@ import '../../widgets/advent_ai_mark.dart';
 import '../../widgets/church_group_avatar.dart';
 import '../../services/presence_service.dart';
 import '../../services/typing_signal.dart';
-import '../widgets/main_bottom_nav.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -27,7 +26,6 @@ import '../../widgets/verified_tick.dart';
 import 'chat_search_delegate.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/content_reveal.dart';
-import '../../widgets/motion/hide_on_scroll.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/shimmer_loaders.dart';
@@ -38,6 +36,21 @@ class ConversationsScreen extends StatefulWidget {
   /// When set to 'requests' the screen opens straight on the Requests
   /// tab. Used by deep links from friend-request notification taps.
   final String? initialTab;
+
+  /// Bumped to switch an ALREADY-MOUNTED inbox to Requests.
+  ///
+  /// Chat is a kept-alive tab (TabShell), so `initialTab` is only read the
+  /// first time it builds. A friend-request tap that lands on a live inbox
+  /// goes through this instead — see [openRequests].
+  static final ValueNotifier<int> _requestsAsked = ValueNotifier<int>(0);
+
+  /// Shows the Requests list: switches to the Chat tab, and tells the inbox
+  /// to flip over if it is already mounted. The query parameter covers the
+  /// case where it is not yet built.
+  static void openRequests(GoRouter router) {
+    _requestsAsked.value++;
+    router.goNamed('messages', queryParameters: {'tab': 'requests'});
+  }
 
   @override
   State<ConversationsScreen> createState() => _ConversationsScreenState();
@@ -60,8 +73,7 @@ extension _ChatFilterLabel on _ChatFilter {
   };
 }
 
-class _ConversationsScreenState extends State<ConversationsScreen>
-    with NavVisibilityMixin {
+class _ConversationsScreenState extends State<ConversationsScreen> {
   List<Conversation> _conversations = [];
   Map<String, ConversationState> _convStates = const {};
   Map<String, InboxReactionPreview> _reactionPreviews = const {};
@@ -186,6 +198,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
       // heuristic in _bootstrap override that choice.
       _autoTabResolved = true;
     }
+    ConversationsScreen._requestsAsked.addListener(_showRequestsTab);
     _bootstrap();
     _startActivityWatcher();
     // Local inbox changes (delete-for-me preview floor) emit no realtime
@@ -201,8 +214,17 @@ class _ConversationsScreenState extends State<ConversationsScreen>
     if (mounted) setState(() {});
   }
 
+  void _showRequestsTab() {
+    if (!mounted) return;
+    setState(() {
+      _showRequests = true;
+      _autoTabResolved = true;
+    });
+  }
+
   @override
   void dispose() {
+    ConversationsScreen._requestsAsked.removeListener(_showRequestsTab);
     _refreshDebounce?.cancel();
     _searchDebounce?.cancel();
     _activitySub?.cancel();
@@ -908,13 +930,7 @@ class _ConversationsScreenState extends State<ConversationsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      // Chat is a top-level tab now (it replaced Churches), so the
-      // inbox carries the island like every other tab destination — and
-      // hides it on scroll the way the others do.
-      bottomNavigationBar: HideOnScroll(
-        visible: navVisible,
-        child: const MainBottomNav(currentIndex: MainBottomNav.chatIndex),
-      ),
+      // Chat is a tab: the island (and hiding it on scroll) is TabShell's.
       // Hidden while multi-selecting or searching — in both modes the screen
       // is doing something else and a "compose" button is noise. Advent AI
       // goes with it: same reasoning, and the two are one stack.
@@ -936,15 +952,12 @@ class _ConversationsScreenState extends State<ConversationsScreen>
           ),
           if (!_chatSelect && !_showRequests) _buildSearchField(),
           Expanded(
-            child: NotificationListener<UserScrollNotification>(
-              onNotification: handleNavScroll,
-              child: BrandedRefreshIndicator(
-                color: AppColors.primaryBlue,
-                onRefresh: _bootstrap,
-                // Entrance now happens per-tile (StaggeredReveal in
-                // _conversationListView) instead of one block fade.
-                child: _buildBody(),
-              ),
+            child: BrandedRefreshIndicator(
+              color: AppColors.primaryBlue,
+              onRefresh: _bootstrap,
+              // Entrance now happens per-tile (StaggeredReveal in
+              // _conversationListView) instead of one block fade.
+              child: _buildBody(),
             ),
           ),
         ],

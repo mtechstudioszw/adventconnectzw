@@ -26,7 +26,7 @@ void main() {
         body: HomeShortcutChips(
           onChurches: () => fired.add('churches'),
           onEvents: () => fired.add('events'),
-          onDonate: () => fired.add('donate'),
+          onPrayer: () => fired.add('prayer'),
         ),
       ),
     ));
@@ -37,9 +37,10 @@ void main() {
 
     await t.tap(find.text('Churches'));
     await t.pump();
-    await t.tap(find.text('Donate'));
+    // Prayer replaced Donate on 27 Oct 2026 (founder).
+    await t.tap(find.text('Prayer'));
     await t.pump();
-    expect(fired, ['events', 'churches', 'donate']);
+    expect(fired, ['events', 'churches', 'prayer']);
     expect(t.takeException(), isNull);
   });
 
@@ -57,7 +58,7 @@ void main() {
             body: HomeShortcutChips(
               onChurches: () {},
               onEvents: () {},
-              onDonate: () {},
+              onPrayer: () {},
             ),
           ),
         ),

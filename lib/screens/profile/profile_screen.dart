@@ -35,12 +35,10 @@ import '../../widgets/full_image_viewer.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/friend_qr_sheet.dart';
 import '../../widgets/screen_shell.dart';
-import '../widgets/main_bottom_nav.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
-import '../../widgets/motion/hide_on_scroll.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -49,7 +47,7 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
+class _ProfileScreenState extends State<ProfileScreen> {
   int _churchesFollowed = 0;
   int _eventsGoing = 0;
   // Accepted friendships only — the stat strip shows "Friends", and a
@@ -224,8 +222,9 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
       if (!mounted) return;
       final followed = results[0] as Set<String>;
       final allPosts = results[2] as List<Post>;
-      final friends =
-          (results[3] as List<Friendship>).where((f) => f.isAccepted).length;
+      final friends = (results[3] as List<Friendship>)
+          .where((f) => f.isAccepted)
+          .length;
       final myPosts = viewerId == null
           ? const <Post>[]
           : allPosts.where((p) => p.authorId == viewerId).toList();
@@ -243,13 +242,15 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
         _myChurches = myChurches;
         _friendCount = friends;
       });
-      unawaited(_writeCache(
-        myPosts,
-        myChurches,
-        churchesFollowed: followed.length,
-        eventsGoing: (results[1] as Set).length,
-        friendCount: friends,
-      ));
+      unawaited(
+        _writeCache(
+          myPosts,
+          myChurches,
+          churchesFollowed: followed.length,
+          eventsGoing: (results[1] as Set).length,
+          friendCount: friends,
+        ),
+      );
     } catch (_) {
       // ignore — UI just keeps showing whatever it has from cache.
     }
@@ -279,7 +280,8 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
         // a moment later with the truth; showing yesterday's number beats
         // showing a zero that is definitely wrong.
         _churchesFollowed =
-            (decoded['churches_followed'] as num?)?.toInt() ?? _churchesFollowed;
+            (decoded['churches_followed'] as num?)?.toInt() ??
+            _churchesFollowed;
         _eventsGoing =
             (decoded['events_going'] as num?)?.toInt() ?? _eventsGoing;
         _friendCount =
@@ -337,14 +339,14 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
   /// The initials glyph for the big profile avatar. One builder for both
   /// the "no photo" and the "photo failed" paths so they can't drift.
   Widget _avatarInitials() => Text(
-        _initials(),
-        textAlign: TextAlign.center,
-        style: AppTextStyles.displayMedium.copyWith(
-          color: AppColors.white,
-          fontWeight: FontWeight.w700,
-          fontSize: 38,
-        ),
-      );
+    _initials(),
+    textAlign: TextAlign.center,
+    style: AppTextStyles.displayMedium.copyWith(
+      color: AppColors.white,
+      fontWeight: FontWeight.w700,
+      fontSize: 38,
+    ),
+  );
 
   String _bio() {
     final user = AuthService.currentUser;
@@ -468,63 +470,57 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: NotificationListener<UserScrollNotification>(
-        onNotification: handleNavScroll,
-        child: BrandedRefreshIndicator(
-          color: AppColors.primaryBlue,
-          onRefresh: _bootstrap,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            // Sections cascade in instead of the old one-block fade.
-            child: Column(
-              children: [
-                StaggeredReveal(index: 0, rise: 14, child: _buildHeader()),
-                StaggeredReveal(
-                  index: 1,
-                  child: Column(
-                    children: [
-                      _buildIdentity(),
-                      const SizedBox(height: 10),
-                      _buildInlineStats(),
-                    ],
+      body: BrandedRefreshIndicator(
+        color: AppColors.primaryBlue,
+        onRefresh: _bootstrap,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          // Sections cascade in instead of the old one-block fade.
+          child: Column(
+            children: [
+              StaggeredReveal(index: 0, rise: 14, child: _buildHeader()),
+              StaggeredReveal(
+                index: 1,
+                child: Column(
+                  children: [
+                    _buildIdentity(),
+                    const SizedBox(height: 10),
+                    _buildInlineStats(),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              StaggeredReveal(
+                index: 2,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _buildActionToolbar(),
+                ),
+              ),
+              const SizedBox(height: 18),
+              // Ministry & gifts (patch_168) — what you serve in and
+              // what you bring. Sits above the tabs because it is
+              // identity, not one of several views of your content.
+              StaggeredReveal(
+                index: 3,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                  child: MinistrySection(
+                    tags: _myTags,
+                    isOwn: true,
+                    onEdit: _editMinistryTags,
                   ),
                 ),
-                const SizedBox(height: 16),
-                StaggeredReveal(
-                  index: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _buildActionToolbar(),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                // Ministry & gifts (patch_168) — what you serve in and
-                // what you bring. Sits above the tabs because it is
-                // identity, not one of several views of your content.
-                StaggeredReveal(
-                  index: 3,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-                    child: MinistrySection(
-                      tags: _myTags,
-                      isOwn: true,
-                      onEdit: _editMinistryTags,
-                    ),
-                  ),
-                ),
-                StaggeredReveal(index: 4, child: _buildTabSelector()),
-                const SizedBox(height: 12),
-                StaggeredReveal(index: 4, child: _buildTabContent()),
-                const SizedBox(height: 32),
-              ],
-            ),
+              ),
+              StaggeredReveal(index: 4, child: _buildTabSelector()),
+              const SizedBox(height: 12),
+              StaggeredReveal(index: 4, child: _buildTabContent()),
+              const SizedBox(height: 32),
+            ],
           ),
         ),
       ),
-      bottomNavigationBar: HideOnScroll(
-        visible: navVisible,
-        child: const MainBottomNav(currentIndex: 4),
-      ),
+      // The island is TabShell's.
     );
   }
 
@@ -653,17 +649,17 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
               // moment a purchase lands, without reopening the sheet.
               // Hidden on iOS: no In-App Purchase is configured there.
               if (!kHidePayments)
-              ValueListenableBuilder<bool>(
-                valueListenable: PremiumService.isPremium,
-                builder: (context, isPremium, _) => _MoreMenuRow(
-                  icon: isPremium
-                      ? Icons.star_rounded
-                      : Icons.star_outline_rounded,
-                  label: isPremium ? 'Your Premium' : 'Go Premium',
-                  accent: AppColors.goldAccent,
-                  onTap: () => Navigator.pop(ctx, 'premium'),
+                ValueListenableBuilder<bool>(
+                  valueListenable: PremiumService.isPremium,
+                  builder: (context, isPremium, _) => _MoreMenuRow(
+                    icon: isPremium
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    label: isPremium ? 'Your Premium' : 'Go Premium',
+                    accent: AppColors.goldAccent,
+                    onTap: () => Navigator.pop(ctx, 'premium'),
+                  ),
                 ),
-              ),
               _MoreMenuRow(
                 icon: Icons.settings_outlined,
                 label: 'Settings',
@@ -1028,8 +1024,7 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
     // to be conditional — a fixed SizedBox would leave a hole on a
     // finished profile. Without it the card sat flush against the About
     // card below, the only pair on the tab with no space between them.
-    final showCompleteness =
-        _completenessItems().any((i) => !i.value);
+    final showCompleteness = _completenessItems().any((i) => !i.value);
     return Column(
       children: [
         if (showCompleteness) ...[
@@ -1415,9 +1410,7 @@ class _ProfileScreenState extends State<ProfileScreen> with NavVisibilityMixin {
                               coverUrl,
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) =>
-                                  Container(
-                                    color: context.palette.cardMuted,
-                                  ),
+                                  Container(color: context.palette.cardMuted),
                             ),
                           ),
                         ),
@@ -2003,15 +1996,9 @@ class _StatDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 30,
-      color: context.palette.divider,
-    );
+    return Container(width: 1, height: 30, color: context.palette.divider);
   }
 }
-
-
 
 class _ToolbarButton extends StatelessWidget {
   const _ToolbarButton({
@@ -2142,8 +2129,9 @@ class _MoreMenuRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        destructive ? AppColors.red : (accent ?? context.palette.text);
+    final color = destructive
+        ? AppColors.red
+        : (accent ?? context.palette.text);
     return PressEffect(
       child: Material(
         color: Colors.transparent,

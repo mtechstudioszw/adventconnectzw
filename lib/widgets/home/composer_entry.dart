@@ -1,7 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
-import '../../config/platform_flags.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/photo_url.dart';
 import '../../theme/app_palette.dart';
@@ -184,22 +183,56 @@ class ComposerEntry extends StatelessWidget {
   }
 }
 
-/// The three shortcuts that used to be buried inside the composer card:
-/// **Churches**, **Events**, **Donate**.
+/// Home's floating "create" button — the composer card's replacement.
+///
+/// Founder call, 27 Oct 2026: the "Share something…" card left the top of
+/// Home and became a floating gold "+". It opens the same [showCreateSheet]
+/// chooser the card did, so every kind of post is still one tap away
+/// without the card taking a row above the live banner and chips.
+///
+/// Gold is this screen's single gold moment now (the Donate chip that held
+/// it is gone). The glyph is navy, not white: white on #C8A951 is ~2.2:1
+/// and fails contrast; navy on it is ~7:1.
+class HomeComposeFab extends StatelessWidget {
+  const HomeComposeFab({super.key, required this.onCreate});
+
+  /// Fires with whatever the member picked in the sheet.
+  final void Function(CreateKind) onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return FloatingActionButton(
+      heroTag: 'home-compose',
+      tooltip: 'Create a post',
+      backgroundColor: AppColors.goldAccent,
+      foregroundColor: AppColors.darkNavy,
+      shape: const CircleBorder(),
+      onPressed: () async {
+        final choice = await showCreateSheet(context);
+        if (choice != null) onCreate(choice);
+      },
+      child: const Icon(Icons.add_rounded, size: 30),
+    );
+  }
+}
+
+/// Home's shortcut row: **Churches**, **Events**, **Prayer**.
 ///
 /// They sit on the scaffold as their own row, not inside a card, because
-/// none of them is a kind of post. Under the composer they read as "and
-/// here are the other places to go", which is what they are.
+/// none of them is a kind of post.
+///
+/// Prayer replaced Donate on 27 Oct 2026 (founder). The prayer wall was
+/// otherwise reachable only through the small "Prayer" link on the Stories
+/// header. Unlike Donate it asks nobody for money, so it shows on iOS too.
 ///
 /// Equal thirds rather than a scrolling rail: three is few enough to fit
-/// any phone, and a rail would hide Donate off the right edge on a small
-/// screen — the one shortcut the church most wants found.
+/// any phone.
 class HomeShortcutChips extends StatelessWidget {
   const HomeShortcutChips({
     super.key,
     required this.onChurches,
     required this.onEvents,
-    required this.onDonate,
+    required this.onPrayer,
   });
 
   final VoidCallback onChurches;
@@ -209,7 +242,7 @@ class HomeShortcutChips extends StatelessWidget {
   /// while its two neighbours navigated — the chip said "Events" and
   /// opened a form. Plural, like the screen it opens.
   final VoidCallback onEvents;
-  final VoidCallback onDonate;
+  final VoidCallback onPrayer;
 
   @override
   Widget build(BuildContext context) {
@@ -248,23 +281,15 @@ class HomeShortcutChips extends StatelessWidget {
               onTap: onEvents,
             ),
           ),
-          // Hidden on iOS: Apple requires In-App Purchase for anything that
-          // asks users to send money. Churches and Events then share the row.
-          if (!kHidePayments) ...[
-            const SizedBox(width: AppSpace.sm),
-            Expanded(
-              child: _ShortcutChip(
-                icon: Icons.favorite_rounded,
-                label: 'Donate',
-                // Home's single gold moment on an ordinary day. On Sabbath
-                // the header takes the gold instead; the two never compete
-                // because the header's is a whole warm gradient and this is
-                // one 16dp glyph in a tinted disc.
-                tint: AppColors.goldAccent,
-                onTap: onDonate,
-              ),
+          const SizedBox(width: AppSpace.sm),
+          Expanded(
+            child: _ShortcutChip(
+              icon: Icons.volunteer_activism_rounded,
+              label: 'Prayer',
+              tint: AppColors.primaryBlue,
+              onTap: onPrayer,
             ),
-          ],
+          ),
         ],
       ),
     );

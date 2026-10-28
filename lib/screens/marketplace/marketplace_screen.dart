@@ -17,7 +17,6 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
-import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/home/section_header.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/marketplace/cart_badge_button.dart';
@@ -25,12 +24,10 @@ import '../../widgets/marketplace/product_tile.dart';
 import '../../widgets/marketplace/shop_card.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/content_reveal.dart';
-import '../../widgets/motion/hide_on_scroll.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/offline_inline_notice.dart';
 import '../../widgets/shimmer_loaders.dart';
-import '../widgets/main_bottom_nav.dart';
 import '../widgets/post_form_widgets.dart';
 
 /// The marketplace tab.
@@ -52,8 +49,7 @@ class MarketplaceScreen extends StatefulWidget {
   State<MarketplaceScreen> createState() => _MarketplaceScreenState();
 }
 
-class _MarketplaceScreenState extends State<MarketplaceScreen>
-    with NavVisibilityMixin {
+class _MarketplaceScreenState extends State<MarketplaceScreen> {
   final _searchController = TextEditingController();
   Timer? _debounce;
 
@@ -251,34 +247,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      bottomNavigationBar: HideOnScroll(
-        visible: navVisible,
-        child: const Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // The "N items · View basket" bar that used to sit here is gone.
-            // It was a persistent blue slab restating what the basket badge in
-            // the header already shows, and it ate a row of products on every
-            // marketplace screen.
-            AdBanner(),
-            MainBottomNav(currentIndex: 3),
-          ],
-        ),
-      ),
+      // The island and the banner above it are drawn by TabShell. (The
+      // "N items · View basket" bar that used to sit there is gone — it
+      // restated the header's basket badge and ate a row of products.)
       floatingActionButton: const PostFab(
         routeName: 'add_product',
         tooltip: 'List a product',
       ),
-      body: NotificationListener<UserScrollNotification>(
-        onNotification: handleNavScroll,
-        child: BrandedRefreshIndicator(
-          color: AppColors.primaryBlue,
-          onRefresh: _refresh,
-          child: ContentReveal(
-            loading: _loading && _products.isEmpty,
-            skeleton: ShimmerLoaders.productGrid(),
-            child: _buildScroll(),
-          ),
+      body: BrandedRefreshIndicator(
+        color: AppColors.primaryBlue,
+        onRefresh: _refresh,
+        child: ContentReveal(
+          loading: _loading && _products.isEmpty,
+          skeleton: ShimmerLoaders.productGrid(),
+          child: _buildScroll(),
         ),
       ),
     );

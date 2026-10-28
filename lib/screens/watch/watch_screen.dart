@@ -18,11 +18,9 @@ import '../../widgets/shimmer_loaders.dart';
 import '../../widgets/youtube/watch_cards.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 import 'shorts_screen.dart' show ShortsArgs;
-import '../widgets/main_bottom_nav.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/motion/content_reveal.dart';
-import '../../widgets/motion/hide_on_scroll.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 
 /// Which slice of the library the feed below the chips is showing.
@@ -76,7 +74,7 @@ class WatchScreen extends StatefulWidget {
   State<WatchScreen> createState() => _WatchScreenState();
 }
 
-class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
+class _WatchScreenState extends State<WatchScreen> {
   final ScrollController _scroll = ScrollController();
 
   // Shelves.
@@ -380,41 +378,35 @@ class _WatchScreenState extends State<WatchScreen> with NavVisibilityMixin {
     final palette = context.palette;
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: NotificationListener<UserScrollNotification>(
-        onNotification: handleNavScroll,
-        child: ContentReveal(
-          loading: _loading,
-          skeleton: ShimmerLoaders.watchList(),
-          child: BrandedRefreshIndicator(
-            color: AppColors.primaryBlue,
-            onRefresh: _bootstrap,
-            child: CustomScrollView(
-              controller: _scroll,
-              slivers: [
-                _appBar(),
-                // The LIVE deck sits ABOVE the filter rail: a service
-                // going out right now outranks the filter you last
-                // picked. Everything else sits below, so the chips stay
-                // near the top of the scroll instead of behind six
-                // shelves.
-                if (_filter == _Filter.all && _liveNow.isNotEmpty)
-                  SliverToBoxAdapter(
-                    child: LiveBanner(live: _liveNow, onTap: _open),
-                  ),
-                _filterBar(palette),
-                if (_filter == _Filter.all) ..._shelfSlivers(palette),
-                ..._feedSlivers(palette),
-                // Room for the floating navigation island.
-                const SliverToBoxAdapter(child: SizedBox(height: 96)),
-              ],
-            ),
+      body: ContentReveal(
+        loading: _loading,
+        skeleton: ShimmerLoaders.watchList(),
+        child: BrandedRefreshIndicator(
+          color: AppColors.primaryBlue,
+          onRefresh: _bootstrap,
+          child: CustomScrollView(
+            controller: _scroll,
+            slivers: [
+              _appBar(),
+              // The LIVE deck sits ABOVE the filter rail: a service
+              // going out right now outranks the filter you last
+              // picked. Everything else sits below, so the chips stay
+              // near the top of the scroll instead of behind six
+              // shelves.
+              if (_filter == _Filter.all && _liveNow.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: LiveBanner(live: _liveNow, onTap: _open),
+                ),
+              _filterBar(palette),
+              if (_filter == _Filter.all) ..._shelfSlivers(palette),
+              ..._feedSlivers(palette),
+              // Room for the floating navigation island.
+              const SliverToBoxAdapter(child: SizedBox(height: 96)),
+            ],
           ),
         ),
       ),
-      bottomNavigationBar: HideOnScroll(
-        visible: navVisible,
-        child: const MainBottomNav(currentIndex: 1),
-      ),
+      // The island is TabShell's.
     );
   }
 

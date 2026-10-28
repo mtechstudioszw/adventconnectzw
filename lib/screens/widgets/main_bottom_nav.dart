@@ -49,9 +49,9 @@ const bool kFloatingNavBlur = true;
 /// **Screens must reserve ~96dp of bottom padding**, because the island now
 /// floats over content instead of displacing it.
 ///
-/// Because each tab is its own route (no shell yet), the bar remounts per
-/// screen — so the pill *pops in* at the new tab rather than sliding across;
-/// the app-wide fade-through transition carries the movement between tabs.
+/// The five tabs live in a `StatefulShellRoute` (27 Oct 2026) and `TabShell`
+/// draws ONE island for all of them. Screens outside the shell that still
+/// want the island (via MainScaffold) draw their own.
 ///
 /// Each tab can optionally show a red badge with a count by passing
 /// [badges] (map of tab-index → count). A count of 0 hides the badge. The
@@ -66,6 +66,7 @@ class MainBottomNav extends StatelessWidget {
     required this.currentIndex,
     this.badges = const <int, int>{},
     this.onReselect,
+    this.onTabSelected,
   });
 
   /// Index of the Chat tab, which merges in the app-wide unread count.
@@ -78,6 +79,11 @@ class MainBottomNav extends StatelessWidget {
   /// scroll their content back to the top — the standard behaviour everywhere
   /// else, and the only way back up from a long endless feed.
   final VoidCallback? onReselect;
+
+  /// Switches tab. Supplied by `TabShell`, which moves between its kept-alive
+  /// branches; screens outside the shell (Churches, Events, Prayer) leave it
+  /// null and fall back to `goNamed`, which lands in the shell.
+  final ValueChanged<int>? onTabSelected;
 
   static const _routes = [
     'home',
@@ -179,7 +185,12 @@ class MainBottomNav extends StatelessWidget {
       return;
     }
     HapticFeedback.selectionClick();
-    context.goNamed(_routes[i]);
+    final select = onTabSelected;
+    if (select != null) {
+      select(i);
+    } else {
+      context.goNamed(_routes[i]);
+    }
   }
 
   @override

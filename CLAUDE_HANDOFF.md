@@ -1,0 +1,218 @@
+# CLAUDE_HANDOFF — Advent Connect ZW (Adventist Super App)
+
+Handover from the local Windows session (27–28 Oct 2026) to Claude Code Cloud.
+Read this file, then `CLAUDE.md`, then the master prompt, before touching code.
+
+---
+
+## 1. Where the instructions live
+
+| File | What it is |
+|---|---|
+| `adventist_super_app_complete_13_batch_prompt-1.txt` | **The owner's master prompt.** Full scope, the 13 batches, acceptance criteria and working rules. It is the source of truth for what to build and in what order. |
+| `CLAUDE.md` | Design + technical rules that predate this work (colours, Poppins, flat headers, transparent scaffolds, `profiles` grant checklist, `pref:` cache keys). Still binding. |
+| `docs/BATCH_1_AUDIT.md` | The Batch 1 audit: baseline, every fix with root cause, open findings by severity. |
+| This file | State of play and the exact resume point. |
+
+### Non-negotiable working rules (from the master prompt)
+1. Audit → fix bugs → then build. Never rewrite working systems.
+2. **Stop and ask** before any change that conflicts with existing routes,
+   navigation, schema, auth, permissions or established behaviour. Give the
+   conflict, options, a recommendation, impact and risks, then wait.
+3. Work in the 13 batches, one at a time. Report at the end of each.
+4. Never fake data or functionality. Respect content licences.
+5. Never commit secrets.
+
+### Batch order (from the master prompt file — note it differs from an
+earlier chat version; the FILE wins)
+1. Audit, bug fixes, Advent AI cleanup — **DONE**
+2. Core app shell, Home, Marketplace, Profile — **IN PROGRESS**
+3. Library information architecture & design
+4. Bible app experience
+5. Sabbath School experience & date bug
+6. Hymnal (multilingual)
+7. Ellen G. White library & reading tools
+8. Music player, audio & Android system media controls
+9. Search, speed, autocomplete & profile image quality
+10. Watch tab
+11. Settings
+12. Profile onboarding, country rules & profile quality
+13. Quizzes, spiritual growth, final QA & release readiness
+
+---
+
+## 2. Architecture (what exists)
+
+- **Flutter 3.41.9 / Dart 3.11.5** (pubspec `sdk: ^3.11.3`). 400+ Dart files
+  under `lib/`, ~90 test files under `test/`.
+- **Backend:** Supabase (auth, Postgres with RLS + triggers, storage, edge
+  functions in `supabase/functions/`). Region Africa (Cape Town) — never change.
+  SQL migrations are hand-run patches in `database/patch_NNN_*.sql`
+  (latest: `patch_269`).
+- **Firebase:** FCM push, Crashlytics, Analytics only. `firebase_auth` is
+  permanently excluded — Supabase does auth.
+- **Routing:** go_router 14.8.1, `lib/config/router_config.dart`.
+  - **NEW (Batch 2):** the five tabs — Home, Watch, Chat (`/messages`),
+    Marketplace, Profile — are a `StatefulShellRoute.indexedStack` rendered by
+    `lib/screens/widgets/tab_shell.dart`. Tabs stay alive when you switch.
+  - Every **direct child route of a tab** carries
+    `parentNavigatorKey: rootNavigatorKey` so it still opens full-screen above
+    the island. A new child route without it will open inside the tab.
+  - Never `push` a tab route (it duplicates the shell navigator). Use
+    `goNamed`. For Chat → Requests use `ConversationsScreen.openRequests(router)`.
+  - All other routes are flat top-level `GoRoute`s.
+- **State:** services with static `ValueNotifier`s + `StatefulWidget`s. No
+  Provider/Bloc/Riverpod — do not introduce one.
+- **Cache/offline:** Hive via `CacheService` (keys starting `pref:` survive
+  sign-out; everything else is user-scoped and cleared).
+  `cached_network_image` with `adventImageCacheManager`.
+- **Global overlays** live in `MaterialApp.builder` (`lib/main.dart`):
+  ambient background, voice-note bar, docked music/video (`GlobalMediaBars`).
+  The Advent AI floating bubble was **removed** in Batch 1.
+- **Audio:** `just_audio` + `just_audio_background` (audio_service 0.18.18) in
+  `MusicPlayerService`; `audioplayers` for chat voice notes.
+- **Video:** `youtube_player_iframe`.
+- **Ads/Premium:** Appodeal, `in_app_purchase`. Payments are hidden on iOS
+  (`kHidePayments`).
+
+### Builds / CI (no Mac — iOS builds in the cloud)
+- `.github/workflows/`: `analyze.yml`, `build-apk.yml`, `build-aab.yml`,
+  `ios-build.yml`.
+- **iOS signing comes from GitHub Secrets** (`APPLE_CERTIFICATE_P12_BASE64`,
+  `APPLE_PROVISIONING_PROFILE_BASE64`, `APP_STORE_CONNECT_API_*`, …), decoded
+  at build time. Nothing in the repo is needed for signing.
+- Android release signing also comes from secrets (`ANDROID_KEYSTORE_*`).
+- Local commands: `flutter pub get`, `flutter analyze`, `flutter test`.
+  On the old Windows PC a full analyze took ~35 min; `dart analyze <files>`
+  on just the changed files is much faster.
+
+---
+
+## 3. Batch 1 — DONE (commit `dcbcc8a`)
+
+Verified: changed files `dart analyze` → **No issues found**; 32 targeted tests
+passed. Full `flutter analyze` baseline was 0 errors, 0 warnings, 3 infos.
+
+| Fix | Root cause | Key files |
+|---|---|---|
+| Advent AI floated over chats opened from Profile → Chat (and on Library, Settings, Home…) | App-wide bubble hid itself by reading `currentConfiguration.uri.path`, which `push` never updates | Bubble deleted; only entry point is the Chat inbox button (`conversations_screen.dart`). `test/advent_ai_placement_test.dart` |
+| Sabbath School chip ≠ content | `weekday % 7` into a Sabbath-first list shifted every label one day; Friday supplements shown as weekday chips | `lib/models/sabbath_school_model.dart` (`chipLabel`, `isDailyReading`, `ssWeekdayShort`), `ss_lesson_screen.dart`. `test/ss_day_labels_test.dart` |
+| Android music missing from system media controls | `MainActivity` wasn't audio_service's activity → init threw → silent fallback | `MainActivity : AudioServiceFragmentActivity()` (still a FragmentActivity, biometrics OK). **Needs on-device check.** |
+| Country "rejected but switched" | Metadata written before the trigger-guarded `profiles` row | `auth_service.dart` writes the row first; `edit_profile_screen.dart` re-reads after a failed save |
+| Search stale results | Overlapping searches; last response won | `search_screen.dart` drops responses whose query ≠ `_lastQuery` |
+| Blurry search avatars | Stored Google `=s96-c` URL used raw | `search_screen.dart` uses `photoUrlAtSize(…, 132)` |
+| Committed Apple signing material | — | Untracked + `.gitignore`d (`*.p8`, `*.pem`, `*.cer`, etc.) |
+
+---
+
+## 4. Batch 2 — IN PROGRESS (this push)
+
+Owner decisions taken in this session:
+- **Tabs stay alive** → `StatefulShellRoute` + `TabShell` (approved).
+- **The floating island stays exactly as designed** — it is drawn once by
+  `TabShell` instead of by each tab screen. Do not remove or restyle it.
+- **Devotion / Verse of the Day card keeps opening the Library Bible tab**
+  (founder decision of 4 Aug 2026 reconfirmed).
+- **Home order (owner, 27 Oct 2026):**
+  header → live quiz strip / live banner (+ urgent banner, fundraiser when
+  present) → **Churches · Events · Prayer** chips → **Stories** →
+  **Today cards** (devotion, Sabbath School, hymn…) → **Library chips**
+  (Bible, Quiz, EGW, Sabbath, Hymnal, Music) → Featured church events → feed.
+- **Composer card removed from the column**; posting is a **floating gold "+"**
+  (`HomeComposeFab`) that opens the same create sheet. Navy glyph on gold for
+  contrast. Gold is Home's one gold accent now.
+- **Donate chip replaced by Prayer** (shows on iOS too since it asks for no money).
+  Donate is still reachable from its route `/donate` (check that Profile/Settings
+  still link to it — not yet verified).
+- **Featured church events stay just before the feed.**
+
+### Done and verified
+- `TabShell` + `StatefulShellRoute`, island/badges/hide-on-scroll/Marketplace
+  banner moved into the shell, Home re-tap scroll-to-top via
+  `TabShell.registerReselect`, friend-request badge via
+  `TabShell.pendingFriendRequests`, `ConversationsScreen.openRequests`.
+  `dart analyze` on all those files → No issues; 28 tests passed
+  (`tab_shell_test`, `bottom_nav_test`, `ads_never_in_chat_test`,
+  `advent_ai_placement_test`, `ad_banner_height_test`, `hide_on_scroll_test`,
+  `home_shortcut_chips_test` (old version), `widget_test`).
+
+### Done but NOT yet verified (run these first)
+- Home: composer removed, `HomeComposeFab` added, Donate → Prayer
+  (`lib/screens/home/home_screen.dart`, `lib/widgets/home/composer_entry.dart`,
+  `test/home_shortcut_chips_test.dart` updated to Prayer).
+- **First thing to run:**
+  ```
+  dart analyze lib/screens/home/home_screen.dart lib/widgets/home/composer_entry.dart
+  flutter test test/home_shortcut_chips_test.dart test/tab_shell_test.dart test/bottom_nav_test.dart
+  ```
+- Check `ComposerEntry` is now unused — if nothing references it, it can be
+  removed (it was only used on Home).
+- Verify the gold FAB sits above the island (TabShell `extendBody` on Home
+  should give the inner Scaffold the island's bottom padding) and does not
+  cover the last feed card.
+
+### Resume point (exact)
+**Batch 2 → Home → Sabbath School Today card must open today's lesson, not
+just the quarter's lesson list.**
+- Today: `lib/widgets/home/today_card.dart` `_LessonPage` sets
+  `LibraryLaunchIntent.quarterlyId` and pushes `library` tab 1;
+  `lib/screens/library/sabbath_school_tab.dart` `_consumeLaunchIntent`
+  pushes `SsLessonListScreen` only.
+- Plan: add a "open today" flag to `lib/services/library_launch_intent.dart`;
+  in `_consumeLaunchIntent`, after the lesson list, load lessons
+  (`SabbathSchoolService.lessons`), find `isCurrent`, load its days and push
+  the day reader at the `isToday` index (see `_todayIndex()` and
+  `SsDayReaderScreen` in `ss_lesson_screen.dart`). Back must step out through
+  week → quarter.
+
+Then, still Batch 2:
+1. Home polish: loading/empty/offline states per section; card visual pass
+   (keep CLAUDE.md colours, Poppins, flat headers, transparent scaffolds).
+2. Marketplace audit + redesign (listing cards, categories, search/filters,
+   empty/loading states). No new checkout/payment features without approval.
+3. Profile redesign (layout, identity, avatar quality, actions). Profile →
+   Chat must open the normal conversation (already fixed — keep it so).
+4. End-of-batch report + full `flutter analyze` + full `flutter test`.
+
+---
+
+## 5. Pending owner actions
+
+1. **Run `database/patch_269_country_metadata_resync.sql`** in Supabase
+   (preview query first). Repairs members whose auth metadata kept a
+   country the cooldown rejected.
+2. **Rotate the App Store Connect API key `5DP8YVY728`** if the repo is or was
+   public — it is still in git history (old commits). New key → update the
+   `APP_STORE_CONNECT_API_*` secrets. Distribution cert rotation optional if
+   the repo is private. Do NOT rewrite git history without the owner's say-so.
+3. **On-device Android test** of music: notification, lock screen, Bluetooth
+   buttons, and that the biometric prompt still appears.
+4. Back up the local signing files (still on the old PC, untracked) somewhere
+   safe outside the repo.
+
+---
+
+## 6. Known open issues (by batch)
+
+| Sev | Issue | Batch |
+|---|---|---|
+| HIGH | Onboarding pre-selects country from device locale (`onboarding_flow_screen.dart:63`, `Countries.detect()`); must be an explicit choice | 12 |
+| MEDIUM | ~20 avatar renders bypass `photoUrlAtSize` (seller, blocked users, directory, edit profile, onboarding…) | 9 |
+| MEDIUM | `GlobalMediaBars` and checks in `main.dart` read `currentConfiguration.uri.path`, which misses `push`ed routes | 2/13 |
+| MEDIUM | Search fires 7–9 requests per query, no cancellation (stale ones now ignored) | 9 |
+| LOW | Media notification small icon is the colour launcher icon (`mipmap/ic_launcher`) | 8 |
+| LOW | 3 analyzer infos: `event_details_screen.dart:965,967`, `utils/date_format.dart:1` | 13 |
+| INFO | Kept-alive tabs no longer refetch on every visit; screens relying on initState-per-visit may show older data until pull-to-refresh | watch in 2 |
+
+---
+
+## 7. Gotchas learned this session
+- `CacheService.writePref` does NOT add `pref:` — see CLAUDE.md.
+- Adventech Sabbath School API dates are `dd/MM/yyyy` calendar dates and are
+  correct; lesson weeks start Saturday; days `01`–`07` plus supplements
+  `hope-ss`, `inside-story`, `teacher-comments` dated Friday.
+- `profiles` has no table-level SELECT for `authenticated`; column grants
+  only (CLAUDE.md checklist).
+- In a Home `initState` path, never notify a shell-level `ValueNotifier`
+  synchronously during build — defer with a post-frame callback (see
+  `_pendingFriendRequests` setter in `home_screen.dart`).

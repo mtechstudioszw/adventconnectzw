@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/church_service.dart';
+import '../messaging/conversations_screen.dart';
 import '../../services/notification_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -184,12 +185,14 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
         // Accepted (patch_033) and declined (patch_088) both carry the
         // FRIENDSHIP row id, not a profile id — so there's no person to
         // open. The Requests tab is where friend requests live either way.
-        context.pushNamed('messages', queryParameters: {'tab': 'requests'});
+        // Chat is a shell tab: switch to it rather than pushing a second
+        // copy of the inbox on top of this screen.
+        ConversationsScreen.openRequests(GoRouter.of(context));
         return true;
       case 'announcement':
         return _openAnnouncement(id);
       case 'friend_request':
-        context.pushNamed('messages', queryParameters: {'tab': 'requests'});
+        ConversationsScreen.openRequests(GoRouter.of(context));
         return true;
       case 'quiz_match':
         // A live quiz invite, and it expires in five minutes — so this has

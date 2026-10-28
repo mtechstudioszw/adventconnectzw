@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show FloatingHeaderSnapConfiguration;
+import 'package:flutter/scheduler.dart' show SchedulerBinding, SchedulerPhase;
 import 'package:go_router/go_router.dart';
 import '../../config/platform_flags.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -78,13 +79,12 @@ import '../../models/youtube_video.dart';
 import '../../services/youtube_service.dart';
 import '../../widgets/last_updated_strip.dart';
 import '../../widgets/motion/content_reveal.dart';
-import '../../widgets/motion/hide_on_scroll.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/home/story_viewer.dart';
 import '../../widgets/chat_contact_sheet.dart';
 import '../../widgets/shimmer_loaders.dart';
-import '../widgets/main_bottom_nav.dart';
+import '../widgets/tab_shell.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/inline_action.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
@@ -97,7 +97,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with NavVisibilityMixin, TickerProviderStateMixin {
+    with TickerProviderStateMixin {
   List<Event> _events = [];
   List<Church> _churches = [];
   List<MemberDirectoryEntry> _suggestedMembers = [];
@@ -129,7 +129,27 @@ class _HomeScreenState extends State<HomeScreen>
   // whether to show "Add friend" / "Pending" / "Friends".
   Map<String, Friendship> _friendshipsByUser = <String, Friendship>{};
   int _unreadMessages = 0;
-  int _pendingFriendRequests = 0;
+
+  /// Friend requests waiting in Chat. Every write is also published to
+  /// [TabShell.pendingFriendRequests], which adds it to the Chat badge on
+  /// the shared island.
+  int _pendingRequestCount = 0;
+  int get _pendingFriendRequests => _pendingRequestCount;
+  set _pendingFriendRequests(int value) {
+    _pendingRequestCount = value;
+    // One write happens in initState (the cached badge), i.e. while the
+    // shell is building. Notifying the island's builder mid-build throws,
+    // so that case is deferred a frame; every other write is immediate.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => TabShell.pendingFriendRequests.value = _pendingRequestCount,
+      );
+    } else {
+      TabShell.pendingFriendRequests.value = value;
+    }
+  }
+
   UrgentBanner? _banner;
   // Banners dismissed in this session — kept in memory only so the
   // user sees fresh banners on relaunch but isn't pestered after they
@@ -195,6 +215,9 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
+    // Tapping Home while already on Home returns to the top — the only way
+    // back up from an endless feed. The shared island calls this.
+    TabShell.registerReselect(TabShell.homeIndex, _scrollToTop);
     // (Entrance animation now lives in _buildScrollableContent's
     // StaggeredReveal sections — no screen-level controller needed.)
     // Paint cached unread badges instantly so the notification bell + chat
@@ -363,6 +386,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    TabShell.unregisterReselect(TabShell.homeIndex, _scrollToTop);
     FeedService.friendshipsChanged.removeListener(_onFriendshipsChanged);
     _authSub?.cancel();
     _unreadRefreshDebounce?.cancel();
@@ -879,13 +903,6 @@ class _HomeScreenState extends State<HomeScreen>
         .toUpperCase();
   }
 
-  /// What the Chat tab badges: unread messages plus friend requests waiting
-  /// to be accepted, since both are answered from inside Chat.
-  int? get _chatBadgeCount {
-    final total = _unreadMessages + _pendingFriendRequests;
-    return total > 0 ? total : null;
-  }
-
   Future<void> _openPostComposer() async {
     final post = await showPostComposer(context);
     if (!mounted || post == null) return;
@@ -1163,13 +1180,16 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      // The nav is a floating island now, so the feed runs full-height and
-      // scrolls UNDER its frosted glass. The last sliver reserves 96dp so
-      // nothing important ends up trapped beneath it.
-      extendBody: true,
+      // The island, its hide-on-scroll and the full-height layout under it
+      // belong to TabShell now. The last sliver still reserves 96dp so
+      // nothing important ends up trapped beneath the island.
+      //
+      // TabShell's extendBody adds the island's height to this body's
+      // bottom padding, so the FAB rests above the island and drops with
+      // it when the island hides on scroll.
+      floatingActionButton: HomeComposeFab(onCreate: _handleCreate),
       body: NotificationListener<ScrollNotification>(
         onNotification: (note) {
-          if (note is UserScrollNotification) handleNavScroll(note);
           if (note is ScrollUpdateNotification) {
             _maybeAutoLoadMore();
             _updateHeaderBrand();
@@ -1189,19 +1209,6 @@ class _HomeScreenState extends State<HomeScreen>
       // from it, transport controls live where a real music player puts them
       // — the Android media notification and the iOS lock screen / Control
       // Centre, both driven by the media session in MusicPlayerService.
-      bottomNavigationBar: HideOnScroll(
-        visible: navVisible,
-        child: MainBottomNav(
-          currentIndex: 0,
-          // Tapping Home while already on Home returns to the top — the
-          // only way back up from an endless feed.
-          onReselect: _scrollToTop,
-          // Home's own count is richer than the app-wide unread total the
-          // nav falls back to: it also folds in pending friend requests,
-          // which is the other thing waiting for you inside Chat.
-          badges: {MainBottomNav.chatIndex: _chatBadgeCount ?? 0},
-        ),
-      ),
     );
   }
 
@@ -1348,20 +1355,15 @@ class _HomeScreenState extends State<HomeScreen>
                   // Belt and braces: never built on iOS, whatever the card
                   // decides for itself (it asks users for money).
                   if (!kHidePayments) const IphoneFundraiserCard(),
-                  ComposerEntry(
-                    photoUrl: _viewerPhotoUrl(),
-                    name: _displayFullName(),
-                    onCreate: _handleCreate,
-                  ),
-                  // Navigation, not authoring — so these sit UNDER the
-                  // composer card rather than inside it. Order here is
-                  // fixed by the founder (28 Jul, amended 18 Aug): header,
-                  // live match, live banner, composer, these chips,
-                  // stories, devotion, library tiles, feed.
+                  // Order fixed by the founder (amended 27 Oct 2026):
+                  // header, live match, live banner, these chips, stories,
+                  // devotion cards, library tiles, church events, feed.
+                  // The composer card is gone from this column — posting
+                  // is the floating gold "+" (HomeComposeFab) now.
                   HomeShortcutChips(
                     onChurches: () => context.pushNamed('churches'),
                     onEvents: () => context.pushNamed('events'),
-                    onDonate: () => context.pushNamed('donate'),
+                    onPrayer: () => context.pushNamed('prayer'),
                   ),
                 ],
               ),

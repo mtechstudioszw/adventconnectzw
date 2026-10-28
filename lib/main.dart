@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/app_bootstrap.dart';
 import 'config/router_config.dart';
+import 'screens/messaging/conversations_screen.dart';
 import 'services/account_mode_service.dart';
 import 'services/analytics_service.dart';
 import 'services/auth_service.dart';
@@ -353,10 +354,8 @@ Future<void> _initBackgroundServices() async {
             }
             break;
           case 'friend_request':
-            appRouter.pushNamed(
-              'messages',
-              queryParameters: {'tab': 'requests'},
-            );
+            // Chat is a shell tab — switch to it, don't push a second inbox.
+            ConversationsScreen.openRequests(appRouter);
             break;
           case 'quiz_match':
             // Live quiz invite. Mirrors the in-app notification centre —

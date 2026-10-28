@@ -1,0 +1,602 @@
+ADVENTIST SUPER APP — COMPLETE PROJECT AUDIT, BUG FIXES, REDESIGN & FEATURE DEVELOPMENT PROMPT
+13-BATCH IMPLEMENTATION PLAN
+
+ROLE AND OVERALL OBJECTIVE
+You are the senior Flutter engineer, software architect, UI/UX designer, QA engineer, and technical lead working on the existing Adventist Super App project.
+
+Your job is to audit the existing Flutter project, fix verified bugs, improve existing experiences, and then implement the agreed redesigns and new features in 13 controlled batches. The goal is a polished, reliable, fast, accessible, worldwide Adventist spiritual-growth and community toolkit.
+
+IMPORTANT: This is an existing project. Do not blindly replace working systems, rewrite the app from scratch, or assume how its architecture works. Preserve working functionality, existing integrations, data, routes, design conventions, and platform-specific behavior unless a change is agreed upon.
+
+============================================================
+NON-NEGOTIABLE WORKING RULES
+============================================================
+
+1. FIRST AUDIT, THEN FIX BUGS, THEN DEVELOP
+- Begin by inspecting the entire Flutter repository and understanding its architecture.
+- Check the Flutter/Dart versions, project structure, state management, routing, dependency injection, backend integrations, authentication, database/storage, media handling, platform configuration, and existing tests.
+- Run `flutter analyze` first and capture the complete findings. Also run relevant existing tests and checks where practical.
+- Identify real errors, warnings, likely bugs, duplicated implementations, risky code, broken flows, and platform-specific issues.
+- Fix verified bugs before beginning new feature development.
+- After each meaningful fix, rerun the relevant checks. Do not merely silence analyzer warnings or hide errors; fix root causes wherever practical.
+- Do not make broad, risky changes before understanding their consequences.
+
+2. STOP AND ASK BEFORE CONTRADICTORY OR ARCHITECTURALLY RISKY CHANGES
+This is a strict requirement.
+- Before implementing a new feature, compare it with the existing architecture and features.
+- If the proposed implementation conflicts with existing routes, navigation, state management, data models, authentication, permissions, database schema, caching, deep links, app lifecycle, media services, or any existing behavior, DO NOT choose an approach silently.
+- Explain the conflict, identify the affected files/features, offer a recommended solution and reasonable alternatives, and describe the risks and migration implications.
+- Ask me to approve the approach. Wait for my answer before implementing the conflicting or risky change.
+- Do not delete, replace, rename, migrate, or break existing functionality just because a new design would be easier that way.
+- If a detail is genuinely unclear and could materially change the implementation, ask before proceeding.
+- You may continue with independent, non-conflicting work while waiting, but clearly separate it from the blocked decision.
+- Do not ask for approval for every small, safe implementation detail. Use engineering judgment for reversible, low-risk changes.
+
+3. WORK IN EXACTLY 13 BATCHES
+- The entire project scope is divided into the 13 batches below.
+- Work on one batch at a time, in order.
+- Do not try to build everything in one massive change.
+- Before starting each batch, state its objective, the existing systems it touches, the files/areas likely to change, and any risks or decisions that require my approval.
+- If a material architectural conflict exists, stop and ask me before implementing that part.
+- After each batch, summarize changes, tests/checks run, known issues, and the next batch.
+- Keep a progress checklist for all 13 batches.
+- Do not mark a batch complete unless its acceptance criteria are met.
+- Avoid unrelated refactoring and unnecessary dependency additions.
+- Do not claim a test passed unless you actually ran it.
+
+4. PRESERVE THE PROJECT AND DATA
+- Do not delete user data, production data, migrations, assets, or working features.
+- Do not make destructive database/schema changes without explaining them and obtaining approval.
+- Inspect the repository and current backend before deciding whether to add tables, indexes, RPCs, edge functions, storage policies, or API endpoints.
+- Preserve backward compatibility where practical and include safe migrations when approved.
+- Never hardcode secrets, service-role keys, private tokens, or credentials.
+- Do not invent APIs or pretend a backend capability exists if it does not.
+- Respect copyright, licensing, attribution, and content permissions for Bible translations, hymnals, Ellen G. White books, lesson materials, music, video, and other media.
+
+5. QUALITY EXPECTATIONS
+- Build on the existing codebase and design system.
+- Deliver production-quality Flutter code with clear boundaries, reusable widgets, sound error/loading/empty states, accessibility, responsive layouts, and maintainable architecture.
+- Consider low-end Android devices, unreliable networks, offline/slow-network states, and international users.
+- Keep iOS and Android behavior correct. Verify platform-specific work separately where possible.
+- Use caching, pagination, debouncing, indexes, and background work where appropriate, without introducing stale or inconsistent data.
+- Never fake functionality with buttons that do nothing, static placeholder data presented as real data, or screens that are only visual mockups.
+- If external data, API access, content licenses, or backend work is required, explain the dependency and ask before making a risky commitment.
+- Do not put Advent AI floating widgets or overlays across the app. See Batch 1 for the exact requirement.
+
+============================================================
+BATCH 1 — FULL PROJECT AUDIT, EXISTING BUG FIXES & ADVENT AI CLEANUP
+============================================================
+
+A. Full repository audit
+1. Inspect the entire project before modifying it.
+2. Run `flutter analyze`; record all errors, warnings, and informational findings.
+3. Inspect `pubspec.yaml`, dependency versions, assets, routes, state management, models, services, repositories, screens, widgets, authentication, API/backend code, database access, platform files, and tests.
+4. Run existing tests and available build checks where practical.
+5. Build a prioritized bug list: critical, high, medium, low. Distinguish verified bugs from suspicions.
+6. Identify fragile architecture, duplicated code, performance bottlenecks, security concerns, accessibility issues, and missing tests.
+
+B. Fix verified bugs before new development
+- Fix analyzer errors and genuine defects first, prioritizing crashes, data loss, broken navigation, authentication issues, and core feature failures.
+- Fix the known issues listed in later batches where they can safely be handled during the audit. Otherwise track them for their dedicated batch.
+- Do not hide problems with broad ignores, forced casts, swallowed exceptions, or disabling checks.
+- Re-run `flutter analyze` and relevant tests after fixes.
+
+C. Advent AI placement and chat bug
+- Remove Advent AI buttons, floating widgets, assistant bubbles, and overlays from every screen except the dedicated chat tab/screen where Advent AI is intended to be available.
+- Advent AI must be accessible from the app's dedicated Chat tab, not embedded inside individual conversations.
+- Fix the bug where opening a conversation through Profile > Chat causes Advent AI to appear inside the conversation.
+- Opening a chat from a profile must open the normal conversation UI. Advent AI must not appear as a participant, message, overlay, floating action button, or injected chat component inside a user's conversation.
+- Ensure the cleanup covers all entry points, nested routes, profile chat, conversation detail pages, and relevant Android/iOS layouts.
+- Do not remove the actual Advent AI functionality from its intended dedicated tab.
+- Inspect existing routing and widget composition before changing placement. If the correct implementation would require a material route/navigation change, explain it and ask me before proceeding.
+
+Acceptance criteria:
+- Initial analyzer/test baseline is documented.
+- Verified high-priority bugs fixed or clearly tracked.
+- `flutter analyze` has been rerun and results reported.
+- Advent AI appears only where intended: the dedicated Chat tab/screen, never inside individual conversations or unrelated screens.
+
+============================================================
+BATCH 2 — CORE APP SHELL, HOME SCREEN, MARKETPLACE & PROFILE
+============================================================
+
+Review and improve the main app experience, including the Home screen, Marketplace, Profile, and their relationship to the existing bottom navigation and other main destinations.
+
+A. App navigation and consistency
+- Audit current bottom navigation, route names, nested navigation, back-button behavior, deep links, and state restoration.
+- Preserve existing destinations and working navigation.
+- Make transitions consistent and prevent duplicate screens, accidental resets, broken back navigation, or route conflicts.
+- Do not change the overall navigation architecture without first presenting the conflict and getting approval.
+
+B. Home screen
+- Make the Home screen a polished, personalized launchpad for spiritual growth and app activity.
+- Present clear, useful sections such as a daily Bible verse, devotion, Sabbath School lesson, prayer access, worship/music, reading progress, upcoming Sabbath countdown/events, and relevant community or ministry updates where those features/data already exist.
+- Cards and chips should lead to the correct destination and selected content. For example, devotion or Sabbath School cards should open the appropriate section of the Library/lesson experience, not an unrelated screen.
+- Keep the Home screen distinct from the Library: Home is for discovery, daily engagement, and shortcuts; Library is the organized spiritual toolkit.
+- Use meaningful loading, offline, empty, and error states. Avoid a cluttered feed of identical cards.
+- Personalize only where real user data and privacy permissions support it.
+
+C. Marketplace
+- Audit the current Marketplace, categories, listings, search, filters, seller details, listing details, and create/edit flows.
+- Improve visual hierarchy, listing cards, category browsing, search/filter usability, loading states, empty states, and responsive layouts.
+- Preserve existing buying/selling behavior and backend contracts.
+- Do not invent checkout, payment, shipping, verification, or moderation features unless the existing architecture supports them and I approve any required changes.
+- Keep marketplace notifications and user settings consistent with the existing app.
+
+D. Profile
+- Improve profile layout, identity, avatar quality, user details, activity and relevant account actions.
+- Ensure edit-profile and country-selection behavior is consistent with the rules in Batch 7.
+- Preserve existing account/security flows and avoid duplicating settings inside the profile unnecessarily.
+- Make profile-to-chat navigation open the correct conversation without Advent AI appearing inside it.
+
+Acceptance criteria:
+- Home, Marketplace, and Profile feel consistent and polished.
+- Existing navigation and core functionality remain intact.
+- All key cards/actions lead to correct destinations.
+- No regressions to Profile > Chat.
+
+============================================================
+BATCH 3 — COMPLETE LIBRARY INFORMATION ARCHITECTURE & DESIGN
+============================================================
+
+Redesign the Library as the app's organized Adventist spiritual-growth toolkit. It is not a social feed. When an Adventist needs a Bible, lesson, hymn, trusted reading, church reference, study tool, or spiritual-learning activity, the Library should be the obvious place to find it.
+
+A. Core design
+- Create a coherent, premium-quality, modern, calm, readable UI that fits the app's existing dark/navy and blue visual language while improving contrast, hierarchy, spacing, typography, icons, navigation, and content discovery.
+- Audit the current Library tabs: Bible, Sabbath School, Hymnal, EGW, and Music.
+- Keep the main sections easy to discover, but do not force every resource into the same card layout.
+- Add a clear Library landing/overview that can surface search, continue reading, saved items, recently opened items, progress, featured resources, and categories.
+- Provide fast global Library search where practical, with filters and clear result types. Search should not accidentally mix social posts, marketplace listings, and spiritual resources unless the user explicitly selects a global search.
+- Support favorites/bookmarks, reading history, progress, offline availability where licensed and technically supported, and accessible text settings.
+- Make content provenance, edition, language, and licensing clear where relevant.
+
+B. Add useful Adventist toolkit categories
+Evaluate and implement the following as appropriate, based on available data, licenses, backend support, and approval:
+- Bible and Bible study tools.
+- Sabbath School lessons, teacher resources, lesson archives, and quarterly materials.
+- Adventist hymnals and worship music.
+- Ellen G. White writings and reading/study tools.
+- 28 Fundamental Beliefs.
+- Adventist history and heritage.
+- Church manual and official church documents where permitted.
+- Adventist Yearbook, organizational directories, and church/mission/region references where licensed and data is available.
+- Prophecy and Bible study guides.
+- Bible dictionaries, concordances, cross-references, and topical indexes where data/licensing permits.
+- Devotionals and spiritual reading.
+- Children's, youth, family, and small-group study resources.
+- Sabbath worship and family worship resources.
+- Prayer journal and saved prayer resources, if compatible with existing prayer features.
+- Quizzes, Bible challenges, memory verses, learning streaks, achievements, and leaderboards.
+- Downloaded/offline resources and reading lists.
+- Audio Bible, audiobooks, and accessible reading modes where audio content is available.
+- A resource directory with category, language, format, author/source, and download availability.
+Do not present unavailable or unlicensed content as if it were complete. Propose a phased/content-source plan for anything that depends on external datasets, copyright, or backend work.
+
+C. Library UX
+- Add useful filters such as category, language, format, topic, author, and availability where relevant.
+- Provide useful sorting: recently added, recently opened, title, and relevant popularity where data exists.
+- Support empty, loading, offline, and error states.
+- Ensure cards have meaningful labels and screen-reader semantics.
+- Keep text readable and controls accessible on small Android devices and iPhones.
+
+Acceptance criteria:
+- The Library clearly feels like an Adventist spiritual toolkit.
+- Existing resource sections still work.
+- Search, categories, saved items, and progress work with real data.
+- New categories are implemented only when the underlying content/data is available or an approved implementation plan exists.
+
+============================================================
+BATCH 4 — COMPLETE BIBLE APP EXPERIENCE
+============================================================
+
+Turn the Bible section into a polished, feature-rich Bible-reading and study experience, building on the existing implementation rather than replacing it blindly.
+
+Required capabilities, where translations/content licenses and data permit:
+- Browse Old Testament and New Testament, books, chapters, and verses.
+- Fast book/chapter navigation and jump-to-reference.
+- Change Bible translation/version and language using available licensed translations.
+- Search verses and passages quickly, with sensible matching, filters, and result navigation.
+- Verse selection, copy, share, highlight, bookmark, notes, and saved collections.
+- Cross-references, parallel passages, and contextual references when the dataset supports them.
+- Reading history and continue reading.
+- Reading plans, completion progress, daily verse, and reminders where appropriate.
+- Adjustable font size, line spacing, text layout, and light/dark/reading themes consistent with app appearance settings.
+- Audio Bible and playback controls if audio content is available.
+- Offline reading/downloads where licensing and storage architecture allow it.
+- Clear chapter navigation, previous/next chapter, and accessible selection controls.
+- Good handling of slow internet, unavailable translations, and search errors.
+
+Do not scrape, redistribute, or package copyrighted Bible translations without permission. Preserve existing version-selection and content-source contracts unless a change is approved.
+
+Acceptance criteria:
+- Core Bible navigation and reading are reliable.
+- Notes, bookmarks, highlights, and search do not lose user data.
+- Language/version switching works for the actual available content.
+- UI and behavior are tested on Android and iOS where possible.
+
+============================================================
+BATCH 5 — COMPLETE SABBATH SCHOOL EXPERIENCE & DATE BUG
+============================================================
+
+Build a comprehensive Sabbath School experience around the existing lesson and quarterly data.
+
+A. Features
+- Current quarter prominently displayed with cover, title, date range, language, and a clear Continue/Open Lessons action.
+- Browse previous and available upcoming quarters without duplicate or misleading entries.
+- Browse lessons by day and date, with clear lesson titles, Bible references, memory texts, and study content where available.
+- Support lesson notes, highlights, bookmarks, sharing, progress tracking, and continue-reading.
+- Add teacher/study resources, quarterly archives, lesson search, and language selection where data supports them.
+- Provide daily lesson navigation and a clear way to distinguish the lesson's actual date from the day label.
+- Respect the current content provider, copyright, and licensing restrictions.
+- Use fast search, helpful filters, and clear empty/offline/error states.
+
+B. CRITICAL DAY/DATE MISMATCH BUG
+There is a known bug where the date/day chips and the actual Sabbath School lesson content are offset by one day. Example: the user selects Wednesday but sees Tuesday's lesson.
+
+Investigate the root cause rather than applying a superficial label fix. Check:
+- Time zone conversions and UTC/local date handling.
+- Date parsing and formatting.
+- Inclusive/exclusive date ranges.
+- Weekday numbering conventions (Sunday-first vs Monday-first).
+- Index-to-day mappings and array offsets.
+- API/backend date fields and cached lesson data.
+- Locale-specific weekday names and daylight-saving behavior where relevant.
+
+Fix the source of the mismatch so that selecting a particular day always opens that exact day's lesson, including around quarter boundaries and different time zones. Ensure chip labels, displayed dates, lesson titles, and lesson body all agree.
+
+Add automated tests for the mapping and date logic, including multiple time zones/locales and boundary cases where practical. Do not “fix” it by merely changing the displayed weekday while leaving the wrong content selected.
+
+Acceptance criteria:
+- Wednesday selects Wednesday content, Tuesday selects Tuesday content, and so on.
+- The displayed date, chip label, and actual lesson all correspond.
+- Regression tests cover the root cause.
+
+============================================================
+BATCH 6 — HYMNAL: MULTILINGUAL ADVENTIST HYMN EXPERIENCE
+============================================================
+
+Redesign the Hymnal section as a high-quality, multilingual Seventh-day Adventist hymnbook experience.
+
+A. Language selection
+- Add a prominent, clear language selector button/control.
+- Tapping it opens a searchable language picker showing available hymnals and their language names, preferably with native-language labels and script support.
+- Do not hardcode English as the only option.
+- Show only languages/hymnal collections that are actually available and licensed/configured. Do not claim that every world language is supported if content is missing.
+- Remember the user's chosen language and restore it on future visits.
+- Allow changing languages easily at any time.
+- Clearly distinguish hymn collections/editions where a language has more than one.
+
+B. Hymn discovery and reading
+- Fast search by hymn number, title, lyric phrase, or available metadata.
+- Show hymn number, title, lyrics, verses/chorus, and available author/composer/source metadata.
+- Support favorites, recently opened hymns, bookmarks, copy/share where permitted, adjustable text size, and clean reading mode.
+- Provide accessible typography and correct rendering for accents, non-Latin scripts, and right-to-left languages if any supported collection uses them.
+- Make hymn-number navigation quick and reliable.
+
+C. Audio
+- Connect lyrics to recordings only where the correct recording is available and usage rights permit it.
+- Keep audio controls and lyrics in sync when the content supports it.
+- Do not present a lyric file as a working audio recording.
+
+Acceptance criteria:
+- Language picker works and reflects real available collections.
+- Language preference persists.
+- Search and hymn navigation are fast and correct.
+- Existing Shona and English collections, if present, continue to work.
+
+============================================================
+BATCH 7 — ELLEN G. WHITE LIBRARY & READING TOOLS
+============================================================
+
+Build a refined EGW library for reading and studying Ellen G. White's writings.
+
+A. Library browsing
+- Browse available books and collections with cover, title, author/source, language, and progress.
+- Fast search by book, author, chapter, title, and full text when the data supports full-text search.
+- Browse by book and chapter with reliable previous/next navigation.
+- Continue reading, reading history, favorites, bookmarks, and collections.
+- Support reading progress, chapter/paragraph references, notes, highlights, and saved quotations.
+- Provide font controls, line spacing, margins, themes, and a distraction-free reading mode.
+- Add text-to-speech/audio only if a suitable source or supported device capability exists.
+- Share/copy quotations with appropriate source/book/chapter/paragraph attribution.
+- Support multiple languages only where the actual text is available.
+- Keep editions and translations clearly identified.
+
+B. Study tools
+- Add useful contextual navigation, internal references, Scripture references, topic search, and parallel-language display where data permits.
+- Add daily reading plans, bookmarks, and reading goals if they can be integrated cleanly with the existing account/progress model.
+- Preserve local progress offline and sync safely where supported.
+- Respect copyright, public-domain status, edition differences, and content attribution.
+
+Acceptance criteria:
+- Users can find, open, read, save, and resume real available books.
+- Reading controls work and persist appropriately.
+- No fake books, placeholder text, or unsupported language claims.
+
+============================================================
+BATCH 8 — MUSIC PLAYER, AUDIO & ANDROID SYSTEM MEDIA CONTROLS
+============================================================
+
+Redesign the Music section as a polished Adventist worship and listening experience.
+
+A. Music library UX
+- Improve track cards, artwork/placeholders, titles, artist/collection metadata, search, liked tracks, downloaded tracks, playlists, recently played, and shuffle/repeat controls where supported.
+- Use readable full titles or sensible truncation with a way to see the full title.
+- Add a proper Now Playing screen with artwork, track details, progress, seek controls, play/pause, next/previous, queue, repeat/shuffle, and background playback where supported.
+- Support playlists and favorites only in a way compatible with the existing data model.
+- Provide loading, unavailable-track, buffering, offline, and error states.
+- Respect music licenses and avoid downloading or redistributing audio without permission.
+
+B. CRITICAL ANDROID EXTERNAL MINI-PLAYER BUG
+On Android, the music mini-player appears inside the app but does not appear in the phone's system media controls/notification area or outside the app. On iOS, the corresponding behavior works.
+
+Investigate the Android media-session and background-audio implementation. Check:
+- Current audio package/plugin and its Android integration.
+- Media session and notification configuration.
+- Android foreground service declarations and permissions required by the target SDK.
+- Notification channel and notification visibility.
+- Lock-screen/system media metadata and artwork.
+- Audio focus, lifecycle, background playback, and notification permission behavior on relevant Android versions.
+- Whether the player is integrated with the Android media session/Media3 or equivalent supported mechanism.
+
+Implement the appropriate Android fix without breaking iOS. Do not merely show an ordinary notification if the requirement is a proper system media player with controls. Ensure play/pause and track changes work from the Android notification/system media controls and lock screen, subject to Android version and permissions.
+
+Acceptance criteria:
+- Android system media controls show the current track and useful metadata while playback is active.
+- Play/pause and track controls work outside the app.
+- Background playback/lifecycle behavior is reliable.
+- iOS playback behavior is not regressed.
+- Test on physical Android hardware or an emulator when available, and document any unverified platform limitations.
+
+============================================================
+BATCH 9 — SEARCH EXPERIENCE, SPEED, AUTOCOMPLETE & PROFILE IMAGE QUALITY
+============================================================
+
+Audit and improve the app's search experience, especially the main Search feature and profile/user discovery.
+
+A. Search quality and speed
+- First inspect all existing search entry points, search providers, backend queries, indexes, cache layers, and pagination.
+- Make search feel fast on a good internet connection and responsive while typing.
+- Add debounced typeahead/autocomplete suggestions that update as the user types, similar in responsiveness to polished mainstream apps.
+- Suggestions should be relevant to the typed prefix/query, dismissible, selectable, and clearly distinguish users, resources, posts, videos, or marketplace items when the search scope supports them.
+- Show useful recent searches if privacy and existing data structures support them.
+- Support typo-tolerant/fuzzy search only if it can be implemented reliably and efficiently.
+- Add sensible loading indicators, empty results, retry states, and pagination/infinite scrolling where appropriate.
+- Prevent duplicate requests, stale results overwriting newer queries, unnecessary rebuilds, and slow full-table scans.
+- Use debouncing, cancellation/request tokens, caching, pagination, and suitable backend indexes where appropriate.
+- Do not add a broad “search everything” behavior that returns confusing results; make scope and filters clear.
+- If the backend needs new indexes, RPCs, schema changes, or a new search service, inspect current infrastructure and ask me before any material change.
+
+B. Search UI/UX
+- Make search results feel polished and premium: consistent spacing, strong hierarchy, clean user cards, good typography, helpful filters, and clear interaction states.
+- Ensure profile photos are crisp, correctly cropped, and not stretched or unnecessarily downscaled.
+- Optimize avatar fetching and rendering, including appropriate image dimensions, caching, memory usage, and error/fallback states.
+- Check whether Google sign-in returns a low-resolution avatar URL and whether the app requests an appropriate available image size. Do not assume the provider always offers a higher-resolution image.
+- Inspect image upload/compression/storage settings and server transformations so user-uploaded profile photos do not lose unnecessary quality.
+- Use suitable thumbnail sizes for search lists and higher-resolution images for profile details, without loading oversized originals for every row.
+- Respect user privacy and do not expose hidden profile information.
+
+C. Search audit coverage
+- Look for bugs throughout search, including input behavior, keyboard focus, filters, sorting, results, profile display, pagination, navigation to result details, and state restoration.
+- Fix verified bugs and add tests where practical.
+- Keep search fast without compromising relevance or data security.
+
+Acceptance criteria:
+- Typeahead/autocomplete responds smoothly.
+- Newer queries cannot be overwritten by stale results.
+- Search results and avatars look crisp and consistent.
+- Search is measured/tested where practical; do not claim a specific speed without measurement.
+
+============================================================
+BATCH 10 — WATCH TAB ENHANCEMENTS
+============================================================
+
+Audit and improve the Watch tab as a polished video and live-content experience.
+
+- Inspect current video providers, video lists, detail screens, playback, live streams, categories, recommendations, watch history, and autoplay settings.
+- Improve content discovery, category browsing, video cards/thumbnails, titles, creator/source details, playback controls, loading/error/offline states, and small-screen layouts.
+- Add or improve Watch History, Continue Watching, favorites/saved videos, playlists, and category filters where supported by current architecture and data.
+- Ensure autoplay-next respects the existing user preference in Settings. If disabled, do not automatically play the next video.
+- Ensure video playback, orientation changes, audio focus, and return navigation work correctly.
+- Add live/upcoming status and reminders only if the underlying content provider supports reliable live-event data.
+- Do not invent videos, live streams, or recommendations.
+- Respect content licenses and provider requirements.
+- Audit and fix existing Watch tab bugs before adding features.
+- Ensure settings and Watch behavior remain in sync.
+
+Acceptance criteria:
+- Watch is polished, reliable, and easy to browse.
+- Autoplay preference is honored.
+- Existing playback and navigation remain functional.
+
+============================================================
+BATCH 11 — SETTINGS REDESIGN & SETTINGS BEHAVIOR
+============================================================
+
+Redesign Settings as a clear, searchable control center for the user's app, account, notifications, appearance, privacy, and Sabbath preferences.
+
+A. Settings information architecture
+Keep the existing functional settings, but organize them clearly. Possible groups:
+- Subscription: Premium/no-ads information where already supported.
+- Account: edit profile, change password, biometric unlock, blocked contacts, delete account.
+- Notifications: event reminders, prayer updates, new messages, likes/comments, Marketplace alerts, church announcements, Advent news, Watch updates, quiz reminders.
+- Preferences: appearance/theme, language, sound/haptics, Sabbath countdown, Sabbath mode.
+- Watch: autoplay next video.
+- Privacy and permissions.
+- Legal: Terms of Service, Privacy Policy, Community Guidelines.
+- Support: Send Feedback, Help Center, Report a Problem, Contact Us.
+- Ministry support/donations only if the existing process is legitimate, secure, and clearly explained.
+- Admin options only for authorized administrators; never expose admin controls to ordinary users.
+
+B. Search and controls
+- Add/retain a fast Settings search that finds settings by label and category.
+- Use consistent rows, icons, labels, descriptions, toggle hit targets, and navigation affordances.
+- Ensure toggles immediately reflect saved state and correctly recover from save failures.
+- Persist settings reliably and load saved values on app start.
+- Ensure settings actually control the corresponding feature; do not leave decorative toggles.
+- Handle notification permissions correctly on Android and iOS.
+- Make destructive actions such as account deletion explicit, confirmed, and safe.
+- Ensure theme and language changes are reflected consistently throughout the app.
+- Check accessibility, contrast, dynamic text size, and screen-reader labels.
+- Keep settings screens visually consistent with the redesigned Home, Library, Marketplace, and Profile.
+
+C. Sabbath settings
+- Review Sabbath countdown and Sabbath mode behavior, schedule, time-zone handling, and quiet hours.
+- Make the configured Friday start and Saturday sunset/end behavior clear and correct for the user's chosen location/time zone.
+- Do not hardcode one global Sabbath time for all countries or seasons.
+- If precise local sunset calculations require new services or data, explain the options and ask me before a material architectural choice.
+- Ensure Sabbath mode only mutes/limits the features it is supposed to and does not accidentally block essential account or safety functions.
+
+D. Legal, support, and donation integrity
+- Verify that Terms, Privacy Policy, and Community Guidelines open the correct content.
+- Verify that support links/forms and donation instructions work.
+- Do not claim that a donation provider or payment integration works unless it does.
+- Keep administrator-only functionality protected by authorization, not merely hidden UI.
+
+Acceptance criteria:
+- Settings are easy to understand and search.
+- All visible controls work and persist.
+- Existing account, notification, legal, support, and Sabbath settings remain functional.
+- No privilege escalation or broken settings behavior.
+
+============================================================
+BATCH 12 — PROFILE ONBOARDING, COUNTRY RULES & PROFILE QUALITY
+============================================================
+
+Redesign and fix the profile setup/onboarding flow from first launch/profile setup through entry into the main app.
+
+A. Country selection during onboarding
+- On first profile setup, do NOT silently auto-select a country based on device location, IP, SIM, or inferred location.
+- Leave country unselected/blank initially and require the user to select it explicitly.
+- The user must not proceed to the next onboarding step or finish profile setup until a valid country is selected.
+- Show a clear inline validation message and accessible focus/error behavior if they attempt to continue without a country.
+- Provide a searchable country picker and persist the selected country correctly.
+- Do not request precise location permission just to populate this field.
+- Existing users should not have their saved country silently cleared.
+
+B. Country-switch restriction bug
+There is a known bug: the app says the country can be changed only once every two weeks, but the country still appears to change. Some features then remain locked to the old country while the UI displays the new country.
+
+Investigate and fix the actual source of truth:
+- Determine where the country is stored and where the 14-day restriction is enforced.
+- Check client-side validation, server-side rules, timestamps, time-zone handling, race conditions, optimistic UI updates, caches, profile state, and country-dependent feature configuration.
+- Ensure the restriction is enforced consistently by the authoritative backend where feasible, not only by hiding or disabling a client-side control.
+- Define the exact rule clearly: a country change is allowed only when the 14-day interval has elapsed since the last successful change.
+- If the user is not eligible, reject the change and preserve the old country everywhere. Do not update the UI optimistically or partially.
+- If eligible, update the country, last-changed timestamp, caches, profile state, and dependent feature configuration atomically or with a safe rollback strategy.
+- Avoid inconsistent states where the profile shows one country but Marketplace or other country-specific features use another.
+- Inspect all places where country affects content, listings, settings, or eligibility.
+- If this requires a database migration, RPC, backend policy, or new server-side endpoint, explain the proposal and ask for approval before implementing the material change.
+
+C. Onboarding UX
+- Improve the onboarding screens to feel polished, welcoming, simple, and trustworthy.
+- Clarify the sequence, progress, required fields, optional fields, validation, and what happens next.
+- Make the layout accessible and responsive on small phones.
+- Prevent duplicate submissions and ensure data persists safely across interruptions.
+- Handle network failures and retry states.
+- Preserve existing authentication providers and sign-in flows.
+- Ensure successful completion leads to the correct main app destination without losing profile data.
+
+D. Profile image and profile consistency
+- Coordinate with Batch 9 to ensure avatar quality, cropping, upload quality, and caching are consistent.
+- Ensure profile details and country-dependent UI refresh from the same authoritative saved state.
+- Do not expose sensitive profile data.
+
+Acceptance criteria:
+- New users must explicitly select a country before proceeding.
+- A country change is rejected before the 14-day window ends and accepted after it ends.
+- Profile and country-dependent features show the same country after success or failure.
+- Onboarding is clear, reliable, and visually polished.
+
+============================================================
+BATCH 13 — QUIZZES, SPIRITUAL GROWTH, FINAL QA & RELEASE READINESS
+============================================================
+
+A. Spiritual learning and gamification
+Evaluate and add a coherent spiritual-learning area, preferably linked from the Library as a toolkit rather than mixed into the social feed:
+- Bible quizzes and knowledge challenges.
+- 28 Fundamental Beliefs learning/quiz paths.
+- Adventist history quizzes.
+- Memory-verse practice.
+- Personal learning goals, streaks, badges, achievements, and progress.
+- Optional challenge matches with other users and leaderboards, if appropriate and supported by safe backend design.
+- Age-appropriate, respectful content and anti-abuse protections for competitive features.
+- Explain scoring rules clearly and avoid rewarding spam or superficial engagement.
+- Allow private/personal study without requiring public ranking.
+- Use verified questions, correct answers, references, and review/explanation material.
+- Do not invent doctrinal claims or show unverified content as official. Identify the source/edition of educational material.
+- Ask for approval before introducing new social, competitive, payment, or database architecture that materially affects the app.
+
+B. Final integration and regression testing
+- Review interactions among Home, Library, Bible, Sabbath School, Hymnal, EGW, Music, Search, Watch, Marketplace, Profile, Chat, Advent AI, Settings, and onboarding.
+- Run `flutter analyze`, unit/widget/integration tests available in the project, and build checks where practical.
+- Test or document:
+  * Core navigation and back behavior.
+  * Profile > Chat with no Advent AI inside conversations.
+  * Bible version selection and reading tools.
+  * Sabbath School day/date mapping.
+  * Hymnal language selection.
+  * EGW reading and progress.
+  * Android system media controls and iOS playback.
+  * Search autocomplete, pagination, and avatar quality.
+  * Watch autoplay setting.
+  * Settings persistence and permissions.
+  * Country-required onboarding and 14-day country restriction.
+  * Offline/slow-network/error states.
+- Check layout overflow, accessibility labels, contrast, large text, and small-screen devices.
+- Verify no secrets were introduced and no data/content was accidentally deleted.
+- Review dependency changes and remove unnecessary dependencies only if safe and approved where material.
+
+C. Final report
+Provide:
+- Summary of implemented work by batch.
+- List of important files/modules changed.
+- Tests and checks actually run, with honest pass/fail/skipped status.
+- Known issues and external dependencies.
+- Any remaining licensing/content/backend requirements.
+- Any migrations or operational steps required.
+- Recommended next steps.
+
+============================================================
+IMPLEMENTATION WORKFLOW FOR EVERY BATCH
+============================================================
+
+Before each batch:
+1. State the objective and acceptance criteria.
+2. Inspect the relevant current implementation.
+3. Identify dependencies and possible conflicts with existing features/routes.
+4. Ask me to decide on any material architectural conflict before coding that part.
+5. Propose a short plan and wait for approval if the plan includes a risky or contradictory change.
+
+During each batch:
+1. Make small, logically grouped changes.
+2. Preserve current working behavior.
+3. Add or update tests for bug fixes and important logic.
+4. Keep changes within the approved scope.
+5. Do not silently alter routes, database schema, authentication, backend policies, permissions, or content providers.
+
+After each batch:
+1. Run relevant tests and checks.
+2. Run `flutter analyze` at sensible milestones and at the end of the batch.
+3. Report what changed and what was actually verified.
+4. List unresolved bugs, blocked decisions, and any known limitations.
+5. Update the 13-batch checklist.
+6. Wait before starting the next batch if approval is required or if I ask to review the work.
+
+============================================================
+START HERE — DO NOT SKIP THIS
+============================================================
+
+Your first action must be to inspect the existing Flutter project and run `flutter analyze`. Do not begin with UI redesign or feature coding.
+
+Then:
+1. Report the repository structure and architecture you discovered.
+2. Report the actual analyzer findings and available test/build results.
+3. Produce a prioritized list of verified bugs and likely issues, clearly distinguishing between them.
+4. Identify the existing routes/navigation, Advent AI placement, Sabbath School date logic, search implementation, Android audio setup, country persistence/restriction logic, and profile onboarding flow.
+5. Fix verified bugs from Batch 1 first, starting with the highest priority and lowest-risk fixes.
+6. Remove Advent AI from all unrelated screens and from individual conversation screens while preserving it in its dedicated Chat tab/screen.
+7. Before any change that conflicts with the current implementation or could break a working feature, explain the issue and ask me for a decision.
+8. Do not start the 13-batch feature/redesign work until the audit and initial bug-fix phase is reported.
+
+Remember: I want a careful, high-quality implementation in the existing project—not a rushed rewrite. Work in 13 batches, communicate clearly, preserve working functionality, and ask before making material architectural decisions.

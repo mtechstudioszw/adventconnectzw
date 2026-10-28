@@ -117,6 +117,7 @@ import '../screens/settings/sound_settings_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/splash/biometric_lock_screen.dart';
 import '../screens/splash/splash_screen.dart';
+import '../screens/widgets/tab_shell.dart';
 import '../widgets/friend_qr_sheet.dart';
 
 /// A calm fade-through + gentle scale-up page transition. Used for the auth
@@ -317,25 +318,342 @@ final GoRouter appRouter = GoRouter(
       name: 'account_banned',
       builder: (context, state) => const AccountBannedScreen(),
     ),
-    GoRoute(
-      path: '/home',
-      name: 'home',
-      builder: (context, state) => const HomeScreen(),
-      routes: [
-        GoRoute(
-          path: 'search',
-          name: 'search',
-          builder: (context, state) => const SearchScreen(),
+    // The five tab destinations (27 Oct 2026). One shell owns the floating
+    // nav island and keeps every tab alive in an IndexedStack, so moving
+    // Home → Watch → Home returns to the same scroll position and loaded
+    // feed instead of rebuilding the screen from scratch.
+    //
+    // Branch order IS the island order — MainBottomNav indexes by it.
+    //
+    // Every child route of a tab sets `parentNavigatorKey: rootNavigatorKey`
+    // so it still opens full-screen ABOVE the island, exactly as it did
+    // when the tabs were plain top-level routes. Leave that key off a new
+    // child and it opens inside the tab with the island showing.
+    StatefulShellRoute.indexedStack(
+      builder: (context, state, shell) => TabShell(shell: shell),
+      branches: [
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/home',
+              name: 'home',
+              builder: (context, state) => const HomeScreen(),
+              routes: [
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'search',
+                  name: 'search',
+                  builder: (context, state) => const SearchScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'post-notice',
+                  name: 'post_notice',
+                  builder: (context, state) => const PostNoticeScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'notifications',
+                  name: 'notification_centre',
+                  builder: (context, state) => const NotificationCentreScreen(),
+                ),
+              ],
+            ),
+          ],
         ),
-        GoRoute(
-          path: 'post-notice',
-          name: 'post_notice',
-          builder: (context, state) => const PostNoticeScreen(),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/watch',
+              name: 'watch',
+              builder: (context, state) => const WatchScreen(),
+              routes: [
+                // Static segments must precede ':id' so they aren't captured
+                // as ids.
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'saved',
+                  name: 'watch_saved',
+                  builder: (context, state) => const SavedVideosScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'channels',
+                  name: 'watch_channels',
+                  builder: (context, state) => const ChannelsScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'shorts',
+                  name: 'watch_shorts',
+                  builder: (context, state) {
+                    final args = state.extra is ShortsArgs
+                        ? state.extra as ShortsArgs
+                        : const ShortsArgs(shorts: []);
+                    return ShortsScreen(args: args);
+                  },
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'series/:playlistId',
+                  name: 'watch_series',
+                  builder: (context, state) {
+                    final id = state.pathParameters['playlistId'] ?? '';
+                    final initial = state.extra is YoutubePlaylist
+                        ? state.extra as YoutubePlaylist
+                        : null;
+                    final from =
+                        int.tryParse(state.uri.queryParameters['from'] ?? '') ??
+                            0;
+                    return SeriesScreen(
+                      playlistId: id,
+                      initial: initial,
+                      fromPosition: from,
+                    );
+                  },
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'channel/:channelId',
+                  name: 'watch_channel',
+                  builder: (context, state) {
+                    final id = state.pathParameters['channelId'] ?? '';
+                    final initial = state.extra is YoutubeChannel
+                        ? state.extra as YoutubeChannel
+                        : null;
+                    return ChannelScreen(channelId: id, initial: initial);
+                  },
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: ':id',
+                  name: 'watch_video',
+                  builder: (context, state) {
+                    final id = state.pathParameters['id'] ?? '';
+                    final initial = state.extra is YoutubeVideo
+                        ? state.extra as YoutubeVideo
+                        : null;
+                    return VideoPlayerScreen(
+                      videoId: id,
+                      initialVideo: initial,
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
         ),
-        GoRoute(
-          path: 'notifications',
-          name: 'notification_centre',
-          builder: (context, state) => const NotificationCentreScreen(),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/messages',
+              name: 'messages',
+              builder: (context, state) => ConversationsScreen(
+                initialTab: state.uri.queryParameters['tab'],
+              ),
+              routes: [
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'privacy',
+                  name: 'chat_privacy',
+                  builder: (context, state) => const ChatPrivacyScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'new-chat',
+                  name: 'new_chat',
+                  // `extra: true` opens straight into "Find people" — used
+                  // by Home's end-of-feed card, which is asking "who else is
+                  // here?" rather than "who do I already know?".
+                  builder: (context, state) =>
+                      NewChatScreen(startInFindPeople: state.extra == true),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'new-group',
+                  name: 'create_group',
+                  builder: (context, state) =>
+                      CreateGroupScreen(preselectUserId: state.extra as String?),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'starred',
+                  name: 'starred_messages',
+                  builder: (context, state) => const StarredMessagesScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: ':id',
+                  name: 'chat',
+                  builder: (context, state) {
+                    final id = state.pathParameters['id'] ?? '';
+                    // extra is either a Conversation (normal open) or a
+                    // (Conversation?, String?) record (open + scroll to a
+                    // message, from chat search).
+                    final extra = state.extra;
+                    Conversation? initial;
+                    String? highlight;
+                    if (extra is Conversation) {
+                      initial = extra;
+                    } else if (extra is (Conversation?, String?)) {
+                      initial = extra.$1;
+                      highlight = extra.$2;
+                    }
+                    return ChatScreen(
+                      conversationId: id,
+                      initialConversation: initial,
+                      highlightMessageId: highlight,
+                    );
+                  },
+                  routes: [
+                    GoRoute(
+                      path: 'info',
+                      name: 'group_info',
+                      builder: (context, state) => GroupInfoScreen(
+                        conversationId: state.pathParameters['id'] ?? '',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/marketplace',
+              name: 'marketplace',
+              builder: (context, state) => const MarketplaceScreen(),
+              routes: [
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'add',
+                  name: 'add_product',
+                  builder: (context, state) => const AddProductScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'categories',
+                  name: 'categories',
+                  builder: (context, state) => const CategoryScreen(),
+                  routes: [
+                    GoRoute(
+                      path: ':id',
+                      name: 'category',
+                      builder: (context, state) => CategoryScreen(
+                        categoryId: state.pathParameters['id'],
+                      ),
+                    ),
+                  ],
+                ),
+                // Declared BEFORE ':id' — both would match
+                // '/marketplace/cart', and the literal segment has to win.
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'cart',
+                  name: 'cart',
+                  builder: (context, state) => const CartScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'orders',
+                  name: 'my_orders',
+                  builder: (context, state) => const MyOrdersScreen(),
+                  routes: [
+                    GoRoute(
+                      path: ':orderId',
+                      name: 'order_details',
+                      builder: (context, state) {
+                        final initial = state.extra is MarketOrder
+                            ? state.extra as MarketOrder
+                            : null;
+                        return OrderDetailsScreen(
+                          orderId: state.pathParameters['orderId'] ?? '',
+                          initialOrder: initial,
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: ':id',
+                  name: 'product_details',
+                  builder: (context, state) {
+                    final id = state.pathParameters['id'] ?? '';
+                    final initial = state.extra is Product
+                        ? state.extra as Product
+                        : null;
+                    return ProductDetailsScreen(
+                      productId: id,
+                      initialProduct: initial,
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/profile',
+              name: 'profile',
+              builder: (context, state) => const ProfileScreen(),
+              routes: [
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'edit',
+                  name: 'edit_profile',
+                  builder: (context, state) => const EditProfileScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'my-events',
+                  name: 'my_events',
+                  builder: (context, state) => const MyEventsScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'saved-listings',
+                  name: 'saved_listings',
+                  builder: (context, state) => const SavedListingsScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'friends',
+                  name: 'friends',
+                  builder: (context, state) => const FriendsScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'sabbath-timer',
+                  name: 'sabbath_timer',
+                  builder: (context, state) => const SabbathTimerScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'notifications',
+                  name: 'notification_preferences',
+                  builder: (context, state) =>
+                      const NotificationPreferencesScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'blocked',
+                  name: 'blocked_users',
+                  builder: (context, state) => const BlockedUsersScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'feedback',
+                  name: 'feedback',
+                  builder: (context, state) => const FeedbackScreen(),
+                ),
+              ],
+            ),
+          ],
         ),
       ],
     ),
@@ -501,69 +819,6 @@ final GoRouter appRouter = GoRouter(
       ],
     ),
     GoRoute(
-      path: '/marketplace',
-      name: 'marketplace',
-      builder: (context, state) => const MarketplaceScreen(),
-      routes: [
-        GoRoute(
-          path: 'add',
-          name: 'add_product',
-          builder: (context, state) => const AddProductScreen(),
-        ),
-        GoRoute(
-          path: 'categories',
-          name: 'categories',
-          builder: (context, state) => const CategoryScreen(),
-          routes: [
-            GoRoute(
-              path: ':id',
-              name: 'category',
-              builder: (context, state) =>
-                  CategoryScreen(categoryId: state.pathParameters['id']),
-            ),
-          ],
-        ),
-        // Declared BEFORE ':id' — both would match '/marketplace/cart',
-        // and the literal segment has to win.
-        GoRoute(
-          path: 'cart',
-          name: 'cart',
-          builder: (context, state) => const CartScreen(),
-        ),
-        GoRoute(
-          path: 'orders',
-          name: 'my_orders',
-          builder: (context, state) => const MyOrdersScreen(),
-          routes: [
-            GoRoute(
-              path: ':orderId',
-              name: 'order_details',
-              builder: (context, state) {
-                final initial = state.extra is MarketOrder
-                    ? state.extra as MarketOrder
-                    : null;
-                return OrderDetailsScreen(
-                  orderId: state.pathParameters['orderId'] ?? '',
-                  initialOrder: initial,
-                );
-              },
-            ),
-          ],
-        ),
-        GoRoute(
-          path: ':id',
-          name: 'product_details',
-          builder: (context, state) {
-            final id = state.pathParameters['id'] ?? '';
-            final initial = state.extra is Product
-                ? state.extra as Product
-                : null;
-            return ProductDetailsScreen(productId: id, initialProduct: initial);
-          },
-        ),
-      ],
-    ),
-    GoRoute(
       path: '/jobs',
       name: 'jobs',
       builder: (context, state) => const JobsScreen(),
@@ -605,119 +860,6 @@ final GoRouter appRouter = GoRouter(
       path: '/iphone-fundraiser',
       name: 'iphone_fundraiser',
       builder: (context, state) => const IphoneFundraiserScreen(),
-    ),
-    GoRoute(
-      path: '/messages',
-      name: 'messages',
-      builder: (context, state) =>
-          ConversationsScreen(initialTab: state.uri.queryParameters['tab']),
-      routes: [
-        GoRoute(
-          path: 'privacy',
-          name: 'chat_privacy',
-          builder: (context, state) => const ChatPrivacyScreen(),
-        ),
-        GoRoute(
-          path: 'new-chat',
-          name: 'new_chat',
-          // `extra: true` opens straight into "Find people" — used by
-          // Home's end-of-feed card, which is asking "who else is here?"
-          // rather than "who do I already know?".
-          builder: (context, state) =>
-              NewChatScreen(startInFindPeople: state.extra == true),
-        ),
-        GoRoute(
-          path: 'new-group',
-          name: 'create_group',
-          builder: (context, state) =>
-              CreateGroupScreen(preselectUserId: state.extra as String?),
-        ),
-        GoRoute(
-          path: 'starred',
-          name: 'starred_messages',
-          builder: (context, state) => const StarredMessagesScreen(),
-        ),
-        GoRoute(
-          path: ':id',
-          name: 'chat',
-          builder: (context, state) {
-            final id = state.pathParameters['id'] ?? '';
-            // extra is either a Conversation (normal open) or a
-            // (Conversation?, String?) record (open + scroll to a message,
-            // from chat search).
-            final extra = state.extra;
-            Conversation? initial;
-            String? highlight;
-            if (extra is Conversation) {
-              initial = extra;
-            } else if (extra is (Conversation?, String?)) {
-              initial = extra.$1;
-              highlight = extra.$2;
-            }
-            return ChatScreen(
-              conversationId: id,
-              initialConversation: initial,
-              highlightMessageId: highlight,
-            );
-          },
-          routes: [
-            GoRoute(
-              path: 'info',
-              name: 'group_info',
-              builder: (context, state) => GroupInfoScreen(
-                conversationId: state.pathParameters['id'] ?? '',
-              ),
-            ),
-          ],
-        ),
-      ],
-    ),
-    GoRoute(
-      path: '/profile',
-      name: 'profile',
-      builder: (context, state) => const ProfileScreen(),
-      routes: [
-        GoRoute(
-          path: 'edit',
-          name: 'edit_profile',
-          builder: (context, state) => const EditProfileScreen(),
-        ),
-        GoRoute(
-          path: 'my-events',
-          name: 'my_events',
-          builder: (context, state) => const MyEventsScreen(),
-        ),
-        GoRoute(
-          path: 'saved-listings',
-          name: 'saved_listings',
-          builder: (context, state) => const SavedListingsScreen(),
-        ),
-        GoRoute(
-          path: 'friends',
-          name: 'friends',
-          builder: (context, state) => const FriendsScreen(),
-        ),
-        GoRoute(
-          path: 'sabbath-timer',
-          name: 'sabbath_timer',
-          builder: (context, state) => const SabbathTimerScreen(),
-        ),
-        GoRoute(
-          path: 'notifications',
-          name: 'notification_preferences',
-          builder: (context, state) => const NotificationPreferencesScreen(),
-        ),
-        GoRoute(
-          path: 'blocked',
-          name: 'blocked_users',
-          builder: (context, state) => const BlockedUsersScreen(),
-        ),
-        GoRoute(
-          path: 'feedback',
-          name: 'feedback',
-          builder: (context, state) => const FeedbackScreen(),
-        ),
-      ],
     ),
     // Friend QR scanner. Top-level rather than nested under profile so a
     // scan can replace it with the scanned member's profile without
@@ -783,73 +925,6 @@ final GoRouter appRouter = GoRouter(
             key: state.pageKey,
             child: const QuizMatchmakingScreen(),
           ),
-        ),
-      ],
-    ),
-    GoRoute(
-      path: '/watch',
-      name: 'watch',
-      builder: (context, state) => const WatchScreen(),
-      routes: [
-        // Static segments must precede ':id' so they aren't captured as ids.
-        GoRoute(
-          path: 'saved',
-          name: 'watch_saved',
-          builder: (context, state) => const SavedVideosScreen(),
-        ),
-        GoRoute(
-          path: 'channels',
-          name: 'watch_channels',
-          builder: (context, state) => const ChannelsScreen(),
-        ),
-        GoRoute(
-          path: 'shorts',
-          name: 'watch_shorts',
-          builder: (context, state) {
-            final args = state.extra is ShortsArgs
-                ? state.extra as ShortsArgs
-                : const ShortsArgs(shorts: []);
-            return ShortsScreen(args: args);
-          },
-        ),
-        GoRoute(
-          path: 'series/:playlistId',
-          name: 'watch_series',
-          builder: (context, state) {
-            final id = state.pathParameters['playlistId'] ?? '';
-            final initial = state.extra is YoutubePlaylist
-                ? state.extra as YoutubePlaylist
-                : null;
-            final from =
-                int.tryParse(state.uri.queryParameters['from'] ?? '') ?? 0;
-            return SeriesScreen(
-              playlistId: id,
-              initial: initial,
-              fromPosition: from,
-            );
-          },
-        ),
-        GoRoute(
-          path: 'channel/:channelId',
-          name: 'watch_channel',
-          builder: (context, state) {
-            final id = state.pathParameters['channelId'] ?? '';
-            final initial = state.extra is YoutubeChannel
-                ? state.extra as YoutubeChannel
-                : null;
-            return ChannelScreen(channelId: id, initial: initial);
-          },
-        ),
-        GoRoute(
-          path: ':id',
-          name: 'watch_video',
-          builder: (context, state) {
-            final id = state.pathParameters['id'] ?? '';
-            final initial = state.extra is YoutubeVideo
-                ? state.extra as YoutubeVideo
-                : null;
-            return VideoPlayerScreen(videoId: id, initialVideo: initial);
-          },
         ),
       ],
     ),

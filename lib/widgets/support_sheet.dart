@@ -77,7 +77,7 @@ class _SupportSheet extends StatelessWidget {
                   AppTextStyles.bodyMedium.copyWith(color: palette.textMuted),
             ),
             const SizedBox(height: 18),
-            _ContactTile(
+            SupportContactTile(
               icon: Icons.chat_rounded,
               iconColor: AppColors.successGreen,
               title: 'WhatsApp us',
@@ -88,7 +88,7 @@ class _SupportSheet extends StatelessWidget {
               },
             ),
             const SizedBox(height: 10),
-            _ContactTile(
+            SupportContactTile(
               icon: Icons.email_outlined,
               iconColor: AppColors.primaryBlue,
               title: 'Email us',
@@ -106,8 +106,11 @@ class _SupportSheet extends StatelessWidget {
   }
 }
 
-class _ContactTile extends StatelessWidget {
-  const _ContactTile({
+/// One contact row (WhatsApp / email). Shared with the moderation appeal
+/// sheet so both look the same.
+class SupportContactTile extends StatelessWidget {
+  const SupportContactTile({
+    super.key,
     required this.icon,
     required this.iconColor,
     required this.title,

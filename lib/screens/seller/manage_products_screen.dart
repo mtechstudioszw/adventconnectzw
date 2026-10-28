@@ -10,6 +10,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/moderation_appeal_sheet.dart';
 
 /// Owner view of a seller's full product list. Lets them toggle each
 /// listing between live/hidden, jump into product details, and delete
@@ -90,6 +91,12 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
 
   Future<void> _toggle(Product product) async {
     if (_busyIds.contains(product.id)) return;
+    // A listing the moderators hid can't be made live from here (the
+    // database refuses — patch_272). The way back is an appeal.
+    if (product.isModerated) {
+      _appeal(product);
+      return;
+    }
     setState(() => _busyIds.add(product.id));
     try {
       await SellerService.setProductAvailability(
@@ -114,6 +121,16 @@ class _ManageProductsScreenState extends State<ManageProductsScreen>
     } finally {
       if (mounted) setState(() => _busyIds.remove(product.id));
     }
+  }
+
+  void _appeal(Product product) {
+    showModerationAppealSheet(
+      context,
+      kind: ModeratedKind.listing,
+      itemId: product.id,
+      title: product.title,
+      reason: product.moderationReason,
+    );
   }
 
   Future<void> _confirmDelete(Product product) async {
@@ -589,7 +606,10 @@ class _ProductRow extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 6),
-                        _AvailabilityChip(available: product.isAvailable),
+                        _AvailabilityChip(
+                          available: product.isAvailable,
+                          moderated: product.isModerated,
+                        ),
                       ],
                     ),
                   ),
@@ -678,7 +698,9 @@ class _RowMenu extends StatelessWidget {
           child: Row(
             children: [
               Icon(
-                product.isAvailable
+                product.isModerated
+                    ? Icons.gavel_outlined
+                    : product.isAvailable
                     ? Icons.visibility_off_outlined
                     : Icons.visibility_outlined,
                 color: AppColors.primaryBlue,
@@ -686,7 +708,11 @@ class _RowMenu extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Text(
-                product.isAvailable ? 'Hide from marketplace' : 'Make live',
+                product.isModerated
+                    ? 'Appeal'
+                    : product.isAvailable
+                    ? 'Hide from marketplace'
+                    : 'Make live',
                 style: AppTextStyles.bodyMedium,
               ),
             ],
@@ -711,11 +737,33 @@ class _RowMenu extends StatelessWidget {
 }
 
 class _AvailabilityChip extends StatelessWidget {
-  const _AvailabilityChip({required this.available});
+  const _AvailabilityChip({required this.available, this.moderated = false});
   final bool available;
+
+  /// Hidden by the moderators rather than by the seller — red, and named,
+  /// so it doesn't read like the seller's own "hidden".
+  final bool moderated;
 
   @override
   Widget build(BuildContext context) {
+    if (moderated) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.red.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          'HIDDEN BY MODERATORS',
+          style: AppTextStyles.labelSmall.copyWith(
+            color: AppColors.red,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.2,
+          ),
+        ),
+      );
+    }
     final color = available ? AppColors.successGreen : context.palette.text;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

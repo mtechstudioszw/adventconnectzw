@@ -374,6 +374,12 @@ Future<void> _initBackgroundServices() async {
           case 'seller':
             appRouter.pushNamed('seller_dashboard');
             break;
+          case 'moderated_product':
+          case 'moderated_post':
+            // The appeal opens from the notification centre, which has the
+            // full notice (title + reason) to fill it in from.
+            appRouter.pushNamed('notification_centre');
+            break;
           case 'church_admin':
             appRouter.pushNamed('admin_login');
             break;

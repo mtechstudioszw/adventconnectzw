@@ -332,6 +332,26 @@ Owner decisions taken in this session:
   said "ban product")**, seller notified for each. Reversible: set status
   back to 'available'. The six capsule listings (hedged wording +
   disclaimer) left up.
+- **Moderation + appeal (founder, 28 Oct 2026):**
+  - `database/patch_272_moderation_hide_and_appeal.sql` — **DRAFT, NOT
+    RUN** (replaces the old unrun patch_272). Adds
+    `moderation_hidden_at` / `moderation_reason` to products and posts; a
+    guard trigger (only super admins change them; a seller can't re-show a
+    moderated listing — before this they could undo the ban themselves); a
+    RESTRICTIVE select policy hiding moderated posts from all but author +
+    admins; an admin read policy on products; RPCs
+    `admin_set_product_status` / `admin_set_post_hidden` that notify with
+    reference_type `moderated_product` / `moderated_post`; backfills 42–44.
+  - App: `widgets/moderation_appeal_sheet.dart` (Appeal sheet — WhatsApp
+    +263778092494 / adventconnectzw@gmail.com from `support_sheet.dart`,
+    prefilled with item, link, reason; `ModeratedBanner`; reason dialog),
+    `widgets/moderation_actions.dart` (`moderatePost`). Admin "Hide/Restore
+    post" in the post menu (Home, user profiles); "Hide/Restore listing" on
+    product details; seller dashboard shows "HIDDEN BY MODERATORS" and its
+    toggle becomes Appeal. Notification centre + push tap open the appeal.
+  - Posts on other people's profiles had no menu → now Report (+ admin).
+  - `Post.copyWith` was dropping `country` — fixed.
+  - Test: `moderation_appeal_test`. Full suite **812 passed**.
 - Plain data writes via execute_sql go through; DDL (patch 270/272) asks
   for approval, which times out.
 - Supabase `apply_migration` approval prompts timed out 3× (never reached

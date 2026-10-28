@@ -89,6 +89,8 @@ import '../widgets/tab_shell.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/inline_action.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../services/seller_service.dart';
+import '../../widgets/moderation_actions.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -242,6 +244,7 @@ class _HomeScreenState extends State<HomeScreen>
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(onResume: _onResume);
+    _loadSuperAdmin();
     // Tapping Home while already on Home returns to the top — the only way
     // back up from an endless feed. The shared island calls this.
     TabShell.registerReselect(TabShell.homeIndex, _scrollToTop);
@@ -2195,6 +2198,8 @@ class _HomeScreenState extends State<HomeScreen>
               onDelete: () => _confirmDeletePost(post),
               onToggleVisibility: () => _togglePostVisibility(post),
               onReport: () => _reportPost(post),
+              onAdminModerate:
+                  _isSuperAdmin ? () => _adminModeratePost(post) : null,
               onAuthorTapped: () => _openAuthorProfile(post),
               onAuthorAvatarTapped: () => _previewAuthor(post),
               hasStory: _authorHasStory(post.authorId),
@@ -2580,6 +2585,26 @@ class _HomeScreenState extends State<HomeScreen>
       'user_profile',
       pathParameters: {'userId': post.authorId},
     );
+  }
+
+  /// Super admins see "Hide post (admin)" in a post's menu. Loaded once;
+  /// false on any error, so admin UI never appears by accident.
+  bool _isSuperAdmin = false;
+
+  Future<void> _loadSuperAdmin() async {
+    final admin = await SellerService.isCurrentUserSuperAdmin();
+    if (mounted && admin) setState(() => _isSuperAdmin = true);
+  }
+
+  Future<void> _adminModeratePost(Post post) async {
+    final updated = await moderatePost(context, post);
+    if (updated == null || !mounted) return;
+    setState(() {
+      _posts = [
+        for (final p in _posts)
+          if (p.id != post.id) p else if (!updated.isModerated) updated,
+      ];
+    });
   }
 
   Future<void> _reportPost(Post post) async {

@@ -25,6 +25,7 @@ import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/home/report_sheet.dart';
+import '../../widgets/moderation_appeal_sheet.dart';
 import '../../widgets/offline_toast.dart';
 
 /// Product detail.
@@ -328,9 +329,22 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           ),
           if (_isSuperAdmin)
             TextButton.icon(
-              onPressed: _moderating ? null : () => _adminHide(product),
-              icon: const Icon(Icons.visibility_off_outlined, size: 18),
-              label: const Text('Hide listing (admin)'),
+              onPressed: _moderating
+                  ? null
+                  : () => product.isModerated
+                      ? _adminRestore(product)
+                      : _adminHide(product),
+              icon: Icon(
+                product.isModerated
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                size: 18,
+              ),
+              label: Text(
+                product.isModerated
+                    ? 'Restore listing (admin)'
+                    : 'Hide listing (admin)',
+              ),
               style: TextButton.styleFrom(foregroundColor: AppColors.red),
             ),
         ],
@@ -347,9 +361,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   }
 
   Future<void> _adminHide(Product product) async {
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (ctx) => const _HideReasonDialog(),
+    final reason = await showModerationReasonDialog(
+      context,
+      what: 'listing',
+      defaultReason: 'It claims to treat or cure a medical condition, which '
+          'the marketplace guidelines do not allow.',
     );
     if (reason == null || !mounted) return;
     setState(() => _moderating = true);
@@ -370,6 +386,25 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             ? 'Hiding needs database patch_272 to be run first.'
             : 'Could not hide this listing. Try again.',
       );
+    }
+  }
+
+  /// After an appeal: make the listing visible again. Only reachable by
+  /// super admins, who can open a hidden listing (patch_272).
+  Future<void> _adminRestore(Product product) async {
+    setState(() => _moderating = true);
+    try {
+      await SellerService.adminSetProductStatus(
+        productId: product.id,
+        hidden: false,
+      );
+      if (!mounted) return;
+      _toast('Listing restored. The seller has been told.');
+      await _bootstrap();
+    } catch (_) {
+      if (mounted) _toast('Could not restore this listing. Try again.');
+    } finally {
+      if (mounted) setState(() => _moderating = false);
     }
   }
 
@@ -452,6 +487,16 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     index: 4,
                     child: const MarketplaceSafetyCard(),
                   ),
+                  if (product.isModerated && _isOwnListing(product))
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpace.md),
+                      child: ModeratedBanner(
+                        kind: ModeratedKind.listing,
+                        itemId: product.id,
+                        title: product.title,
+                        reason: product.moderationReason,
+                      ),
+                    ),
                   if (!_isOwnListing(product)) _moderationRow(product),
                 ],
               ),
@@ -1319,51 +1364,6 @@ class _CarouselImage extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Asks the moderator why, with the common case pre-filled. The reason is
-/// sent to the seller, so it should read as an explanation, not a verdict.
-class _HideReasonDialog extends StatefulWidget {
-  const _HideReasonDialog();
-
-  @override
-  State<_HideReasonDialog> createState() => _HideReasonDialogState();
-}
-
-class _HideReasonDialogState extends State<_HideReasonDialog> {
-  final _controller = TextEditingController(
-    text: 'It claims to treat or cure a medical condition, which the '
-        'marketplace guidelines do not allow.',
-  );
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Hide this listing?'),
-      content: TextField(
-        controller: _controller,
-        maxLines: 4,
-        decoration: const InputDecoration(labelText: 'Reason sent to the seller'),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, _controller.text.trim()),
-          style: TextButton.styleFrom(foregroundColor: AppColors.red),
-          child: const Text('Hide'),
-        ),
-      ],
     );
   }
 }

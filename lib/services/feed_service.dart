@@ -305,6 +305,21 @@ class FeedService {
     );
   }
 
+  /// Super admin: hide a post from everyone but its author (or restore it)
+  /// and notify the author with a way to appeal. Backed by
+  /// `admin_set_post_hidden` (patch_272), which refuses non-admins.
+  static Future<void> adminSetPostHidden(
+    String postId, {
+    required bool hidden,
+    String? reason,
+  }) async {
+    await _client.rpc('admin_set_post_hidden', params: {
+      'p_post_id': postId,
+      'p_hidden': hidden,
+      'p_reason': reason,
+    });
+  }
+
   /// Body-text search across the feed. Respects visibility via RLS so
   /// friends-only posts are only returned to friends / the author.
   static Future<List<Post>> searchPosts(String query, {int limit = 20}) async {

@@ -14,6 +14,7 @@ import '../../theme/app_tokens.dart';
 import '../cached_image.dart';
 import '../expandable_text.dart';
 import '../motion/pressable.dart';
+import '../moderation_appeal_sheet.dart';
 
 /// One card in the home feed.
 ///
@@ -44,6 +45,7 @@ class PostCard extends StatefulWidget {
     this.onToggleVisibility,
     this.onReport,
     this.onSaveImage,
+    this.onAdminModerate,
   });
 
   final Post post;
@@ -76,6 +78,10 @@ class PostCard extends StatefulWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onToggleVisibility;
   final VoidCallback? onReport;
+
+  /// Super admins only (null for everyone else): hide this post from the
+  /// feed, or restore it if it is already hidden. patch_272.
+  final VoidCallback? onAdminModerate;
   // Owner menu shows "Save to gallery" when this is wired AND the
   // post actually has an image. Non-owner cards get the same option
   // via the viewer menu.
@@ -185,6 +191,24 @@ class _PostCardState extends State<PostCard>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildHeader(context),
+          // Only the author and admins can still read a hidden post, so
+          // this is their notice — with the way to appeal.
+          if (post.isModerated)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpace.lg,
+                0,
+                AppSpace.lg,
+                AppSpace.md,
+              ),
+              child: ModeratedBanner(
+                kind: ModeratedKind.post,
+                itemId: post.id,
+                title: post.body,
+                reason: post.moderationReason,
+                ownerView: _isOwner,
+              ),
+            ),
           if ((post.body ?? '').isNotEmpty) _buildBody(context),
           if (_images.isNotEmpty) _buildMedia(context),
           _buildFooter(context),
@@ -296,6 +320,8 @@ class _PostCardState extends State<PostCard>
               onReport: widget.onReport!,
               onSaveImage: _images.isNotEmpty ? widget.onSaveImage : null,
               photoCount: _images.length,
+              onAdminModerate: widget.onAdminModerate,
+              isModerated: post.isModerated,
             ),
         ],
       ),
@@ -1173,10 +1199,14 @@ class _ViewerMenu extends StatelessWidget {
     required this.onReport,
     this.onSaveImage,
     this.photoCount = 0,
+    this.onAdminModerate,
+    this.isModerated = false,
   });
 
   final VoidCallback onReport;
   final VoidCallback? onSaveImage;
+  final VoidCallback? onAdminModerate;
+  final bool isModerated;
 
   /// Label only — see [_OwnerMenu.photoCount].
   final int photoCount;
@@ -1196,6 +1226,9 @@ class _ViewerMenu extends StatelessWidget {
             break;
           case 'report':
             onReport();
+            break;
+          case 'moderate':
+            onAdminModerate?.call();
             break;
         }
       },
@@ -1229,6 +1262,26 @@ class _ViewerMenu extends StatelessWidget {
             ],
           ),
         ),
+        if (onAdminModerate != null)
+          PopupMenuItem(
+            value: 'moderate',
+            child: Row(
+              children: [
+                Icon(
+                  isModerated
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  size: 18,
+                  color: AppColors.red,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  isModerated ? 'Restore post (admin)' : 'Hide post (admin)',
+                  style: const TextStyle(color: AppColors.red),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }

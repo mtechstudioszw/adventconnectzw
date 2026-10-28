@@ -53,6 +53,8 @@ class Post {
     this.likeCount = 0,
     this.commentCount = 0,
     this.viewerReaction,
+    this.moderationHiddenAt,
+    this.moderationReason,
   });
 
   final String id;
@@ -105,10 +107,19 @@ class Post {
   /// profile screens' like toggles keep reading naturally.
   bool get viewerLiked => viewerReaction != null;
 
+  /// Set when the moderators hid this post (patch_272). Only its author
+  /// and super admins can still read it; the author sees why and can
+  /// appeal.
+  final DateTime? moderationHiddenAt;
+  final String? moderationReason;
+  bool get isModerated => moderationHiddenAt != null;
+
   Post copyWith({
     int? likeCount,
     int? commentCount,
     Object? viewerReaction = _unset,
+    Object? moderationHiddenAt = _unset,
+    Object? moderationReason = _unset,
   }) {
     return Post(
       id: id,
@@ -117,6 +128,9 @@ class Post {
       authorPhotoUrl: authorPhotoUrl,
       authorIsVerified: authorIsVerified,
       churchId: churchId,
+      // Was missing: a liked or commented post lost its country, which the
+      // feed's home-country ranking reads.
+      country: country,
       churchName: churchName,
       churchPhotoUrl: churchPhotoUrl,
       body: body,
@@ -129,6 +143,12 @@ class Post {
       viewerReaction: identical(viewerReaction, _unset)
           ? this.viewerReaction
           : viewerReaction as PostReaction?,
+      moderationHiddenAt: identical(moderationHiddenAt, _unset)
+          ? this.moderationHiddenAt
+          : moderationHiddenAt as DateTime?,
+      moderationReason: identical(moderationReason, _unset)
+          ? this.moderationReason
+          : moderationReason as String?,
     );
   }
 
@@ -218,6 +238,9 @@ class Post {
       likeCount: likeCount,
       commentCount: commentCount,
       viewerReaction: viewerReaction,
+      moderationHiddenAt:
+          DateTime.tryParse(json['moderation_hidden_at']?.toString() ?? ''),
+      moderationReason: json['moderation_reason'] as String?,
     );
   }
 
@@ -251,5 +274,7 @@ class Post {
           'viewer_reaction': viewerReaction?.wire,
         },
         'post_comments': {'count': commentCount},
+        'moderation_hidden_at': moderationHiddenAt?.toIso8601String(),
+        'moderation_reason': moderationReason,
       };
 }

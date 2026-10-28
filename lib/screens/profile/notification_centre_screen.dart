@@ -11,6 +11,7 @@ import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/moderation_appeal_sheet.dart';
 
 /// In-app notification inbox. DB triggers populate `notifications` when
 /// people interact with the user's content (RSVPs, prayers, messages,
@@ -153,6 +154,22 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
   Future<bool> _routeFor(AppNotification n) async {
     final id = n.referenceId ?? '';
     switch (n.referenceType) {
+      // patch_272: a listing or post the moderators hid. Opens the appeal
+      // (email / WhatsApp) rather than the item, which nobody else can see.
+      case 'moderated_product':
+      case 'moderated_post':
+        if (id.isEmpty) return false;
+        final notice = parseModerationNotice(n.body);
+        showModerationAppealSheet(
+          context,
+          kind: n.referenceType == 'moderated_product'
+              ? ModeratedKind.listing
+              : ModeratedKind.post,
+          itemId: id,
+          title: notice.title,
+          reason: notice.reason,
+        );
+        return true;
       case 'event':
         if (id.isEmpty) return false;
         context.pushNamed('event_details', pathParameters: {'id': id});

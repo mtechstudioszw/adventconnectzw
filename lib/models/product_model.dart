@@ -23,6 +23,8 @@ class Product {
     this.location,
     this.viewCount = 0,
     this.isFeatured = false,
+    this.moderationHiddenAt,
+    this.moderationReason,
   });
 
   final String id;
@@ -72,6 +74,12 @@ class Product {
   final String? location;
   final int viewCount;
   final bool isFeatured;
+
+  /// Set when the moderators hid this listing (patch_272). The seller can
+  /// edit it but not show it again; they see why and can appeal.
+  final DateTime? moderationHiddenAt;
+  final String? moderationReason;
+  bool get isModerated => moderationHiddenAt != null;
 
   String get firstImage => imageUrls.isEmpty ? '' : imageUrls.first;
 
@@ -130,6 +138,9 @@ class Product {
       location: json['location'] as String?,
       viewCount: (json['view_count'] as num?)?.toInt() ?? 0,
       isFeatured: json['is_featured'] == true,
+      moderationHiddenAt:
+          DateTime.tryParse(json['moderation_hidden_at']?.toString() ?? ''),
+      moderationReason: json['moderation_reason'] as String?,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
     );
@@ -157,6 +168,8 @@ class Product {
         'location': location,
         'view_count': viewCount,
         'is_featured': isFeatured,
+        'moderation_hidden_at': moderationHiddenAt?.toIso8601String(),
+        'moderation_reason': moderationReason,
         'created_at': createdAt.toIso8601String(),
       };
 

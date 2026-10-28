@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/product_model.dart';
 import '../utils/postgrest_filter.dart';
+import 'seller_service.dart';
 import 'post_limit_error.dart';
 
 class MarketplaceService {
@@ -180,8 +181,11 @@ class MarketplaceService {
     final viewerId = _client.auth.currentUser?.id;
     // A listing the seller took down is gone for everyone but them. It used
     // to open from a shared link anyway, labelled "RESERVED".
+    // Super admins still open it — that is how they restore a listing
+    // after an appeal (patch_272 lets them read it).
     if (response['status'] == 'removed' &&
-        response['seller_id']?.toString() != viewerId) {
+        response['seller_id']?.toString() != viewerId &&
+        !await SellerService.isCurrentUserSuperAdmin()) {
       return null;
     }
     // products has no seller_phone / seller_name column — those live on

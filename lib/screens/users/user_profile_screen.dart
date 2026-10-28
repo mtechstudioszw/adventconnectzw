@@ -27,6 +27,8 @@ import '../../services/messaging_service.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/screen_shell.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import '../../services/seller_service.dart';
+import '../../widgets/moderation_actions.dart';
 
 /// Viewing another user's profile (not the logged-in user — that's the
 /// regular ProfileScreen). Surfaces:
@@ -78,6 +80,21 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   void initState() {
     super.initState();
     _bootstrap();
+    SellerService.isCurrentUserSuperAdmin().then((admin) {
+      if (mounted && admin) setState(() => _isSuperAdmin = true);
+    });
+  }
+
+  bool _isSuperAdmin = false;
+
+  Future<void> _adminModeratePost(Post post) async {
+    final updated = await moderatePost(context, post);
+    if (updated == null || !mounted) return;
+    // Admins can still read a hidden post, so here it stays, with its
+    // banner, and the menu offers Restore.
+    setState(() {
+      _posts = [for (final p in _posts) p.id == post.id ? updated : p];
+    });
   }
 
   Future<void> _bootstrap() async {
@@ -940,6 +957,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 onLikeToggled: () => _toggleLike(post),
                 onCommentsTapped: () => _openComments(post),
                 onImageTapped: (_) => _openImage(post),
+                // Posts on someone's profile had no menu at all, so they
+                // could not be reported (Apple 1.2).
+                onReport: () => showReportSheet(
+                  context,
+                  contentType: 'post',
+                  contentId: post.id,
+                  contentLabel: 'this post',
+                ),
+                onAdminModerate:
+                    _isSuperAdmin ? () => _adminModeratePost(post) : null,
               ),
           ],
         ),

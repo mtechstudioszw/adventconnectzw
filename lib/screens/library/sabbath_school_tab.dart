@@ -54,8 +54,12 @@ class _SabbathSchoolTabState extends State<SabbathSchoolTab>
   /// Deferred to after the frame: this runs off a future that can complete
   /// while the tab is still building its first frame, and pushing a route
   /// mid-build throws.
+  ///
+  /// With `openToday` it also opens this week's lesson at today's reading,
+  /// stacked on the lesson list so Back steps out day → quarter → shelf.
   void _consumeLaunchIntent(List<Quarterly> all) {
     final wanted = LibraryLaunchIntent.takeQuarterly();
+    final openToday = LibraryLaunchIntent.takeOpenToday();
     if (wanted == null || all.isEmpty) return;
     Quarterly? target;
     for (final q in all) {
@@ -68,12 +72,62 @@ class _SabbathSchoolTabState extends State<SabbathSchoolTab>
     final quarterly = target;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => SsLessonListScreen(quarterly: quarterly, lang: _lang),
-        ),
+      final listRoute = MaterialPageRoute<void>(
+        builder: (_) => SsLessonListScreen(quarterly: quarterly, lang: _lang),
       );
+      Navigator.of(context).push(listRoute);
+      if (openToday) _openTodayOver(listRoute, quarterly);
     });
+  }
+
+  /// Finds the reading dated today inside [quarterly] and pushes the day
+  /// reader on top of [listRoute].
+  ///
+  /// The list goes up first so the tap answers instantly; the lookup is
+  /// two small, cached requests. If the member has already left the list
+  /// (or opened a week themselves) by the time it resolves, nothing is
+  /// pushed — a reader sliding in over a screen they chose would be wrong.
+  /// No reading today (between quarters, or offline with nothing cached)
+  /// leaves them on the list, which is still the right quarter.
+  Future<void> _openTodayOver(
+    Route<void> listRoute,
+    Quarterly quarterly,
+  ) async {
+    final lang = _lang;
+    try {
+      final lessons = await SabbathSchoolService.lessons(
+        quarterly.id,
+        lang: lang,
+      );
+      // Week boundaries touch at midnight, so more than one lesson can
+      // claim to be current; the one whose days contain today wins.
+      for (final lesson in lessons.where((l) => l.isCurrent)) {
+        final days = await SabbathSchoolService.days(
+          quarterly.id,
+          lesson.id,
+          lang: lang,
+        );
+        final index = ssTodayIndex(days);
+        if (index < 0) continue;
+        if (!mounted || !listRoute.isCurrent) return;
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => SsDayReaderScreen(
+              lang: lang,
+              quarterlyId: quarterly.id,
+              quarterlyTitle: quarterly.title,
+              lessonId: lesson.id,
+              lessonTitle: lesson.title,
+              days: days,
+              initialIndex: index,
+            ),
+          ),
+        );
+        return;
+      }
+    } catch (_) {
+      // Offline with nothing cached — the lesson list is already showing.
+    }
   }
 
   @override

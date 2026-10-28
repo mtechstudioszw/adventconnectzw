@@ -342,10 +342,8 @@ class _LessonCardState extends State<_LessonCard> {
 
   /// Open on today's reading when the week is current, else the first day.
   int _todayIndex() {
-    for (var i = 0; i < _days.length; i++) {
-      if (_days[i].isToday) return i;
-    }
-    return 0;
+    final i = ssTodayIndex(_days);
+    return i < 0 ? 0 : i;
   }
 
   @override

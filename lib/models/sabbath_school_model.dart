@@ -185,11 +185,13 @@ class SsDay {
 
   /// True when this is today's reading. Supplements never are, or every
   /// Friday would light up four chips.
-  bool get isToday {
+  bool get isToday => isReadingFor(DateTime.now());
+
+  /// True when this is the daily reading dated [day] (calendar date only).
+  bool isReadingFor(DateTime day) {
     final d = date;
     if (d == null || !isDailyReading) return false;
-    final now = DateTime.now();
-    return d.year == now.year && d.month == now.month && d.day == now.day;
+    return d.year == day.year && d.month == day.month && d.day == day.day;
   }
 
   /// Label for the reader's day selector, derived from the day's own date
@@ -305,6 +307,14 @@ DateTime? parseSsDate(String? raw) {
 /// one day — Tuesday's reading sat under a "Mon" chip.
 String ssWeekdayShort(DateTime date) =>
     const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sab', 'Sun'][date.weekday - 1];
+
+/// Index of the daily reading dated [now] (default today) in [days], or -1
+/// when the week doesn't contain it — a past or future week, or a day list
+/// that failed to load. Supplements never match.
+int ssTodayIndex(List<SsDay> days, {DateTime? now}) {
+  final today = now ?? DateTime.now();
+  return days.indexWhere((d) => d.isReadingFor(today));
+}
 
 /// Inverse of [parseSsDate], for the offline cache round-trip.
 String? formatSsDate(DateTime? date) {

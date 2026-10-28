@@ -578,6 +578,7 @@ class _LessonPage extends StatelessWidget {
       icon: Icons.school_outlined,
       onTap: () {
         LibraryLaunchIntent.quarterlyId = quarterly.id;
+        LibraryLaunchIntent.openToday = true;
         context.pushNamed('library', extra: 1);
       },
       backdrop: cover.isEmpty ? null : _ArtBackdrop(url: cover),
@@ -623,7 +624,7 @@ class _LessonPage extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                const _OpenHint(label: 'Open this quarter'),
+                const _OpenHint(label: "Open today's lesson"),
               ],
             ),
           ),

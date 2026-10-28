@@ -38,6 +38,16 @@ class LibraryLaunchIntent {
   /// specific week the member never chose.
   static String? quarterlyId;
 
+  /// With [quarterlyId]: also open this week's lesson at today's reading.
+  ///
+  /// The Today card says "Sabbath School" on a day that has a reading, so
+  /// the member expects that reading — not a list of 13 weeks to pick from
+  /// (founder, 27 Oct 2026). The lesson list is still pushed underneath, so
+  /// Back steps out through day → quarter → shelf. When the quarter has no
+  /// reading dated today (offline with nothing cached, or between quarters)
+  /// the list is where they land.
+  static bool openToday = false;
+
   /// Reads and clears the pending music target.
   static String? takeMusic() {
     final id = musicItemId;
@@ -66,10 +76,18 @@ class LibraryLaunchIntent {
     return id;
   }
 
+  /// Reads and clears the "open today's reading" flag.
+  static bool takeOpenToday() {
+    final v = openToday;
+    openToday = false;
+    return v;
+  }
+
   static void clear() {
     musicItemId = null;
     egwItemId = null;
     hymnId = null;
     quarterlyId = null;
+    openToday = false;
   }
 }

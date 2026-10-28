@@ -136,34 +136,26 @@ Owner decisions taken in this session:
   `advent_ai_placement_test`, `ad_banner_height_test`, `hide_on_scroll_test`,
   `home_shortcut_chips_test` (old version), `widget_test`).
 
-### Done but NOT yet verified (run these first)
-- Home: composer removed, `HomeComposeFab` added, Donate → Prayer
-  (`lib/screens/home/home_screen.dart`, `lib/widgets/home/composer_entry.dart`,
-  `test/home_shortcut_chips_test.dart` updated to Prayer).
-- **First thing to run:**
-  ```
-  dart analyze lib/screens/home/home_screen.dart lib/widgets/home/composer_entry.dart
-  flutter test test/home_shortcut_chips_test.dart test/tab_shell_test.dart test/bottom_nav_test.dart
-  ```
-- Check `ComposerEntry` is now unused — if nothing references it, it can be
-  removed (it was only used on Home).
-- Verify the gold FAB sits above the island (TabShell `extendBody` on Home
-  should give the inner Scaffold the island's bottom padding) and does not
-  cover the last feed card.
+### Verified in the cloud session (28 Oct 2026)
+- Home composer removal, `HomeComposeFab`, Donate → Prayer:
+  `dart analyze` clean; `home_shortcut_chips_test`, `tab_shell_test`,
+  `bottom_nav_test` pass.
+- `ComposerEntry` was unused after the composer left Home — **deleted**
+  (`HomeComposeFab` and `HomeShortcutChips` stay in `composer_entry.dart`).
+- **Sabbath School Today card now opens today's reading.**
+  `LibraryLaunchIntent.openToday` (set with `quarterlyId` by `_LessonPage`);
+  `SabbathSchoolTab._consumeLaunchIntent` pushes the lesson list, then
+  `_openTodayOver` finds the current week whose days contain today
+  (`ssTodayIndex` in `sabbath_school_model.dart`) and pushes
+  `SsDayReaderScreen` on top. Back: day → quarter → shelf. No reading today
+  (offline, nothing cached, between quarters) → stays on the list. If the
+  member leaves the list before the lookup resolves, nothing is pushed.
+  Card hint now reads "Open today's lesson". Test: `test/ss_today_index_test.dart`.
+- **Still to check on a device:** the gold FAB sits above the island and
+  doesn't cover the last feed card; the Today-card → reader flow end to end.
 
 ### Resume point (exact)
-**Batch 2 → Home → Sabbath School Today card must open today's lesson, not
-just the quarter's lesson list.**
-- Today: `lib/widgets/home/today_card.dart` `_LessonPage` sets
-  `LibraryLaunchIntent.quarterlyId` and pushes `library` tab 1;
-  `lib/screens/library/sabbath_school_tab.dart` `_consumeLaunchIntent`
-  pushes `SsLessonListScreen` only.
-- Plan: add a "open today" flag to `lib/services/library_launch_intent.dart`;
-  in `_consumeLaunchIntent`, after the lesson list, load lessons
-  (`SabbathSchoolService.lessons`), find `isCurrent`, load its days and push
-  the day reader at the `isToday` index (see `_todayIndex()` and
-  `SsDayReaderScreen` in `ss_lesson_screen.dart`). Back must step out through
-  week → quarter.
+**Batch 2 → Home polish** (item 1 below).
 
 Then, still Batch 2:
 1. Home polish: loading/empty/offline states per section; card visual pass

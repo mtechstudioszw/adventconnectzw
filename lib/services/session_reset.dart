@@ -1,3 +1,4 @@
+import 'search_history_service.dart';
 import 'package:flutter/foundation.dart';
 
 import 'account_mode_service.dart';
@@ -76,6 +77,10 @@ class SessionReset {
     // until the first refresh landed. Same static-notifier carryover as
     // the quiz, fundraiser and verified-tick steps below.
     await _step('aiBalance', () async => AiBalanceService.clear());
+
+    // Search's "Recent" faces — the next member must not see who the last
+    // one looked up.
+    await _step('searchHistory', () async => SearchHistoryService.reset());
 
     await _step('presence', PresenceService.stop);
     await _step('typingSignal', TypingSignal.stop);

@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:advent_connect_zw/screens/home/search_screen.dart';
+import 'package:advent_connect_zw/services/search_history_service.dart';
 import 'package:advent_connect_zw/services/search_typeahead_service.dart';
 import 'package:advent_connect_zw/theme/app_theme.dart';
 
@@ -107,5 +108,60 @@ void main() {
     setFakeSupabaseHandler((_) => const <Object>[]);
     final hits = await SearchTypeaheadService.suggest('John');
     expect(hits.where((h) => h.kind == SearchHitKind.verse), isEmpty);
+  });
+
+  test('a phrase finds the verse that says it, not a near miss', () async {
+    setFakeSupabaseHandler((_) => const <Object>[]);
+    final hits = await SearchTypeaheadService.suggest('love one another');
+    final verses = [
+      for (final h in hits)
+        if (h.kind == SearchHitKind.verse) h.title,
+    ];
+    // Plain substring matching used to return Deuteronomy 21:15 ("beloved").
+    expect(verses, contains('John 13:34'));
+    expect(verses.every((v) => !v.startsWith('Deuteronomy')), isTrue);
+    final first = hits.firstWhere((h) => h.kind == SearchHitKind.verse);
+    expect(first.preview, contains('love one another'));
+  });
+
+  test('a verse reference carries its text', () async {
+    setFakeSupabaseHandler((_) => const <Object>[]);
+    final hits = await SearchTypeaheadService.suggest('John 3:16');
+    final v = hits.firstWhere((h) => h.kind == SearchHitKind.verse);
+    expect(v.preview, contains('God so loved the world'));
+  });
+
+  test('suggested people carry their real mutual friend count', () async {
+    setFakeSupabaseHandler((req) {
+      final path = req.url.path;
+      if (path.endsWith('/profiles')) {
+        return [
+          {'id': 'u9', 'full_name': 'Rudo Chikore', 'username': 'rudo'},
+        ];
+      }
+      if (path.endsWith('/rpc/mutual_friends')) {
+        return [
+          {'id': 'x', 'full_name': 'X', 'total': 4},
+        ];
+      }
+      return const <Object>[];
+    });
+    final hits = await SearchTypeaheadService.suggest('rudo');
+    final p = hits.firstWhere((h) => h.kind == SearchHitKind.person);
+    expect(p.mutualFriends, 4);
+  });
+
+  test('Recent remembers what was opened, newest first, and resets', () async {
+    SearchHistoryService.reset();
+    const a = SearchHit(kind: SearchHitKind.person, id: '1', title: 'A');
+    const b = SearchHit(kind: SearchHitKind.page, id: '2', title: 'B');
+    const verse = SearchHit(kind: SearchHitKind.verse, id: 'v', title: 'J');
+    await SearchHistoryService.add(a);
+    await SearchHistoryService.add(b);
+    await SearchHistoryService.add(a);
+    await SearchHistoryService.add(verse);
+    expect(SearchHistoryService.items.value.map((h) => h.id), ['1', '2']);
+    SearchHistoryService.reset();
+    expect(SearchHistoryService.items.value, isEmpty);
   });
 }

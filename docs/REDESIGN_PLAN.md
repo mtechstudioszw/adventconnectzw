@@ -374,3 +374,21 @@ updated; they fall back to the old buttons until the patch runs.
 - Results are grouped cards with hairlines instead of one floating card
   per row; avatars are fetched at 3x their drawn size.
 
+#### Search, round 2 (owner: "features which will surprise me… like Facebook")
+
+- Suggestions grouped by category with headings (Bible, Hymns, People,
+  Pages, Shop, Jobs, Churches) and 52px pictures; results use 60px faces
+  and Page logos.
+- People show "Friend" or their real mutual-friend count (mutual_friends
+  RPC — only ever the overlap).
+- Bible: a reference shows the verse text; a phrase ("love one another")
+  finds the verses that say it — exact phrase first, then whole words
+  (substring matching had returned "beloved").
+- Recent: faces/logos of people, Pages, products, churches and jobs opened
+  from Search (device-only, user-scoped key, cleared on sign-out via
+  SessionReset).
+- Pages: real follower counts and a Follow button in results.
+- Shop results are photo tiles (a row on Top, a 2-column grid on Shop).
+- People tab: Everyone / Friends / My church.
+- QR button in the search bar opens the existing friend scanner.
+

@@ -24,6 +24,8 @@ import '../../services/job_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/search_suggest_service.dart';
 import '../../services/search_typeahead_service.dart';
+import '../../services/search_history_service.dart';
+import '../../widgets/marketplace/product_tile.dart';
 import '../../services/page_service.dart';
 import '../../services/bible_service.dart';
 import '../../models/hymn_model.dart';
@@ -121,6 +123,15 @@ class _SearchScreenState extends State<SearchScreen>
   bool _suggesting = false;
   bool _showResults = false;
 
+  /// Real "N mutual friends" for the top people results, by user id.
+  final Map<String, int> _mutual = {};
+
+  /// Pages: follower counts and whether I follow, for the results shown.
+  final Map<String, ({int followers, bool following})> _pageStats = {};
+
+  /// People tab filter: everyone, my friends, people from my church.
+  String _peopleScope = 'all';
+
   // Fallback list — surfaced when the query has no matches. Loaded
   // lazily the first time we hit an empty-result state.
   List<MemberDirectoryEntry> _fallbackPeople = const [];
@@ -194,6 +205,7 @@ class _SearchScreenState extends State<SearchScreen>
       if (!mounted || _focusNode.hasFocus == _focused) return;
       setState(() => _focused = _focusNode.hasFocus);
     });
+    SearchHistoryService.load();
     if (widget.autoLoad) {
       _loadRecent();
       _loadSuggestions();
@@ -544,6 +556,7 @@ class _SearchScreenState extends State<SearchScreen>
   /// Opens what a suggestion points at, remembering the search.
   Future<void> _openHit(SearchHit h) async {
     unawaited(_saveRecent(_typed));
+    unawaited(SearchHistoryService.add(h));
     switch (h.kind) {
       case SearchHitKind.person:
         context.pushNamed('user_profile', pathParameters: {'userId': h.id});
@@ -651,6 +664,7 @@ class _SearchScreenState extends State<SearchScreen>
     // A new answer just landed — let it arrive in sequence rather than
     // replacing the previous result set in a single frame.
     _replayListEnter();
+    unawaited(_enrich(query, people, pages));
     final hasAny =
         people.isNotEmpty ||
         churches.isNotEmpty ||
@@ -674,6 +688,83 @@ class _SearchScreenState extends State<SearchScreen>
       setState(() => _didYouMean = const []);
     }
   }
+
+  /// Mutual friends for the top people, follower counts for Pages — real
+  /// numbers, fetched after the results are already on screen.
+  Future<void> _enrich(
+    String query,
+    List<MemberDirectoryEntry> people,
+    List<OrgPage> pages,
+  ) async {
+    final mutual = await Future.wait([
+      for (final p in people.take(6))
+        DirectoryService.fetchMutualFriends(
+          p.userId,
+          limit: 1,
+        ).then((r) => MapEntry(p.userId, r.total)),
+    ]);
+    final stats = await Future.wait([
+      for (final pg in pages.take(12))
+        PageService.stats(pg.id)
+            .then<MapEntry<String, ({int followers, bool following})>?>(
+              (st) => MapEntry(pg.id, (
+                followers: st.followers,
+                following: st.iFollow,
+              )),
+            )
+            .catchError((_) => null),
+    ]);
+    if (!mounted || query != _lastQuery) return;
+    setState(() {
+      for (final e in mutual) {
+        if (e.value > 0) _mutual[e.key] = e.value;
+      }
+      for (final e in stats) {
+        if (e != null) _pageStats[e.key] = e.value;
+      }
+    });
+  }
+
+  Future<void> _togglePageFollow(OrgPage pg) async {
+    final cur = _pageStats[pg.id] ?? (followers: 0, following: false);
+    final next = !cur.following;
+    setState(() {
+      _pageStats[pg.id] = (
+        followers: (cur.followers + (next ? 1 : -1)).clamp(0, 1 << 30),
+        following: next,
+      );
+    });
+    try {
+      if (next) {
+        await PageService.follow(pg.id);
+      } else {
+        await PageService.unfollow(pg.id);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _pageStats[pg.id] = cur);
+    }
+  }
+
+  void _openProduct(Product p) => _openResult(_lastQuery, () {
+    _remember(
+      SearchHit(
+        kind: SearchHitKind.product,
+        id: p.id,
+        title: p.title,
+        subtitle: p.formatPrice(),
+        imageUrl: p.imageUrls.isEmpty ? null : p.imageUrls.first,
+      ),
+    );
+    context.pushNamed(
+      'product_details',
+      pathParameters: {'id': p.id},
+      extra: p,
+    );
+  });
+
+  /// Remember what was opened from the results (the Recent row).
+  void _remember(SearchHit h) => unawaited(SearchHistoryService.add(h));
 
   /// Close matches for a query that found nothing. Best-effort and
   /// self-cancelling: if the member has typed on since, the answer is for a
@@ -886,6 +977,16 @@ class _SearchScreenState extends State<SearchScreen>
                 },
               ),
             ),
+            // Find a friend by their QR code — already in the app, now one
+            // tap from where people look for friends.
+            IconButton(
+              tooltip: "Scan a friend's QR code",
+              onPressed: () => context.pushNamed('scan_friend'),
+              icon: Icon(
+                Icons.qr_code_scanner_rounded,
+                color: context.palette.text,
+              ),
+            ),
           ],
         ),
       ),
@@ -911,7 +1012,7 @@ class _SearchScreenState extends State<SearchScreen>
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: palette.divider)),
       ),
-      height: 44,
+      height: 52,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -938,6 +1039,26 @@ class _SearchScreenState extends State<SearchScreen>
   /// search.
   Widget _buildTypeahead() {
     final palette = context.palette;
+    // Grouped like Facebook's: a heading per kind of thing.
+    const order = <(SearchHitKind, String)>[
+      (SearchHitKind.verse, 'Bible'),
+      (SearchHitKind.hymn, 'Hymns'),
+      (SearchHitKind.person, 'People'),
+      (SearchHitKind.page, 'Pages'),
+      (SearchHitKind.product, 'Shop'),
+      (SearchHitKind.job, 'Jobs'),
+      (SearchHitKind.church, 'Churches'),
+    ];
+    final groups = [
+      for (final (kind, label) in order)
+        (
+          label,
+          [
+            for (final h in _hits)
+              if (h.kind == kind) h,
+          ],
+        ),
+    ].where((g) => g.$2.isNotEmpty).toList();
     return ListView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -946,8 +1067,8 @@ class _SearchScreenState extends State<SearchScreen>
           children: [
             _SuggestRow(
               leading: Container(
-                width: 40,
-                height: 40,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
                   color: AppColors.primaryBlue.withValues(alpha: 0.10),
                   shape: BoxShape.circle,
@@ -955,7 +1076,7 @@ class _SearchScreenState extends State<SearchScreen>
                 child: const Icon(
                   Icons.search_rounded,
                   color: AppColors.primaryBlue,
-                  size: 20,
+                  size: 24,
                 ),
               ),
               title: 'Search for "$_typed"',
@@ -964,17 +1085,34 @@ class _SearchScreenState extends State<SearchScreen>
               bold: true,
               onTap: () => _submit(_typed),
             ),
-            for (final h in _hits)
-              _SuggestRow(
-                leading: _HitLeading(hit: h),
-                title: h.title,
-                subtitle: h.subtitle,
-                query: _typed,
-                verified: h.verified,
-                onTap: () => _openHit(h),
-              ),
           ],
         ),
+        for (final (label, hits) in groups) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 18, 4, 8),
+            child: Text(
+              label,
+              style: AppTextStyles.titleSmall.copyWith(
+                color: palette.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          _Group(
+            children: [
+              for (final h in hits)
+                _SuggestRow(
+                  leading: _HitLeading(hit: h),
+                  title: h.title,
+                  subtitle: _hitSubtitle(h),
+                  preview: h.preview,
+                  query: _typed,
+                  verified: h.verified,
+                  onTap: () => _openHit(h),
+                ),
+            ],
+          ),
+        ],
         if (_suggesting && _hits.isEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 16),
@@ -1003,6 +1141,17 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
+  /// "Friend · Harare", "3 mutual friends · @rudo", or the hit's own line.
+  String? _hitSubtitle(SearchHit h) {
+    if (h.kind != SearchHitKind.person) return h.subtitle;
+    final lead = _friendIds.contains(h.id)
+        ? 'Friend'
+        : (h.mutualFriends ?? 0) > 0
+        ? '${h.mutualFriends} mutual friend${h.mutualFriends == 1 ? '' : 's'}'
+        : null;
+    return [?lead, if ((h.subtitle ?? '').isNotEmpty) h.subtitle!].join(' · ');
+  }
+
   Widget _buildRecent() {
     final shown = _seeAllRecent
         ? _recent
@@ -1013,6 +1162,16 @@ class _SearchScreenState extends State<SearchScreen>
       // under the field before anything readable started.
       padding: const EdgeInsets.fromLTRB(0, 2, 0, 24),
       children: [
+        ValueListenableBuilder<List<SearchHit>>(
+          valueListenable: SearchHistoryService.items,
+          builder: (context, items, _) => items.isEmpty
+              ? const SizedBox.shrink()
+              : _RecentItemsRail(
+                  items: items,
+                  onOpen: _openHit,
+                  onClear: SearchHistoryService.clear,
+                ),
+        ),
         _JumpGrid(
           onPeople: () {
             setState(() => _filter = _Filter.people);
@@ -1491,6 +1650,16 @@ class _SearchScreenState extends State<SearchScreen>
     // rather than expanding in place, which is what the chips are for.
     const allCap = 3;
     final grouped = _filter == _Filter.all;
+    // People tab: everyone, my friends, or my church.
+    final people = _filter != _Filter.people || _peopleScope == 'all'
+        ? _people
+        : [
+            for (final p in _people)
+              if (_peopleScope == 'friends'
+                  ? _friendIds.contains(p.userId)
+                  : (p.churchId != null && _isHomeChurch(p.churchId!)))
+                p,
+          ];
     List<T> cap<T>(List<T> items) =>
         grouped ? items.take(allCap).toList() : items;
 
@@ -1502,25 +1671,57 @@ class _SearchScreenState extends State<SearchScreen>
           onSeeAll: grouped && _people.length > allCap
               ? () => setState(() => _filter = _Filter.people)
               : null,
+          header: _filter == _Filter.people
+              ? _ScopeChips(
+                  value: _peopleScope,
+                  options: [
+                    ('all', 'Everyone'),
+                    ('friends', 'Friends'),
+                    if ((_homeChurchId ?? '').isNotEmpty)
+                      ('church', 'My church'),
+                  ],
+                  onChanged: (v) => setState(() => _peopleScope = v),
+                )
+              : null,
           children: [
-            for (final p in cap(_people))
+            if (people.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(18),
+                child: Text(
+                  _peopleScope == 'friends'
+                      ? 'None of your friends match "$_lastQuery".'
+                      : 'Nobody from your church matches "$_lastQuery".',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: context.palette.textMuted,
+                  ),
+                ),
+              ),
+            for (final p in cap(people))
               _PersonResultRow(
                 person: p,
                 query: _lastQuery,
-                state: _friendIds.contains(p.userId)
-                    ? _FriendState.friends
-                    : _pendingFriendIds.contains(p.userId)
-                    ? _FriendState.pending
-                    : _FriendState.none,
+                mutualFriends: _mutual[p.userId],
+                state: _friendStateOf(p.userId),
                 busy: _actionBusy.contains(p.userId),
                 onAdd: () => _addFriend(p.userId),
-                onTap: () => _openResult(
-                  _lastQuery,
-                  () => context.pushNamed(
+                onTap: () => _openResult(_lastQuery, () {
+                  _remember(
+                    SearchHit(
+                      kind: SearchHitKind.person,
+                      id: p.userId,
+                      title: (p.fullName ?? '').trim().isEmpty
+                          ? 'Member'
+                          : p.fullName!.trim(),
+                      subtitle: p.city,
+                      imageUrl: p.profilePhotoUrl,
+                      verified: p.isVerified,
+                    ),
+                  );
+                  context.pushNamed(
                     'user_profile',
                     pathParameters: {'userId': p.userId},
-                  ),
-                ),
+                  );
+                }),
               ),
           ],
         ),
@@ -1533,29 +1734,29 @@ class _SearchScreenState extends State<SearchScreen>
               : null,
           children: [
             for (final pg in cap(_pages))
-              _Row(
-                icon: Icons.flag_outlined,
-                imageUrl: pg.logoUrl,
-                title: pg.name,
-                subtitle: [
-                  'Page',
-                  if ((pg.city ?? '').isNotEmpty) pg.city!,
-                ].join('  ·  '),
-                trailing: pg.isVerified
-                    ? const Icon(
-                        Icons.verified,
-                        color: AppColors.goldAccent,
-                        size: 15,
-                      )
-                    : null,
-                onTap: () => _openResult(
-                  _lastQuery,
-                  () => context.pushNamed(
+              _PageResultRow(
+                page: pg,
+                query: _lastQuery,
+                followers: _pageStats[pg.id]?.followers,
+                following: _pageStats[pg.id]?.following ?? false,
+                onFollow: () => _togglePageFollow(pg),
+                onTap: () => _openResult(_lastQuery, () {
+                  _remember(
+                    SearchHit(
+                      kind: SearchHitKind.page,
+                      id: pg.id,
+                      title: pg.name,
+                      subtitle: pg.category.label,
+                      imageUrl: pg.logoUrl,
+                      verified: pg.isVerified,
+                    ),
+                  );
+                  context.pushNamed(
                     'page_details',
                     pathParameters: {'id': pg.id},
                     extra: pg,
-                  ),
-                ),
+                  );
+                }),
               ),
           ],
         ),
@@ -1656,21 +1857,43 @@ class _SearchScreenState extends State<SearchScreen>
         _Section(
           label: 'Shop',
           count: _products.length,
+          grouped: false,
           onSeeAll: grouped && _products.length > allCap
               ? () => setState(() => _filter = _Filter.marketplace)
               : null,
           children: [
-            for (final p in cap(_products))
-              _ProductResultRow(
-                product: p,
-                query: _lastQuery,
-                onTap: () => _openResult(
-                  _lastQuery,
-                  () => context.pushNamed(
-                    'product_details',
-                    pathParameters: {'id': p.id},
-                    extra: p,
+            // Photos, like a shop — not text rows.
+            if (grouped)
+              SizedBox(
+                height: 236,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
+                  itemCount: _products.length.clamp(0, 8),
+                  separatorBuilder: (_, _) => const SizedBox(width: 10),
+                  itemBuilder: (context, i) => SizedBox(
+                    width: 156,
+                    child: ProductTile(
+                      product: _products[i],
+                      onTap: () => _openProduct(_products[i]),
+                    ),
                   ),
+                ),
+              )
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _products.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 0.72,
+                ),
+                itemBuilder: (context, i) => ProductTile(
+                  product: _products[i],
+                  onTap: () => _openProduct(_products[i]),
                 ),
               ),
           ],
@@ -1882,10 +2105,14 @@ class _Section extends StatelessWidget {
     required this.children,
     this.onSeeAll,
     this.grouped = true,
+    this.header,
   });
   final String label;
   final int count;
   final List<Widget> children;
+
+  /// Optional row under the title (the People tab's filter chips).
+  final Widget? header;
 
   /// Non-null only when the section is truncated on the Top tab. Switches
   /// to this type's tab rather than expanding in place.
@@ -1942,12 +2169,267 @@ class _Section extends StatelessWidget {
               ],
             ),
           ),
+          ?header,
           if (grouped)
             _Group(children: children)
           else
             for (final c in children) ...[c, const SizedBox(height: 10)],
         ],
       ),
+    );
+  }
+}
+
+/// A Page result: logo, name, category, real follower count, Follow.
+class _PageResultRow extends StatelessWidget {
+  const _PageResultRow({
+    required this.page,
+    required this.query,
+    required this.following,
+    required this.onFollow,
+    required this.onTap,
+    this.followers,
+  });
+  final OrgPage page;
+  final String query;
+  final int? followers;
+  final bool following;
+  final VoidCallback onFollow;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final n = followers;
+    final sub = [
+      page.category.label,
+      if (n != null && n > 0) '$n follower${n == 1 ? '' : 's'}',
+      if ((page.city ?? '').isNotEmpty) page.city!,
+    ].join('  ·  ');
+    return _ResultShell(
+      onTap: onTap,
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 60,
+          height: 60,
+          color: AppColors.primaryBlue.withValues(alpha: 0.10),
+          child: (page.logoUrl ?? '').isNotEmpty
+              ? CachedImage(page.logoUrl!, fit: BoxFit.cover)
+              : const Icon(
+                  Icons.flag_outlined,
+                  color: AppColors.primaryBlue,
+                  size: 26,
+                ),
+        ),
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Flexible(
+                child: _HighlightedText(
+                  text: page.name,
+                  query: query,
+                  style: AppTextStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (page.isVerified) ...[
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.verified,
+                  color: AppColors.goldAccent,
+                  size: 15,
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            sub,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+          ),
+        ],
+      ),
+      trailing: InlineAction(
+        label: following ? 'Following' : 'Follow',
+        icon: following ? Icons.check : Icons.add,
+        filled: !following,
+        onTap: onFollow,
+      ),
+    );
+  }
+}
+
+/// Small filter chips under a results heading.
+class _ScopeChips extends StatelessWidget {
+  const _ScopeChips({
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+  final String value;
+  final List<(String, String)> options;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Wrap(
+        spacing: 8,
+        children: [
+          for (final (id, label) in options)
+            ChoiceChip(
+              label: Text(label),
+              selected: value == id,
+              showCheckmark: false,
+              onSelected: (_) => onChanged(id),
+              selectedColor: AppColors.primaryBlue.withValues(alpha: 0.12),
+              backgroundColor: palette.card,
+              labelStyle: AppTextStyles.labelMedium.copyWith(
+                color: value == id ? AppColors.primaryBlue : palette.text,
+                fontWeight: FontWeight.w600,
+              ),
+              side: BorderSide(
+                color: value == id ? AppColors.primaryBlue : palette.divider,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Recent": faces and logos of what was opened from Search, newest first.
+class _RecentItemsRail extends StatelessWidget {
+  const _RecentItemsRail({
+    required this.items,
+    required this.onOpen,
+    required this.onClear,
+  });
+  final List<SearchHit> items;
+  final void Function(SearchHit) onOpen;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+          child: Row(
+            children: [
+              Text(
+                'Recent',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: onClear,
+                style: TextButton.styleFrom(minimumSize: const Size(0, 36)),
+                child: Text(
+                  'Clear',
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: palette.textMuted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 112,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: items.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 14),
+            itemBuilder: (context, i) {
+              final h = items[i];
+              final round = h.kind == SearchHitKind.person;
+              return Semantics(
+                button: true,
+                label: h.title,
+                excludeSemantics: true,
+                child: GestureDetector(
+                  onTap: () => onOpen(h),
+                  child: SizedBox(
+                    width: 72,
+                    child: Column(
+                      children: [
+                        round
+                            ? _PersonAvatar(
+                                photoUrl: h.imageUrl,
+                                fullName: h.title,
+                                size: 68,
+                              )
+                            : ClipRRect(
+                                borderRadius: BorderRadius.circular(18),
+                                child: SizedBox(
+                                  width: 68,
+                                  height: 68,
+                                  child: _HitLeadingFill(hit: h),
+                                ),
+                              ),
+                        const SizedBox(height: 6),
+                        Text(
+                          h.title,
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: palette.text,
+                            fontWeight: FontWeight.w600,
+                            height: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A logo / photo / icon that fills its box — for the Recent rail.
+class _HitLeadingFill extends StatelessWidget {
+  const _HitLeadingFill({required this.hit});
+  final SearchHit hit;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = hit.imageUrl;
+    if ((url ?? '').isNotEmpty) return CachedImage(url!, fit: BoxFit.cover);
+    final icon = switch (hit.kind) {
+      SearchHitKind.page => Icons.flag_outlined,
+      SearchHitKind.church => Icons.church_outlined,
+      SearchHitKind.product => Icons.shopping_bag_outlined,
+      SearchHitKind.job => Icons.work_outline_rounded,
+      _ => Icons.search_rounded,
+    };
+    return ColoredBox(
+      color: AppColors.primaryBlue.withValues(alpha: 0.10),
+      child: Icon(icon, color: AppColors.primaryBlue, size: 28),
     );
   }
 }
@@ -1981,7 +2463,7 @@ class _Group extends StatelessWidget {
               Divider(
                 height: 1,
                 thickness: 1,
-                indent: 68,
+                indent: 76,
                 color: palette.divider,
               ),
             children[i],
@@ -2065,12 +2547,16 @@ class _SuggestRow extends StatelessWidget {
     required this.query,
     required this.onTap,
     this.subtitle,
+    this.preview,
     this.verified = false,
     this.bold = false,
   });
   final Widget leading;
   final String title;
   final String? subtitle;
+
+  /// A verse's text, in italics under the reference.
+  final String? preview;
   final String query;
   final bool verified;
   final bool bold;
@@ -2124,6 +2610,20 @@ class _SuggestRow extends StatelessWidget {
                         color: palette.textMuted,
                       ),
                     ),
+                  if ((preview ?? '').isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        '"${preview!}"',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: palette.text,
+                          fontStyle: FontStyle.italic,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -2147,7 +2647,7 @@ class _HitLeading extends StatelessWidget {
       return _PersonAvatar(
         photoUrl: hit.imageUrl,
         fullName: hit.title,
-        size: 40,
+        size: 52,
       );
     }
     final icon = switch (hit.kind) {
@@ -2161,14 +2661,14 @@ class _HitLeading extends StatelessWidget {
     };
     final url = hit.imageUrl;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        width: 40,
-        height: 40,
+        width: 52,
+        height: 52,
         color: AppColors.primaryBlue.withValues(alpha: 0.10),
         child: (url ?? '').isNotEmpty
-            ? CachedImage(url!, fit: BoxFit.cover, width: 40, height: 40)
-            : Icon(icon, color: AppColors.primaryBlue, size: 20),
+            ? CachedImage(url!, fit: BoxFit.cover, width: 52, height: 52)
+            : Icon(icon, color: AppColors.primaryBlue, size: 24),
       ),
     );
   }
@@ -2487,7 +2987,11 @@ class _PersonResultRow extends StatelessWidget {
     required this.busy,
     required this.onAdd,
     required this.onTap,
+    this.mutualFriends,
   });
+
+  /// Real count of friends in common, when known.
+  final int? mutualFriends;
 
   final MemberDirectoryEntry person;
   final String query;
@@ -2502,6 +3006,10 @@ class _PersonResultRow extends StatelessWidget {
         ? 'Member'
         : person.fullName!.trim();
     final parts = <String>[
+      if (state == _FriendState.friends)
+        'Friend'
+      else if ((mutualFriends ?? 0) > 0)
+        '$mutualFriends mutual friend${mutualFriends == 1 ? '' : 's'}',
       if ((person.churchName ?? '').trim().isNotEmpty)
         person.churchName!.trim(),
       if ((person.profession ?? '').trim().isNotEmpty)
@@ -2510,7 +3018,11 @@ class _PersonResultRow extends StatelessWidget {
     ];
     return _ResultShell(
       onTap: onTap,
-      leading: _PersonAvatar(photoUrl: person.profilePhotoUrl, fullName: name),
+      leading: _PersonAvatar(
+        photoUrl: person.profilePhotoUrl,
+        fullName: name,
+        size: 60,
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2610,8 +3122,8 @@ class _ChurchResultRow extends StatelessWidget {
         child: logo.isNotEmpty
             ? CachedNetworkImage(
                 imageUrl: logo,
-                width: 44,
-                height: 44,
+                width: 52,
+                height: 52,
                 fit: BoxFit.cover,
                 placeholder: (_, _) => const _ChurchGlyph(),
                 errorWidget: (_, _, _) => const _ChurchGlyph(),
@@ -2697,8 +3209,8 @@ class _ChurchGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 44,
-      height: 44,
+      width: 52,
+      height: 52,
       decoration: BoxDecoration(
         gradient: AppColors.primaryGradient,
         borderRadius: BorderRadius.circular(11),
@@ -2753,8 +3265,8 @@ class _EventResultRow extends StatelessWidget {
     return _ResultShell(
       onTap: onTap,
       leading: Container(
-        width: 44,
-        height: 44,
+        width: 52,
+        height: 52,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: AppColors.primaryBlue.withValues(alpha: 0.10),
@@ -2878,95 +3390,6 @@ class _PostResultRow extends StatelessWidget {
 }
 
 /// A product: square photo (it is the product), price and seller.
-class _ProductResultRow extends StatelessWidget {
-  const _ProductResultRow({
-    required this.product,
-    required this.query,
-    required this.onTap,
-  });
-
-  final Product product;
-  final String query;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final image = product.firstImage.trim();
-    return _ResultShell(
-      onTap: onTap,
-      leading: ClipRRect(
-        borderRadius: BorderRadius.circular(11),
-        child: image.isNotEmpty
-            ? CachedNetworkImage(
-                imageUrl: image,
-                width: 44,
-                height: 44,
-                fit: BoxFit.cover,
-                placeholder: (_, _) => const _ProductGlyph(),
-                errorWidget: (_, _, _) => const _ProductGlyph(),
-              )
-            : const _ProductGlyph(),
-      ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _HighlightedText(
-            text: product.title,
-            query: query,
-            style: AppTextStyles.titleSmall.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Row(
-            children: [
-              Text(
-                product.formatPrice(),
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: AppColors.primaryBlue,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12.5,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _HighlightedText(
-                  text: product.sellerName,
-                  query: query,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: context.palette.textMuted,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProductGlyph extends StatelessWidget {
-  const _ProductGlyph();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: AppColors.primaryBlue.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(11),
-      ),
-      child: const Icon(
-        Icons.shopping_bag_outlined,
-        color: AppColors.primaryBlue,
-        size: 20,
-      ),
-    );
-  }
-}
-
 /// A job: role, then company and place — the two things you screen on.
 class _JobResultRow extends StatelessWidget {
   const _JobResultRow({
@@ -2985,8 +3408,8 @@ class _JobResultRow extends StatelessWidget {
     return _ResultShell(
       onTap: onTap,
       leading: Container(
-        width: 44,
-        height: 44,
+        width: 52,
+        height: 52,
         decoration: BoxDecoration(
           color: AppColors.goldAccent.withValues(alpha: 0.16),
           borderRadius: BorderRadius.circular(11),
@@ -3183,17 +3606,17 @@ class _Row extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                   child: CachedNetworkImage(
                     imageUrl: imageUrl!,
-                    width: 44,
-                    height: 44,
+                    width: 52,
+                    height: 52,
                     fit: BoxFit.cover,
                     placeholder: (_, _) => Container(
-                      width: 44,
-                      height: 44,
+                      width: 52,
+                      height: 52,
                       color: AppColors.primaryBlue.withValues(alpha: 0.10),
                     ),
                     errorWidget: (_, _, _) => Container(
-                      width: 44,
-                      height: 44,
+                      width: 52,
+                      height: 52,
                       color: AppColors.primaryBlue.withValues(alpha: 0.10),
                       child: Icon(icon, color: AppColors.primaryBlue, size: 20),
                     ),
@@ -3201,8 +3624,8 @@ class _Row extends StatelessWidget {
                 )
               else
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 52,
+                  height: 52,
                   decoration: BoxDecoration(
                     color: AppColors.primaryBlue.withValues(alpha: 0.10),
                     shape: BoxShape.circle,

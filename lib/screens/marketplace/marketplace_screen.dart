@@ -1162,7 +1162,8 @@ class _ShopJobsSegment extends StatelessWidget {
               selected: active == _Section.jobs,
               onTap: active == _Section.jobs
                   ? null
-                  : () => context.goNamed('jobs'),
+                  // Pushed, not gone to: Back from Jobs returns here.
+                  : () => context.pushNamed('jobs'),
             ),
           ],
         ),

@@ -1089,7 +1089,7 @@ class _SearchScreenState extends State<SearchScreen>
         _landingHeader(
           'Jobs & opportunities',
           actionLabel: 'See all',
-          onAction: () => context.goNamed('jobs'),
+          onAction: () => context.pushNamed('jobs'),
         ),
       );
       sections.add(

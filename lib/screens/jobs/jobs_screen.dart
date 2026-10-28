@@ -286,6 +286,20 @@ class _JobsScreenState extends State<JobsScreen> with NavVisibilityMixin {
 
   @override
   Widget build(BuildContext context) {
+    // Opened from a link or notification there is nothing under Jobs; the
+    // phone's Back then lands on Marketplace (its home) instead of leaving
+    // for Home.
+    final router = GoRouter.maybeOf(context);
+    return PopScope(
+      canPop: router == null || router.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) router?.goNamed('marketplace');
+      },
+      child: _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       bottomNavigationBar: const SafeArea(top: false, child: AdBanner()),
@@ -1312,7 +1326,11 @@ class _ShopJobsSegment extends StatelessWidget {
               selected: active == _Section.shop,
               onTap: active == _Section.shop
                   ? null
-                  : () => context.goNamed('marketplace'),
+                  // Back to the Shop we came from when there is one, so the
+                  // two don't stack up as the member flips between them.
+                  : () => context.canPop()
+                        ? context.pop()
+                        : context.goNamed('marketplace'),
             ),
             const SizedBox(width: 6),
             _SegmentButton(

@@ -318,7 +318,8 @@ class _MyJobsScreenState extends State<MyJobsScreen>
           'Use Quick apply on a job and you can follow it here — seen, '
               'shortlisted or not selected.',
           action: 'Browse jobs',
-          onAction: () => context.goNamed('jobs'),
+          onAction: () =>
+              context.canPop() ? context.pop() : context.goNamed('jobs'),
         ),
       ];
     }

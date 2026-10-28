@@ -2470,11 +2470,11 @@ class _HomeScreenState extends State<HomeScreen>
         widget: _discoverySection(
           title: 'Jobs & opportunities',
           action: _jobs.isEmpty ? null : 'See all',
-          onAction: _jobs.isEmpty ? null : () => context.goNamed('jobs'),
+          onAction: _jobs.isEmpty ? null : () => context.pushNamed('jobs'),
           child: _jobs.isEmpty
               ? Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: _JobsEmpty(onTap: () => context.goNamed('jobs')),
+                  child: _JobsEmpty(onTap: () => context.pushNamed('jobs')),
                 )
               : _buildJobsRow(),
         ),

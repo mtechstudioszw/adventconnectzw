@@ -71,6 +71,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   String _query = '';
   bool _loading = true;
+
+  /// True until the first product request settles. Only that first load
+  /// swaps the whole screen for the skeleton; later loads (a category or
+  /// scope change) skeleton the grid alone, so the chips stay tappable.
+  bool _firstLoad = true;
   String? _error;
   Seller? _mySeller;
 
@@ -179,6 +184,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       setState(() {
         _products = list;
         _loading = false;
+        _firstLoad = false;
       });
       // Scope counts as a filter for caching: a cached worldwide grid would
       // greet the member with another country's listings on next launch.
@@ -194,6 +200,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       setState(() {
         _error = 'Could not load products. Pull to retry.';
         _loading = false;
+        _firstLoad = false;
       });
       // A failed refresh over a grid that is still showing said nothing;
       // the spinner just retracted.
@@ -284,7 +291,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         color: AppColors.primaryBlue,
         onRefresh: _refresh,
         child: ContentReveal(
-          loading: _loading && _products.isEmpty,
+          loading: _firstLoad && _products.isEmpty,
           skeleton: ShimmerLoaders.productGrid(),
           child: _buildScroll(),
         ),
@@ -377,7 +384,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ),
           ),
 
-        if (_error != null && _products.isEmpty)
+        if (_loading && _products.isEmpty)
+          ShimmerLoaders.productGridSliver()
+        else if (_error != null && _products.isEmpty)
           SliverToBoxAdapter(child: _buildErrorState())
         else if (products.isEmpty)
           SliverToBoxAdapter(child: _buildEmptyState())
@@ -1109,13 +1118,19 @@ class _MarketHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   double get _scale => textScale.clamp(1.0, _maxHeaderScale);
 
+  /// Text layout rounds each line box up to whole pixels, so the sum above
+  /// can come in a fraction short — a 0.2px overflow showed up in widget
+  /// tests. Two pixels of slack absorbs it for both lines.
+  static const double _roundingSlack = 2;
+
   /// Title block: tagline + headline. This is what scrolls away.
   double get _titleBody =>
       AppSpace.sm +
       (_taglineSize * _taglineHeight +
               _titleGap +
               _headlineSize * _headlineHeight) *
-          _scale;
+          _scale +
+      _roundingSlack;
 
   /// Search row + the basket button beside it. This is what pins.
   ///

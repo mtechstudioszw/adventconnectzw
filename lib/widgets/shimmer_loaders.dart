@@ -89,6 +89,21 @@ class ShimmerLoaders {
       itemBuilder: (context, index) => _ProductSkeleton(),
     );
   }
+
+  /// [productGrid] as a sliver, for a grid area inside a larger scroll
+  /// view — so the header and filters above it stay usable while it loads.
+  static Widget productGridSliver({int count = 6}) {
+    return SliverPadding(
+      padding: const EdgeInsets.all(16),
+      sliver: SliverGrid(
+        gridDelegate: ProductTile.gridDelegate,
+        delegate: SliverChildBuilderDelegate(
+          (context, index) => _ProductSkeleton(),
+          childCount: count,
+        ),
+      ),
+    );
+  }
 }
 
 class _CardSkeleton extends StatelessWidget {

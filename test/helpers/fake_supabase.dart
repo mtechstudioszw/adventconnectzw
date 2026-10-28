@@ -6,6 +6,7 @@
 // shaped like PostgREST's. Anything unhandled gets `[]`, which PostgREST
 // clients read as "no rows".
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -14,7 +15,8 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-typedef FakeHandler = Object? Function(http.Request request);
+/// May return a Future, to simulate a slow response.
+typedef FakeHandler = FutureOr<Object?> Function(http.Request request);
 
 /// Every request the fake has seen, newest last.
 final List<http.Request> fakeSupabaseRequests = [];
@@ -37,7 +39,7 @@ Future<void> initFakeSupabase([FakeHandler? handler]) async {
     debug: false,
     httpClient: MockClient((request) async {
       fakeSupabaseRequests.add(request);
-      final body = _handler(request) ?? const <Object>[];
+      final body = await _handler(request) ?? const <Object>[];
       return http.Response(
         jsonEncode(body),
         200,

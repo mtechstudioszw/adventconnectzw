@@ -197,6 +197,25 @@ Owner decisions taken in this session:
     PostgREST `or()` syntax. New `lib/utils/postgrest_filter.dart`
     `orFilterValue()` quotes it. Test: `test/or_filter_value_test.dart`.
   - Full `flutter test`: 771 passed.
+  - **Correction to the above (found by the new widget test):** clearing
+    the grid on a filter change put the WHOLE screen back into the
+    skeleton (`ContentReveal`), hiding the category chips while a category
+    loaded. Now only the first load skeletons the screen (`_firstLoad`);
+    later loads skeleton the grid (`ShimmerLoaders.productGridSliver`).
+    Test: `test/marketplace_category_race_test.dart` (fails on the original
+    code, passes now).
+  - Header title block overflowed by 0.2px (line boxes round up) → 2px slack.
+- **Product details (fixed):** shared link to a deleted listing crashed
+  (`_product!`); now "This listing is no longer available" with a back
+  button, and a stale grid item that's gone loses its buy actions. Seller-
+  removed listings no longer open for buyers as "RESERVED". Offline save
+  no longer says "Sign in". Test: `test/product_details_gone_test.dart`.
+- **New test harness:** `test/helpers/fake_supabase.dart` — real Supabase
+  client, HTTP answered by an in-test handler. Use it to widget-test
+  screens that read through the static services. Wait with
+  `t.runAsync(() => Future.delayed(...))` + `pump`; a failed request
+  leaves postgrest retry timers, so pump ~30s before the test ends.
+- Full `flutter test`: **776 passed**.
 - **Marketplace findings NOT fixed (need a decision):**
   - `fetchProducts` sends every approved seller id in the URL
     (`inFilter('seller_id', …)`). Fine now; at a few hundred sellers the
@@ -206,7 +225,7 @@ Owner decisions taken in this session:
     links to it — and it ignores the country scope. Remove or relink.
 
 ### Resume point (exact)
-**Batch 2 → Marketplace audit, part 2:** product details, seller profile,
+**Batch 2 → Marketplace audit, part 2 (continued):** seller profile,
 add/edit product flow, listing card hierarchy. Then Profile.
 - **Done:** Home left open overnight kept yesterday's devotion and
   hymn/track/book. Home now has an `AppLifecycleListener`; on resume, if the

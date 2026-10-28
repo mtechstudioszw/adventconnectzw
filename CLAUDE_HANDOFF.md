@@ -26,7 +26,7 @@ Read this file, then `CLAUDE.md`, then the master prompt, before touching code.
 ### Batch order (from the master prompt file — note it differs from an
 earlier chat version; the FILE wins)
 1. Audit, bug fixes, Advent AI cleanup — **DONE**
-2. Core app shell, Home, Marketplace, Profile — **DONE** (report: `docs/BATCH_2_REPORT.md`)
+2. Core app shell, Home, Marketplace, Profile — **IN PROGRESS** (redesign pass 1 done; acceptance needs a device check by the owner — see `docs/BATCH_2_REPORT.md`). Was marked done too early on 28 Oct; reopened.
 3. Library information architecture & design
 4. Bible app experience
 5. Sabbath School experience & date bug
@@ -374,8 +374,26 @@ Owner decisions taken in this session:
   the founder). Patches 270/271/272 are for the founder to run in the SQL
   editor; read-only checks work fine.
 
+### Prompt-compliance notes (28 Oct 2026, owner asked)
+Work done OUTSIDE the current batch, recorded against the batch it belongs
+to so those batches don't redo or overlook it:
+- Batch 5 (Sabbath School): Today card → today's reading; edition labels;
+  shared `pickCurrentQuarterly`.
+- Batch 8 (music): upload titles cleaned; patch_271 drafted.
+- Batch 9 (search): `orFilterValue` quoting in 6 services.
+- Batch 13 (QA): the 3 baseline analyzer infos fixed.
+- Owner-requested, not in any batch: moderation + appeals (patch_272),
+  report on all user content, medical-claims rule, order-status guard
+  (patch_270).
+- **Pending owner approval (rule 2):** ghost outlines removed from the
+  ambient field behind screens — reverses the 18 Aug design decision.
+  Revert = `ghosts: true` (or delete the param) in AmbientBackground,
+  ChatWallpaper, create_sheet.
+- Before each batch: post objective, systems touched, files, risks and
+  decisions needing approval, then wait for decisions.
+
 ### Resume point (exact)
-**Batch 2 is DONE. Next: Batch 3 — Library information architecture &
+**Batch 2 is IN PROGRESS (awaiting owner device check). Next: Batch 3 — Library information architecture &
 design** (see the master prompt). Owner items from the Batch 2 report
 (patch_270 review, Supabase region, repo missing the orders schema) are
 waiting on the owner, not on code.

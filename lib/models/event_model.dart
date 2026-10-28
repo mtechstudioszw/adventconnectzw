@@ -196,6 +196,15 @@ class Event {
         'rsvp_count': rsvpCount,
         'cover_photo_url': coverPhotoUrl,
         'created_at': createdAt?.toIso8601String(),
+        // The joins, in the shape fromJson reads them. Only local caches
+        // call toJson; without these a cached church event lost its
+        // church's name and logo and painted as an anonymous one.
+        if (churchName != null || churchPhotoUrl != null)
+          'churches': {
+            'name': churchName,
+            'profile_photo_url': churchPhotoUrl,
+          },
+        if (organizerName != null) 'profiles': {'full_name': organizerName},
       };
 
   static String _formatDate(DateTime d) =>

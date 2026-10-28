@@ -96,24 +96,24 @@ class EventService {
   /// Approved, upcoming events posted by a church (church_id set). Surfaced as
   /// a featured strip at the top of Home so official church events stand out
   /// from regular community events.
+  ///
+  /// Throws on failure rather than returning `[]`: the Home strip caches
+  /// the last good list, and an empty answer on a dead connection would
+  /// overwrite it and blank the strip offline.
   static Future<List<Event>> fetchFeaturedChurchEvents({int limit = 10}) async {
     final today = _dateOnly(DateTime.now());
-    try {
-      final response = await _client
-          .from(_table)
-          .select(
-              '*, profiles!events_organizer_id_fkey(id, full_name), churches(name, profile_photo_url)')
-          .eq('status', 'approved')
-          .not('church_id', 'is', null)
-          .gte('start_date', _formatDate(today))
-          .order('start_date', ascending: true)
-          .limit(limit);
-      return (response as List)
-          .map((row) => Event.fromJson(row as Map<String, dynamic>))
-          .toList();
-    } catch (_) {
-      return const [];
-    }
+    final response = await _client
+        .from(_table)
+        .select(
+            '*, profiles!events_organizer_id_fkey(id, full_name), churches(name, profile_photo_url)')
+        .eq('status', 'approved')
+        .not('church_id', 'is', null)
+        .gte('start_date', _formatDate(today))
+        .order('start_date', ascending: true)
+        .limit(limit);
+    return (response as List)
+        .map((row) => Event.fromJson(row as Map<String, dynamic>))
+        .toList();
   }
 
   static Future<Event?> fetchEventById(String id) async {

@@ -203,6 +203,11 @@ class _HomeScreenState extends State<HomeScreen>
   /// Retry: the scroll listener used to refire the request on every scroll
   /// event near the bottom, hammering a dead connection behind a blank gap.
   bool _loadMoreFailed = false;
+
+  /// Bumped by every member-initiated refresh, so self-loading sections
+  /// (Featured church events) refetch too. Home is a kept-alive tab, so
+  /// their `initState` no longer runs on each visit.
+  int _refreshTick = 0;
   int _pagesLoaded = 0;
 
   /// Batches "I've seen this" writes. A card marks itself locally as it
@@ -480,6 +485,12 @@ class _HomeScreenState extends State<HomeScreen>
   ///
   /// Tier 2 failures are swallowed per-tier: a dead marketplace must never
   /// blank the feed.
+  /// Pull-to-refresh, the "Updated X ago" strip and the feed's Try again.
+  Future<void> _refresh() {
+    setState(() => _refreshTick++);
+    return _bootstrap();
+  }
+
   Future<void> _bootstrap() async {
     // Pulling to refresh with no signal used to do nothing visible: the
     // cached feed stayed put, the spinner retracted, and the member was left
@@ -1298,7 +1309,7 @@ class _HomeScreenState extends State<HomeScreen>
     // sliver, "on mount" IS "on scroll into view".
     return BrandedRefreshIndicator(
       color: AppColors.primaryBlue,
-      onRefresh: _bootstrap,
+      onRefresh: _refresh,
       child: CustomScrollView(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
@@ -1439,14 +1450,14 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           // Official church-posted events, featured prominently with the
           // church's name + gold tick. Self-hides when there are none.
-          const SliverToBoxAdapter(
+          SliverToBoxAdapter(
             child: StaggeredReveal(
               index: 3,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(height: AppSpace.lg),
-                  FeaturedChurchEvents(),
+                  const SizedBox(height: AppSpace.lg),
+                  FeaturedChurchEvents(refreshTick: _refreshTick),
                 ],
               ),
             ),
@@ -1848,7 +1859,7 @@ class _HomeScreenState extends State<HomeScreen>
           _loading = true;
           _feedFailed = false;
         });
-        _bootstrap();
+        _refresh();
       },
     );
   }
@@ -2104,7 +2115,7 @@ class _HomeScreenState extends State<HomeScreen>
         LastUpdatedStrip(
           timestamp: cachedAt,
           isOnline: ConnectivityService.isOnline,
-          onRefresh: _bootstrap,
+          onRefresh: _refresh,
         ),
       );
     }

@@ -167,14 +167,29 @@ Owner decisions taken in this session:
     Supabase). Check on a device in airplane mode on a fresh install.
 - Donate is still reachable: Settings → `_openDonation` (Android only, `kHidePayments`).
 
+- **Featured church events (Home polish, part 2).** It fetched once in
+  `initState`, and with Home now a kept-alive tab that meant once per
+  session: new church events never showed and pull-to-refresh skipped it.
+  Now: paints the cached list on the first frame (offline too, past events
+  dropped), refetches on `refreshTick` (bumped by Home's `_refresh()` —
+  pull-to-refresh, "Updated" strip, feed Try again). The fetch throws instead
+  of returning `[]`, so a dead connection can't wipe the cache.
+  `Event.toJson` now writes the `churches` / `profiles` joins (only caches
+  use it) — cached events kept their church name and logo. Test:
+  `test/event_cache_roundtrip_test.dart`.
+- Decided **against** a loading skeleton for Featured church events: most
+  days there are none, so a reserved block would appear then collapse —
+  a jump in the other direction. The cache solves the pop-in instead.
+- Full `flutter test`: **769 passed** (28 Oct 2026, cloud).
+
 ### Resume point (exact)
-**Batch 2 → Home polish, part 2:** the Today card and Featured church
-events pop in late (they render nothing until loaded), so the feed jumps
-down under the member's thumb. Decide: reserve space with a skeleton
-while loading, collapse to nothing on failure. Then the card visual pass.
+**Batch 2 → Home card visual pass**, then Marketplace (item 2 below).
+Watch for other self-loading Home widgets that fetch only in `initState`
+(same kept-alive issue) — `TodayCard` picks "of the day" items once, so a
+session left open past midnight keeps yesterday's hymn/track/book.
 
 Then, still Batch 2:
-1. Home polish: loading/empty/offline states per section; card visual pass
+1. Home polish: card visual pass (states done)
    (keep CLAUDE.md colours, Poppins, flat headers, transparent scaffolds).
 2. Marketplace audit + redesign (listing cards, categories, search/filters,
    empty/loading states). No new checkout/payment features without approval.

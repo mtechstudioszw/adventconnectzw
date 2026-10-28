@@ -226,3 +226,24 @@ preset and 18 hues in both themes, category mapping.
 specifications (dimensions, ingredients, author/edition) and sale prices —
 products have no such columns. The layout has room for them; adding them
 needs a schema change (a later stage), not invented values.
+
+### Storefront — matched to the product page (28 Oct 2026)
+
+- Same language as the product page: a stage band coloured from the shop's
+  own logo (or its cover photo, shown as a banner), a rounded sheet with the
+  logo breaking its edge, name + tick, category · place, a rating badge only
+  with real reviews, description with Read more, fact chips (delivery or
+  collection, payment, Sabbath, since), Products grid, Reviews and "The
+  person behind the shop" as hairline sections, Buy safely, Report.
+- Action bar from the shared kit: Chat (sheet: message in app, WhatsApp,
+  call — whichever exist) + one accent pill "WhatsApp the shop" / "Message
+  the shop". None for the owner's preview or a closed shop.
+- Shared kit: lib/marketplace/market_ui.dart (MarketPill, MarketChatButton,
+  MarketActionBar, MarketSection, MarketContactOption, StageHeaderButton,
+  PriceText) used by both screens.
+- Fixed on both screens: the stage was painted over the sheet (an earlier
+  sliver paints over a later one), hiding the logo and the sheet's rounded
+  corners — stage and sheet now share one sliver.
+- Tested with stand-in logos/covers: white-background leaf logo, black
+  monogram, colourful logo, a cover photo, no logo; dark mode; 360 px;
+  scrolled header.

@@ -24,7 +24,6 @@ import '../../widgets/cached_image.dart';
 import '../../widgets/marketplace/cart_badge_button.dart';
 import '../../widgets/marketplace/safety_card.dart';
 import '../../widgets/motion/brand_spinner.dart';
-import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/home/report_sheet.dart';
 import '../../widgets/moderation_appeal_sheet.dart';
@@ -33,6 +32,7 @@ import '../../widgets/expandable_text.dart';
 import '../../widgets/verified_tick.dart';
 import '../../marketplace/product_image_source.dart';
 import '../../marketplace/product_theme.dart';
+import '../../marketplace/market_ui.dart';
 
 /// Product detail.
 ///
@@ -521,7 +521,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final palette = context.palette;
     final solid = t > 0.5;
     Widget btn(IconData icon, VoidCallback onTap, {Color? tint, String? tip}) =>
-        _HeaderButton(
+        StageHeaderButton(
           icon: icon,
           onTap: onTap,
           tint: tint,
@@ -600,65 +600,82 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     return CustomScrollView(
       controller: _scroll,
       slivers: [
-        SliverToBoxAdapter(child: _buildGallery(product)),
+        // Gallery and sheet in ONE sliver so the sheet's rounded top paints
+        // over the photo (an earlier sliver paints over a later one).
         SliverToBoxAdapter(
-          child: Transform.translate(
-            offset: const Offset(0, -_sheetOverlap),
-            child: Container(
-              decoration: BoxDecoration(
-                color: palette.scaffoldBg,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
-                ),
-              ),
-              child: Stack(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        StaggeredReveal(index: 0, child: _buildIntro(product)),
-                        if (product.isModerated && _isOwnListing(product))
-                          Padding(
-                            padding: const EdgeInsets.only(top: AppSpace.lg),
-                            child: ModeratedBanner(
-                              kind: ModeratedKind.listing,
-                              itemId: product.id,
-                              title: product.title,
-                              reason: product.moderationReason,
-                            ),
-                          ),
-                        const SizedBox(height: 18),
-                        StaggeredReveal(index: 1, child: _buildSpecs(product)),
-                        if (product.description?.trim().isNotEmpty == true)
-                          _Section(
-                            title: 'About this item',
-                            child: ExpandableText(
-                              text: product.description!.trim(),
-                              collapsedLines: 5,
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: palette.text,
-                                height: 1.6,
-                              ),
-                            ),
-                          ),
-                        if (_seller != null)
-                          _Section(
-                            title: 'Delivery & pickup',
-                            child: _buildFulfilment(_seller!),
-                          ),
-                        _Section(title: 'Sold by', child: _buildShop(product)),
-                        if (_moreFromShop.isNotEmpty)
-                          _buildMoreFromShop(product),
-                        const SizedBox(height: 28),
-                        _buildFooter(product),
-                      ],
+          child: Column(
+            children: [
+              _buildGallery(product),
+              Transform.translate(
+                offset: const Offset(0, -_sheetOverlap),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: palette.scaffoldBg,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(28),
                     ),
                   ),
-                ],
+                  child: Stack(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            StaggeredReveal(
+                              index: 0,
+                              child: _buildIntro(product),
+                            ),
+                            if (product.isModerated && _isOwnListing(product))
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: AppSpace.lg,
+                                ),
+                                child: ModeratedBanner(
+                                  kind: ModeratedKind.listing,
+                                  itemId: product.id,
+                                  title: product.title,
+                                  reason: product.moderationReason,
+                                ),
+                              ),
+                            const SizedBox(height: 18),
+                            StaggeredReveal(
+                              index: 1,
+                              child: _buildSpecs(product),
+                            ),
+                            if (product.description?.trim().isNotEmpty == true)
+                              MarketSection(
+                                title: 'About this item',
+                                child: ExpandableText(
+                                  text: product.description!.trim(),
+                                  collapsedLines: 5,
+                                  style: AppTextStyles.bodyMedium.copyWith(
+                                    color: palette.text,
+                                    height: 1.6,
+                                  ),
+                                ),
+                              ),
+                            if (_seller != null)
+                              MarketSection(
+                                title: 'Delivery & pickup',
+                                child: _buildFulfilment(_seller!),
+                              ),
+                            MarketSection(
+                              title: 'Sold by',
+                              child: _buildShop(product),
+                            ),
+                            if (_moreFromShop.isNotEmpty)
+                              _buildMoreFromShop(product),
+                            const SizedBox(height: 28),
+                            _buildFooter(product),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ],
@@ -1402,7 +1419,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              _ContactOption(
+              MarketContactOption(
                 icon: Icons.forum_rounded,
                 title: 'Message in the app',
                 subtitle: 'The listing is attached to your message',
@@ -1410,7 +1427,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
               ),
               if (hasPhone) ...[
                 const SizedBox(height: 10),
-                _ContactOption(
+                MarketContactOption(
                   icon: Icons.chat_rounded,
                   title: 'WhatsApp',
                   subtitle: 'Opens WhatsApp with a link to this listing',
@@ -1438,37 +1455,6 @@ String _categoryLabel(String id) {
 
 extension on String {
   String ifEmpty(String other) => isEmpty ? other : this;
-}
-
-/// A titled band: generous space above, a hairline, then the content.
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.child});
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Padding(
-      padding: const EdgeInsets.only(top: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Divider(height: 1, color: palette.divider),
-          const SizedBox(height: 20),
-          Text(
-            title,
-            style: AppTextStyles.titleMedium.copyWith(
-              color: palette.text,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          child,
-        ],
-      ),
-    );
-  }
 }
 
 class _StatusPill extends StatelessWidget {
@@ -1528,46 +1514,6 @@ class _Pill extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class _HeaderButton extends StatelessWidget {
-  const _HeaderButton({
-    required this.icon,
-    required this.onTap,
-    required this.solid,
-    this.tint,
-    this.tooltip,
-  });
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool solid;
-  final Color? tint;
-  final String? tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final button = Pressable(
-      onTap: onTap,
-      pressedScale: 0.9,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: solid ? palette.card : Colors.black.withValues(alpha: 0.32),
-          shape: BoxShape.circle,
-          border: solid ? Border.all(color: palette.divider) : null,
-        ),
-        child: Icon(
-          icon,
-          size: 20,
-          color: tint ?? (solid ? palette.text : AppColors.white),
-        ),
-      ),
-    );
-    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
   }
 }
 
@@ -1823,133 +1769,6 @@ class _GalleryViewerState extends State<_GalleryViewer> {
   }
 }
 
-class _ContactOption extends StatelessWidget {
-  const _ContactOption({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Material(
-      color: palette.card,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: palette.divider),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryBlue.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: AppColors.primaryBlue, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: AppTextStyles.labelLarge.copyWith(
-                        color: palette.text,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      subtitle,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: palette.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded, color: palette.textMuted),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Price set the way premium shops set it: a smaller currency mark, the
-/// whole amount large, cents small. Reads as a price at a glance.
-class PriceText extends StatelessWidget {
-  const PriceText({
-    super.key,
-    required this.product,
-    required this.size,
-    required this.color,
-  });
-  final Product product;
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final symbol = product.currency == 'USD' ? r'$' : '${product.currency} ';
-    final whole = product.price.truncate();
-    final cents = ((product.price - whole) * 100).round();
-    final base = AppTextStyles.displayMedium.copyWith(
-      color: color,
-      fontWeight: FontWeight.w700,
-      fontSize: size,
-      height: 1,
-      letterSpacing: -0.5,
-    );
-    final small = base.copyWith(fontSize: size * 0.52, letterSpacing: 0);
-    return Semantics(
-      label: product.formatPrice(),
-      excludeSemantics: true,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: EdgeInsets.only(top: size * 0.08),
-            child: Text(symbol, style: small),
-          ),
-          Text(_group(whole), style: base),
-          if (cents > 0)
-            Padding(
-              padding: EdgeInsets.only(top: size * 0.08),
-              child: Text(cents.toString().padLeft(2, '0'), style: small),
-            ),
-        ],
-      ),
-    );
-  }
-
-  static String _group(int n) {
-    final s = n.toString();
-    final b = StringBuffer();
-    for (var i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) b.write(',');
-      b.write(s[i]);
-    }
-    return b.toString();
-  }
-}
-
 /// The pinned purchase bar.
 ///
 /// One confident primary — a pill in the product's own accent that carries
@@ -1991,7 +1810,7 @@ class _BuyBar extends StatelessWidget {
 
     final Widget primary;
     if (own) {
-      primary = _Pill2(
+      primary = MarketPill(
         label: 'Manage in your shop',
         trailing: const Icon(Icons.arrow_forward_rounded, size: 18),
         bg: accent,
@@ -1999,7 +1818,7 @@ class _BuyBar extends StatelessWidget {
         onTap: onManage,
       );
     } else if (!product.isAvailable) {
-      primary = _Pill2(
+      primary = MarketPill(
         label: product.isSold ? 'Sold' : 'Reserved',
         trailingText: 'Ask the shop',
         bg: palette.cardMuted,
@@ -2007,7 +1826,7 @@ class _BuyBar extends StatelessWidget {
         onTap: onContact,
       );
     } else if (inBasket) {
-      primary = _Pill2(
+      primary = MarketPill(
         label: 'In basket',
         leading: Icons.check_rounded,
         trailingText: 'View',
@@ -2016,7 +1835,7 @@ class _BuyBar extends StatelessWidget {
         onTap: onViewBasket,
       );
     } else {
-      primary = _Pill2(
+      primary = MarketPill(
         label: 'Add to basket',
         trailingText: product.formatPrice(),
         bg: accent,
@@ -2027,171 +1846,9 @@ class _BuyBar extends StatelessWidget {
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: palette.card,
-        border: Border(top: BorderSide(color: palette.divider)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Row(
-            children: [
-              if (!own) ...[
-                Semantics(
-                  button: true,
-                  label: 'Contact the seller',
-                  child: Tooltip(
-                    message: 'Contact the seller',
-                    child: Pressable(
-                      onTap: chatBusy ? null : onContact,
-                      pressedScale: 0.92,
-                      child: Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: palette.scaffoldBg,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: palette.divider),
-                        ),
-                        child: chatBusy
-                            ? const Center(child: BrandSpinner(size: 18))
-                            : Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.chat_bubble_outline_rounded,
-                                    size: 20,
-                                    color: palette.text,
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Chat',
-                                    style: AppTextStyles.labelSmall.copyWith(
-                                      color: palette.text,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 10.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-              ],
-              Expanded(child: primary),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Pill2 extends StatelessWidget {
-  const _Pill2({
-    required this.label,
-    required this.bg,
-    required this.fg,
-    required this.onTap,
-    this.trailingText,
-    this.trailing,
-    this.leading,
-    this.busy = false,
-    this.raised = false,
-  });
-  final String label;
-  final String? trailingText;
-  final Widget? trailing;
-  final IconData? leading;
-  final Color bg;
-  final Color fg;
-  final VoidCallback? onTap;
-  final bool busy;
-  final bool raised;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = AppTextStyles.labelLarge.copyWith(
-      color: fg,
-      fontWeight: FontWeight.w700,
-      fontSize: 15.5,
-    );
-    return Semantics(
-      button: true,
-      label: [label, ?trailingText].join(', '),
-      excludeSemantics: true,
-      child: Pressable(
-        onTap: busy ? null : onTap,
-        haptics: true,
-        pressedScale: 0.97,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOut,
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: raised
-                ? [
-                    BoxShadow(
-                      color: bg.withValues(alpha: 0.35),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
-                    ),
-                  ]
-                : null,
-          ),
-          child: busy
-              ? Center(
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: fg),
-                  ),
-                )
-              : Row(
-                  children: [
-                    if (leading != null) ...[
-                      Icon(leading, size: 18, color: fg),
-                      const SizedBox(width: 8),
-                    ],
-                    // Expanded, not Flexible + Spacer: those split the free
-                    // space in half and cut "Add to basket" short.
-                    Expanded(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: text,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    if (trailingText != null) ...[
-                      Container(
-                        width: 1,
-                        height: 18,
-                        color: fg.withValues(alpha: 0.28),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        trailingText!,
-                        style: text.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                    if (trailing != null)
-                      IconTheme(
-                        data: IconThemeData(color: fg),
-                        child: trailing!,
-                      ),
-                  ],
-                ),
-        ),
-      ),
+    return MarketActionBar(
+      primary: primary,
+      chat: own ? null : MarketChatButton(onTap: onContact, busy: chatBusy),
     );
   }
 }

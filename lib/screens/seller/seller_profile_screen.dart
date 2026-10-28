@@ -1,7 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import '../../widgets/profile/profile_header.dart';
-import '../../widgets/screen_shell.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
@@ -24,7 +22,6 @@ import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/full_image_viewer.dart';
 import '../../widgets/home/report_sheet.dart';
-import '../../widgets/home/section_header.dart';
 import '../../widgets/marketplace/cart_badge_button.dart';
 import '../../widgets/marketplace/product_tile.dart';
 import '../../widgets/marketplace/safety_card.dart';
@@ -34,6 +31,11 @@ import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/rate_seller_sheet.dart';
 import '../../widgets/offline_toast.dart';
+import '../../widgets/expandable_text.dart';
+import '../../widgets/verified_tick.dart';
+import '../../marketplace/market_ui.dart';
+import '../../marketplace/product_image_source.dart';
+import '../../marketplace/product_theme.dart';
 
 /// Public storefront.
 ///
@@ -242,7 +244,8 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
         ? seller.businessName.trim()
         : 'this seller';
     final shareUrl = sellerShareUrl(seller.authUserId);
-    final text = 'Check out $name on Adventist Super App marketplace:\n$shareUrl';
+    final text =
+        'Check out $name on Adventist Super App marketplace:\n$shareUrl';
     try {
       await Share.share(text, subject: name);
     } catch (_) {
@@ -401,246 +404,474 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     );
   }
 
+  // ---------------------------------------------------------------------
+  //  Storefront (redesign, 28 Oct 2026) — the same language as the product
+  //  page so going from a product to its shop and back feels like one
+  //  place: a stage coloured from the shop's own logo (or cover), a sheet
+  //  that rides over it, hairline sections instead of stacked cards, and
+  //  the same Chat + accent-pill action bar.
+  // ---------------------------------------------------------------------
+
+  /// Scroll offset, read from scroll notifications, for the header.
+  double _scrolled = 0;
+  ProductTheme? _theme;
+  String? _themeFor;
+
+  ProductLook get _look => ProductTheme.lookForText(
+    '${_seller?.category ?? ''} ${_seller?.businessName ?? ''}',
+  );
+
+  String? get _themeImage {
+    final s = _seller;
+    if (s == null) return null;
+    final logo = s.profilePhotoUrl?.trim();
+    if (logo != null && logo.isNotEmpty) return logo;
+    final cover = s.coverPhotoUrl?.trim();
+    return (cover != null && cover.isNotEmpty) ? cover : null;
+  }
+
+  ProductTheme get _currentTheme =>
+      _theme ??
+      ProductTheme.cachedImage(_themeImage, _look) ??
+      ProductTheme.preset(_look);
+
+  Future<void> _loadTheme() async {
+    final key = '${_themeImage ?? ''}|${_look.name}';
+    if (_seller == null || key == _themeFor) return;
+    _themeFor = key;
+    final theme = await ProductTheme.resolveImage(_themeImage, _look);
+    if (mounted && _themeFor == key) setState(() => _theme = theme);
+  }
+
+  bool get _hasWhatsApp {
+    final s = _seller;
+    return s != null &&
+        ((s.whatsapp?.trim().isNotEmpty ?? false) || s.phone.trim().isNotEmpty);
+  }
+
+  Future<void> _openContactSheet() async {
+    final seller = _seller;
+    if (seller == null) return;
+    final palette = context.palette;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: palette.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Contact ${seller.businessName}',
+                style: AppTextStyles.titleLarge.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 16),
+              MarketContactOption(
+                icon: Icons.forum_rounded,
+                title: 'Message in the app',
+                subtitle: 'Chat with the shop inside Adventist Super App',
+                onTap: () => Navigator.pop(ctx, 'chat'),
+              ),
+              if (_hasWhatsApp) ...[
+                const SizedBox(height: 10),
+                MarketContactOption(
+                  icon: Icons.chat_rounded,
+                  title: 'WhatsApp',
+                  subtitle: 'Opens WhatsApp with a link to this shop',
+                  onTap: () => Navigator.pop(ctx, 'whatsapp'),
+                ),
+              ],
+              if (seller.phone.trim().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                MarketContactOption(
+                  icon: Icons.call_outlined,
+                  title: 'Call',
+                  subtitle: seller.phone.trim(),
+                  onTap: () => Navigator.pop(ctx, 'call'),
+                ),
+              ],
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    switch (choice) {
+      case 'chat':
+        await _messageSeller();
+      case 'whatsapp':
+        await _openWhatsApp();
+      case 'call':
+        await _callPhone();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final seller = _seller;
+    if (seller != null) _loadTheme();
+    final b = Theme.of(context).brightness;
+    final theme = _currentTheme;
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: BrandedRefreshIndicator(
-        color: AppColors.primaryBlue,
-        onRefresh: _bootstrap,
-        child: _buildBody(),
+      body: Stack(
+        children: [
+          BrandedRefreshIndicator(
+            color: AppColors.primaryBlue,
+            onRefresh: _bootstrap,
+            child: _buildBody(),
+          ),
+          _buildTopBar(),
+        ],
       ),
-      // Contact is pinned rather than buried in a card halfway down —
-      // reaching the shop is the whole point of the page.
-      bottomNavigationBar: seller == null || _isOwner
+      // No bar for the owner (their preview says so) or a closed shop.
+      bottomNavigationBar: seller == null || _isOwner || _shopClosed
           ? null
-          : _ContactBar(
-              seller: seller,
-              onWhatsApp: _openWhatsApp,
-              onCall: _callPhone,
-              onMessage: _messageSeller,
+          : MarketActionBar(
+              chat: MarketChatButton(
+                onTap: _openContactSheet,
+                semanticLabel: 'Contact the shop',
+              ),
+              primary: MarketPill(
+                label: _hasWhatsApp ? 'WhatsApp the shop' : 'Message the shop',
+                leading: _hasWhatsApp
+                    ? Icons.chat_rounded
+                    : Icons.forum_outlined,
+                trailing: const Icon(Icons.arrow_forward_rounded, size: 18),
+                bg: theme.accent(b),
+                fg: theme.onAccent(b),
+                raised: true,
+                onTap: _hasWhatsApp ? _openWhatsApp : _messageSeller,
+              ),
             ),
       // No ad here (user decision 2026-07-02): a banner under a seller's
       // own storefront cheapened the page and competed with their goods.
     );
   }
 
-  Widget _buildBody() {
-    if (_loading && _seller == null) {
-      return Stack(
-        children: [
-          _buildHeader(),
-          const Positioned.fill(child: Center(child: BrandSpinner(size: 30))),
-        ],
-      );
+  double _stageHeight(BuildContext context) {
+    final top = MediaQuery.paddingOf(context).top;
+    final hasCover = (_seller?.coverPhotoUrl ?? '').trim().isNotEmpty;
+    return hasCover
+        ? MediaQuery.sizeOf(context).width * 9 / 16 + top
+        : top + 150;
+  }
+
+  Widget _buildTopBar() {
+    final palette = context.palette;
+    final t = ((_scrolled - (_stageHeight(context) - 110)) / 70).clamp(
+      0.0,
+      1.0,
+    );
+    final solid = t > 0.5;
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: Container(
+        decoration: BoxDecoration(
+          color: palette.scaffoldBg.withValues(alpha: t),
+          border: Border(
+            bottom: BorderSide(color: palette.divider.withValues(alpha: t)),
+          ),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+            child: Row(
+              children: [
+                StageHeaderButton(
+                  icon: Icons.arrow_back_rounded,
+                  solid: solid,
+                  tooltip: 'Back',
+                  onTap: () => context.canPop()
+                      ? context.pop()
+                      : context.goNamed('marketplace'),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Opacity(
+                    opacity: t,
+                    child: Text(
+                      _seller?.businessName ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleSmall.copyWith(
+                        color: palette.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                if (_seller != null)
+                  StageHeaderButton(
+                    icon: Icons.ios_share_rounded,
+                    solid: solid,
+                    tooltip: 'Share shop',
+                    onTap: _shareSeller,
+                  ),
+                const SizedBox(width: 8),
+                CartBadgeButton(onTap: () => context.pushNamed('cart')),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStage() {
+    final seller = _seller;
+    final b = Theme.of(context).brightness;
+    final theme = _currentTheme;
+    final cover = seller?.coverPhotoUrl?.trim();
+    final hasCover = cover != null && cover.isNotEmpty;
+    // In dark mode a bright logo background would light up the whole band;
+    // the shop's dark surface is used instead (the logo keeps its own
+    // background in its tile).
+    var stage = theme.stage(b);
+    if (b == Brightness.dark && stage.computeLuminance() > 0.5) {
+      stage = theme.stageDark == theme.stageLight
+          ? ProductTheme.preset(theme.look).stageDark
+          : theme.stageDark;
     }
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(end: stage),
+      duration: const Duration(milliseconds: 450),
+      builder: (context, color, child) =>
+          Container(height: _stageHeight(context), color: color, child: child),
+      child: hasCover
+          ? GestureDetector(
+              onTap: () => FullImageViewer.show(context, cover),
+              child: Image(
+                image: ProductImageSource.provider(cover),
+                fit: BoxFit.cover,
+                width: double.infinity,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            )
+          : null,
+    );
+  }
+
+  Widget _buildBody() {
     final seller = _seller;
     if (seller == null || _shopClosed) {
       final offline = !ConnectivityService.isOnline;
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
-          _buildHeader(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-            child: _shopClosed
-                ? const _ErrorCard(
-                    title: "This shop isn't open",
-                    message: 'It may be under review or no longer trading.',
-                  )
-                : _error == null
-                ? const _ErrorCard(
-                    title: 'Seller not found',
-                    message: 'This shop may have closed.',
-                  )
-                : _ErrorCard(
-                    title: offline ? "You're offline" : "Couldn't load shop",
-                    message: _error!,
-                  ),
-          ),
+          _buildStage(),
+          if (_loading && seller == null)
+            const Padding(
+              padding: EdgeInsets.only(top: 60),
+              child: Center(child: BrandSpinner(size: 30)),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+              child: _shopClosed
+                  ? const _ErrorCard(
+                      title: "This shop isn't open",
+                      message: 'It may be under review or no longer trading.',
+                    )
+                  : _error == null
+                  ? const _ErrorCard(
+                      title: 'Seller not found',
+                      message: 'This shop may have closed.',
+                    )
+                  : _ErrorCard(
+                      title: offline ? "You're offline" : "Couldn't load shop",
+                      message: _error!,
+                    ),
+            ),
         ],
       );
     }
 
-    return CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      slivers: [
-        SliverToBoxAdapter(child: _buildHeader()),
-        // Opened from your own dashboard, this page is a PREVIEW. Say so
-        // — the buyer actions are all hidden for you, so without this the
-        // page just looks broken rather than deliberately read-only.
-        if (_isOwner)
-          SliverToBoxAdapter(child: _OwnerPreviewBanner(seller: seller)),
-
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(top: AppSpace.xl),
-            // The count is in the header's stats now; saying it twice was
-            // noise.
-            child: const SectionHeader(title: 'Products'),
-          ),
-        ),
-
-        if (_products.isEmpty)
+    final palette = context.palette;
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        if (n.depth == 0) {
+          _scrolled = n.metrics.pixels;
+          _onScrollTick();
+        }
+        return false;
+      },
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          // Stage and sheet in ONE sliver: in a scroll view an earlier sliver
+          // paints over a later one, so the logo breaking the sheet's top
+          // edge was hidden under the stage.
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.lg,
-                AppSpace.md,
-                AppSpace.lg,
-                0,
-              ),
-              // Opened from the shops rail the seller is already known, so
-              // a failed load used to land here and say the shop had no
-              // products — when they simply had not arrived.
-              child: _error != null
-                  ? _ErrorCard(
-                      title: !ConnectivityService.isOnline
-                          ? "You're offline"
-                          : "Couldn't load products",
-                      message: _error!,
-                    )
-                  : _EmptyProducts(),
-            ),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpace.lg,
-              AppSpace.md,
-              AppSpace.lg,
-              0,
-            ),
-            sliver: SliverGrid(
-              gridDelegate: ProductTile.gridDelegate,
-              delegate: SliverChildBuilderDelegate((context, i) {
-                final p = _products[i];
-                final tile = ProductTile(
-                  product: p,
-                  saved: _isOwner ? null : _savedIds.contains(p.id),
-                  onToggleSave: () => _toggleSave(p),
-                  onTap: () => context.pushNamed(
-                    'product_details',
-                    pathParameters: {'id': p.id},
-                    extra: p,
-                  ),
-                );
-                if (i >= 6) return tile;
-                return StaggeredReveal(index: i, rise: 20, child: tile);
-              }, childCount: _products.length),
-            ),
-          ),
-
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpace.lg,
-              AppSpace.xl,
-              AppSpace.lg,
-              AppSpace.xxl,
-            ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (seller.observesSabbath) ...[
-                  _SabbathBadge(
-                    notice: seller.sabbathNoticeText?.trim().isNotEmpty == true
-                        ? seller.sabbathNoticeText!
-                        : 'This seller observes the Sabbath. Response times '
-                              'may be slower Friday sundown to Saturday '
-                              'sundown.',
-                  ),
-                  const SizedBox(height: AppSpace.lg),
-                ],
-                if (seller.description?.trim().isNotEmpty == true) ...[
-                  _AboutCard(text: seller.description!),
-                  const SizedBox(height: AppSpace.lg),
-                ],
-                if (seller.offersDelivery ||
-                    (seller.paymentMethods ?? '').trim().isNotEmpty) ...[
-                  _DeliveryCard(
-                    delivers: seller.offersDelivery,
-                    area: seller.deliveryArea,
-                    fee: seller.deliveryFee,
-                    payment: seller.paymentMethods,
-                  ),
-                  const SizedBox(height: AppSpace.lg),
-                ],
-                if (_owner != null) ...[
-                  _OwnerBadge(
-                    owner: _owner!,
-                    fallbackName: seller.contactName,
-                    onTap: () => context.pushNamed(
-                      'user_profile',
-                      pathParameters: {'userId': _owner!.id},
+                _buildStage(),
+                Transform.translate(
+                  offset: const Offset(0, -24),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: palette.scaffoldBg,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(28),
+                      ),
                     ),
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                    child: _buildIdentity(seller),
                   ),
-                  const SizedBox(height: AppSpace.lg),
-                ],
-                _ReviewsSection(
-                  reviews: _reviews,
-                  average: seller.rating,
-                  totalCount: seller.ratingCount,
-                  myReview: _myReview,
-                  canRate: _canRate,
-                  onRate: _openRateSheet,
                 ),
-                const SizedBox(height: AppSpace.lg),
-                // Reporting your own shop, and being warned about buying
-                // safely from yourself, are both nonsense when this is a
-                // preview of your own storefront.
-                if (!_isOwner) ...[
-                  _ReportButton(onTap: _showReport),
-                  const SizedBox(height: AppSpace.lg),
-                  const MarketplaceSafetyCard(),
-                ],
               ],
             ),
           ),
-        ),
-      ],
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Row(
+                children: [
+                  Text(
+                    'Products',
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: palette.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (_products.isNotEmpty)
+                    Text(
+                      '${_products.length}',
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: palette.textMuted,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          if (_products.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                child: _error != null
+                    ? _ErrorCard(
+                        title: !ConnectivityService.isOnline
+                            ? "You're offline"
+                            : "Couldn't load products",
+                        message: _error!,
+                      )
+                    : _EmptyProducts(),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+              sliver: SliverGrid(
+                gridDelegate: ProductTile.gridDelegate,
+                delegate: SliverChildBuilderDelegate((context, i) {
+                  final p = _products[i];
+                  final tile = ProductTile(
+                    product: p,
+                    saved: _isOwner ? null : _savedIds.contains(p.id),
+                    onToggleSave: () => _toggleSave(p),
+                    onTap: () => context.pushNamed(
+                      'product_details',
+                      pathParameters: {'id': p.id},
+                      extra: p,
+                    ),
+                  );
+                  if (i >= 6) return tile;
+                  return StaggeredReveal(index: i, rise: 20, child: tile);
+                }, childCount: _products.length),
+              ),
+            ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  MarketSection(
+                    title: 'Reviews',
+                    child: _ReviewsSection(
+                      reviews: _reviews,
+                      average: seller.rating,
+                      totalCount: seller.ratingCount,
+                      myReview: _myReview,
+                      canRate: _canRate,
+                      onRate: _openRateSheet,
+                    ),
+                  ),
+                  if (_owner != null)
+                    MarketSection(
+                      title: 'The person behind the shop',
+                      child: _OwnerBadge(
+                        owner: _owner!,
+                        fallbackName: seller.contactName,
+                        onTap: () => context.pushNamed(
+                          'user_profile',
+                          pathParameters: {'userId': _owner!.id},
+                        ),
+                      ),
+                    ),
+                  if (!_isOwner) ...[
+                    const SizedBox(height: 24),
+                    _buildBuySafely(),
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: _showReport,
+                        icon: const Icon(Icons.flag_outlined, size: 16),
+                        label: const Text('Report this shop'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: palette.textMuted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  /// Flat top bar + the shared profile header (redesign, 28 Oct 2026).
-  ///
-  /// The old header painted the app-bar gradient as a 190px slab whenever a
-  /// shop had no cover — CLAUDE.md: a missing cover is never a reason for a
-  /// navy slab. Now a cover shows only when there is one, the logo is a
-  /// rounded square (organizations, not people — same as Pages), and the
-  /// name, rating and place read the same way as everywhere else.
-  Widget _buildHeader() {
-    final seller = _seller;
-    final topBar = FlatStatusBar(
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-          child: Row(
-            children: [
-              const ScreenHeroBackButton(fallbackRoute: 'marketplace'),
-              const Spacer(),
-              if (seller != null)
-                HeaderIconButton(
-                  icon: Icons.ios_share_rounded,
-                  tooltip: 'Share shop',
-                  onTap: _shareSeller,
-                ),
-              const SizedBox(width: AppSpace.sm),
-              CartBadgeButton(onTap: () => context.pushNamed('cart')),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (seller == null) return topBar;
-    final place = <String?>[
+  void _onScrollTick() {
+    if ((_scrolled < 420) && mounted) setState(() {});
+  }
+
+  Widget _buildIdentity(Seller seller) {
+    final palette = context.palette;
+    final b = Theme.of(context).brightness;
+    final theme = _currentTheme;
+    final accent = theme.accent(b);
+    final logo = seller.profilePhotoUrl?.trim();
+    final hasLogo = logo != null && logo.isNotEmpty;
+    final place = [
       seller.city,
       seller.province,
-      Countries.nameOf(seller.country),
-    ].where((s) => s != null && s.isNotEmpty).join(', ');
+    ].where((s) => (s ?? '').isNotEmpty).join(', ');
     final initials = seller.businessName
         .trim()
         .split(RegExp(r'\s+'))
@@ -648,196 +879,303 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
         .take(2)
         .map((w) => w[0].toUpperCase())
         .join();
-    final photo = seller.profilePhotoUrl;
-    final cover = seller.coverPhotoUrl;
-    return ProfileGlow(
-      photoUrl: photo,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          topBar,
-          ProfileHeader(
-            name: seller.businessName,
-            initials: initials.isEmpty ? '?' : initials,
-            photoUrl: photo,
-            coverUrl: cover,
-            squareAvatar: true,
-            verified: seller.verified || seller.sdaVerified,
-            relationNote: SellerCategory.labelFor(seller.category),
-            facts: [
-              if (place.isNotEmpty)
-                ProfileFact(
-                  Icons.place_outlined,
-                  '${Countries.flagOf(seller.country)} $place'.trim(),
+
+    final chips = <(IconData, String)>[
+      if (seller.offersDelivery)
+        (
+          Icons.local_shipping_outlined,
+          (seller.deliveryArea ?? '').trim().isNotEmpty
+              ? 'Delivers · ${seller.deliveryArea!.trim()}'
+              : 'Delivers',
+        )
+      else
+        (Icons.storefront_outlined, 'Collection only'),
+      if ((seller.paymentMethods ?? '').trim().isNotEmpty)
+        (Icons.account_balance_wallet_outlined, seller.paymentMethods!.trim()),
+      if (seller.observesSabbath)
+        (Icons.brightness_3_outlined, 'Keeps the Sabbath'),
+      if (seller.createdAt != null)
+        (Icons.event_outlined, 'Since ${seller.createdAt!.year}'),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Logo breaks the sheet's top edge, like the product photo above
+        // its details.
+        Transform.translate(
+          offset: const Offset(0, -40),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              GestureDetector(
+                onTap: hasLogo
+                    ? () => FullImageViewer.show(context, logo)
+                    : null,
+                child: Container(
+                  width: 92,
+                  height: 92,
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: palette.scaffoldBg,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.10),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: hasLogo
+                        ? Image(
+                            image: ResizeImage(
+                              ProductImageSource.provider(logo),
+                              width: 300,
+                            ),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => _LogoFallback(
+                              initials: initials,
+                              color: accent,
+                            ),
+                          )
+                        : _LogoFallback(initials: initials, color: accent),
+                  ),
                 ),
-              if (seller.createdAt != null)
-                ProfileFact(
-                  Icons.event_outlined,
-                  'Since ${_monthYear(seller.createdAt!)}',
-                ),
-            ],
-            stats: [
-              ProfileStat(
-                _products.length == 1 ? 'Product' : 'Products',
-                _products.length,
               ),
-              // Real reviews only; a shop with none shows no rating cell
-              // rather than a zero.
+              const Spacer(),
               if (seller.ratingCount > 0)
-                ProfileStat(
-                  seller.ratingCount == 1 ? 'Review' : 'Reviews',
-                  seller.ratingCount,
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: _RatingBadge(
+                    rating: seller.rating,
+                    count: seller.ratingCount,
+                  ),
                 ),
             ],
-            badges: [
-              if (seller.ratingCount > 0)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+          ),
+        ),
+        Transform.translate(
+          offset: const Offset(0, -28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      seller.businessName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.headlineSmall.copyWith(
+                        color: palette.text,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 24,
+                        height: 1.2,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                  ),
+                  if (seller.verified || seller.sdaVerified)
+                    const VerifiedTick(size: 18, leftGap: 6),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                [
+                  if (seller.category != 'other')
+                    SellerCategory.labelFor(seller.category),
+                  if (place.isNotEmpty) place,
+                  if (seller.ratingCount == 0) 'New shop',
+                ].join('  ·  '),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: palette.textMuted,
+                ),
+              ),
+              if ((seller.description ?? '').trim().isNotEmpty) ...[
+                const SizedBox(height: 14),
+                ExpandableText(
+                  text: seller.description!.trim(),
+                  collapsedLines: 3,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: palette.text,
+                    height: 1.55,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final c in chips)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: palette.card,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: palette.divider),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(c.$1, size: 15, color: accent),
+                          const SizedBox(width: 6),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 240),
+                            child: Text(
+                              c.$2,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.labelMedium.copyWith(
+                                color: palette.text,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              if (_isOwner) ...[
+                const SizedBox(height: 16),
+                _OwnerPreviewBanner(seller: seller),
+              ],
+              const SizedBox(height: 12),
+              Divider(height: 1, color: palette.divider),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBuySafely() {
+    final palette = context.palette;
+    return Material(
+      color: palette.card,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => showModalBottomSheet<void>(
+          context: context,
+          backgroundColor: palette.sheet,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          builder: (_) => const SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, 20, 16, 16),
+              child: MarketplaceSafetyCard(),
+            ),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.shield_outlined,
+                color: AppColors.primaryBlue,
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.star_rounded,
-                      size: 16,
-                      color: AppColors.goldAccent,
+                    Text(
+                      'Buy safely',
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: palette.text,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     Text(
-                      seller.rating.toStringAsFixed(1),
-                      style: AppTextStyles.labelLarge.copyWith(
-                        color: context.palette.text,
-                        fontWeight: FontWeight.w700,
+                      'Meet in public and inspect before you pay.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: palette.textMuted,
                       ),
                     ),
                   ],
                 ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: palette.textMuted),
             ],
-            onAvatarTap: (photo ?? '').isEmpty
-                ? null
-                : () => FullImageViewer.show(context, photo),
-            onCoverTap: (cover ?? '').isEmpty
-                ? null
-                : () => FullImageViewer.show(context, cover),
-            actions: const [],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LogoFallback extends StatelessWidget {
+  const _LogoFallback({required this.initials, required this.color});
+  final String initials;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: color,
+      child: Center(
+        child: Text(
+          initials.isEmpty ? '?' : initials,
+          style: AppTextStyles.headlineMedium.copyWith(
+            color: color.computeLuminance() > 0.5
+                ? const Color(0xFF111111)
+                : AppColors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "★ 4.6 · 5 reviews" — only rendered when real reviews exist.
+class _RatingBadge extends StatelessWidget {
+  const _RatingBadge({required this.rating, required this.count});
+  final double rating;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: palette.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: palette.divider),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.star_rounded, size: 18, color: AppColors.goldAccent),
+          const SizedBox(width: 4),
+          Text(
+            rating.toStringAsFixed(1),
+            style: AppTextStyles.titleSmall.copyWith(
+              color: palette.text,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            '  ·  $count review${count == 1 ? '' : 's'}',
+            style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
           ),
         ],
       ),
     );
   }
-
-  static String _monthYear(DateTime d) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${months[d.month - 1]} ${d.year}';
-  }
 }
-
-
-class _ContactBar extends StatelessWidget {
-  const _ContactBar({
-    required this.seller,
-    required this.onWhatsApp,
-    required this.onCall,
-    required this.onMessage,
-  });
-
-  final Seller seller;
-  final VoidCallback onWhatsApp;
-  final VoidCallback onCall;
-  final VoidCallback onMessage;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasWhatsApp =
-        (seller.whatsapp?.trim().isNotEmpty == true) ||
-        seller.phone.trim().isNotEmpty;
-    final hasPhone = seller.phone.trim().isNotEmpty;
-    return Container(
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        boxShadow: AppShadows.floating(context),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpace.lg,
-            AppSpace.md,
-            AppSpace.lg,
-            AppSpace.md,
-          ),
-          child: Row(
-            children: [
-              if (hasPhone) ...[
-                _IconAction(icon: Icons.call_outlined, onTap: onCall),
-                const SizedBox(width: AppSpace.sm),
-              ],
-              _IconAction(icon: Icons.forum_outlined, onTap: onMessage),
-              const SizedBox(width: AppSpace.sm),
-              Expanded(
-                child: Pressable(
-                  onTap: hasWhatsApp ? onWhatsApp : onMessage,
-                  haptics: true,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: AppSpace.lg),
-                    decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      borderRadius: AppRadius.buttonAll,
-                      boxShadow: AppShadows.glow(context),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          hasWhatsApp
-                              ? Icons.chat_rounded
-                              : Icons.forum_outlined,
-                          color: AppColors.white,
-                          size: 18,
-                        ),
-                        const SizedBox(width: AppSpace.sm),
-                        Text(
-                          hasWhatsApp ? 'WhatsApp this shop' : 'Message',
-                          style: AppTextStyles.buttonText.copyWith(
-                            fontSize: 15,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _IconAction extends StatelessWidget {
-  const _IconAction({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Pressable(
-      onTap: onTap,
-      pressedScale: 0.92,
-      child: Container(
-        width: 48,
-        height: 48,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          borderRadius: AppRadius.buttonAll,
-          border: Border.all(color: context.palette.divider),
-        ),
-        child: Icon(icon, color: AppColors.primaryBlue, size: 20),
-      ),
-    );
-  }
-}
-
 
 class _EmptyProducts extends StatelessWidget {
   @override
@@ -870,189 +1208,6 @@ class _EmptyProducts extends StatelessWidget {
             textAlign: TextAlign.center,
             style: AppTextStyles.bodySmall.copyWith(
               color: context.palette.textMuted,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SabbathBadge extends StatelessWidget {
-  const _SabbathBadge({required this.notice});
-
-  final String notice;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      decoration: BoxDecoration(
-        color: AppColors.goldAccent.withValues(alpha: 0.08),
-        borderRadius: AppRadius.lgAll,
-        border: Border.all(color: AppColors.goldAccent.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.brightness_3, color: AppColors.goldAccent, size: 20),
-          const SizedBox(width: AppSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Observes the Sabbath',
-                  style: AppTextStyles.titleSmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.goldAccent,
-                  ),
-                ),
-                const SizedBox(height: AppSpace.xs),
-                Text(
-                  notice,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: context.palette.text,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AboutCard extends StatelessWidget {
-  const _AboutCard({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: AppRadius.lgAll,
-        boxShadow: AppShadows.card(context),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'ABOUT',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: context.palette.textMuted,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.4,
-            ),
-          ),
-          const SizedBox(height: AppSpace.md - 2),
-          Text(
-            text,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: context.palette.text,
-              height: 1.55,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DeliveryCard extends StatelessWidget {
-  const _DeliveryCard({
-    required this.delivers,
-    this.area,
-    this.fee,
-    this.payment,
-  });
-
-  final bool delivers;
-  final String? area;
-  final String? fee;
-
-  /// What the shop accepts, as it typed it (EcoCash, cash…).
-  final String? payment;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.lg),
-      decoration: BoxDecoration(
-        color: AppColors.primaryBlue.withValues(alpha: 0.06),
-        borderRadius: AppRadius.lgAll,
-        border: Border.all(
-          color: AppColors.primaryBlue.withValues(alpha: 0.18),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.primaryBlue.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.local_shipping_outlined,
-              color: AppColors.primaryBlue,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: AppSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  delivers ? 'Offers delivery' : 'Collection only',
-                  style: AppTextStyles.titleSmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primaryBlue,
-                  ),
-                ),
-                const SizedBox(height: AppSpace.xs),
-                if (payment?.trim().isNotEmpty == true)
-                  Text(
-                    'Payment: ${payment!.trim()}',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.palette.text,
-                      height: 1.5,
-                    ),
-                  ),
-                if (delivers && area?.trim().isNotEmpty == true)
-                  Text(
-                    'Area: $area',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.palette.text,
-                      height: 1.5,
-                    ),
-                  ),
-                if (delivers && fee?.trim().isNotEmpty == true)
-                  Text(
-                    'Fee: $fee',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.palette.text,
-                      height: 1.5,
-                    ),
-                  ),
-                if (delivers &&
-                    (area?.trim().isEmpty ?? true) &&
-                    (fee?.trim().isEmpty ?? true))
-                  Text(
-                    'Contact the seller for delivery details.',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: context.palette.text,
-                    ),
-                  ),
-              ],
             ),
           ),
         ],
@@ -1147,43 +1302,6 @@ class _OwnerPreviewBanner extends StatelessWidget {
                   color: AppColors.primaryBlue,
                   fontWeight: FontWeight.w700,
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ReportButton extends StatelessWidget {
-  const _ReportButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Pressable(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          vertical: AppSpace.md + 2,
-          horizontal: AppSpace.lg,
-        ),
-        decoration: BoxDecoration(
-          borderRadius: AppRadius.buttonAll,
-          border: Border.all(color: AppColors.red.withValues(alpha: 0.4)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.flag_outlined, color: AppColors.red, size: 18),
-            const SizedBox(width: AppSpace.sm),
-            Text(
-              'Report this seller',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.red,
-                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -1366,49 +1484,34 @@ class _ReviewsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: context.palette.card,
-        borderRadius: AppRadius.lgAll,
-        boxShadow: AppShadows.card(context),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'REVIEWS',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: context.palette.textMuted,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.4,
-            ),
+    // A section, not a card: the storefront's sections are separated by
+    // space and hairlines (MarketSection supplies the title).
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RatingSummary(average: average, totalCount: totalCount),
+        if (canRate) ...[
+          const SizedBox(height: AppSpace.md + 2),
+          _RateCta(
+            isEditing: myReview != null,
+            myStars: myReview?.rating ?? 0,
+            onTap: onRate,
           ),
+        ],
+        if (reviews.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          Divider(height: 1, color: context.palette.divider),
           const SizedBox(height: AppSpace.md),
-          _RatingSummary(average: average, totalCount: totalCount),
-          if (canRate) ...[
-            const SizedBox(height: AppSpace.md + 2),
-            _RateCta(
-              isEditing: myReview != null,
-              myStars: myReview?.rating ?? 0,
-              onTap: onRate,
-            ),
-          ],
-          if (reviews.isNotEmpty) ...[
-            const SizedBox(height: 18),
-            Divider(height: 1, color: context.palette.divider),
-            const SizedBox(height: AppSpace.md),
-            for (final r in reviews) ...[
-              _ReviewRow(review: r),
-              if (r != reviews.last)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpace.md),
-                  child: Divider(height: 1, color: context.palette.divider),
-                ),
-            ],
+          for (final r in reviews) ...[
+            _ReviewRow(review: r),
+            if (r != reviews.last)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpace.md),
+                child: Divider(height: 1, color: context.palette.divider),
+              ),
           ],
         ],
-      ),
+      ],
     );
   }
 }

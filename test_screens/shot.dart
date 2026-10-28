@@ -79,17 +79,19 @@ Future<void> pumpShot(
   // main.dart does this before every MaterialApp build; without it every
   // direct AppTextStyles use keeps light-mode text colours.
   AppTextStyles.applyBrightness(dark ? Brightness.dark : Brightness.light);
-  await t.pumpWidget(RepaintBoundary(
-    key: _boundary,
-    child: MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: dark ? ThemeMode.dark : ThemeMode.light,
-      builder: (context, child) => AmbientBackground(child: child!),
-      home: screen,
+  await t.pumpWidget(
+    RepaintBoundary(
+      key: _boundary,
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+        builder: (context, child) => AmbientBackground(child: child!),
+        home: screen,
+      ),
     ),
-  ));
+  );
 }
 
 /// Lets fake HTTP and animations settle, then writes `<name>.png`.
@@ -102,8 +104,8 @@ Future<void> saveShot(WidgetTester t, String name, {int rounds = 8}) async {
   }
   final dir = Platform.environment['SHOT_DIR'] ?? 'build/shots';
   await t.runAsync(() async {
-    final boundary = _boundary.currentContext!.findRenderObject()!
-        as RenderRepaintBoundary;
+    final boundary =
+        _boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
     final image = await boundary.toImage(pixelRatio: 1.0);
     final png = await image.toByteData(format: ui.ImageByteFormat.png);
     await Directory(dir).create(recursive: true);

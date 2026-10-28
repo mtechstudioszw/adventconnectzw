@@ -60,8 +60,12 @@ palette, scoped to this screen only:
     exception"). Colourless photos fall back to the category preset.
   - Every accent is forced to WCAG 4.5:1 against its label (tested).
   - The primary button is a solid accent pill, not the blue gradient.
-Text, navigation, cards and the rest of the app keep the palette. Do not
-spread this engine to other screens without the owner's say-so.
+Text, navigation, cards and the rest of the app keep the palette.
+**Storefronts use the same engine** (owner, 28 Oct 2026), from the shop's
+logo — else its cover — for the stage band and the accent pill; in dark
+mode a bright logo background falls back to the shop's dark surface.
+Shared widgets live in lib/marketplace/market_ui.dart. Do not spread the
+engine to other screens without the owner's say-so.
 
 
 

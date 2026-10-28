@@ -17,7 +17,8 @@ void main() {
         return {
           'id': 1,
           'bible_ref': 'Hebrews 10:36',
-          'bible_text': 'For ye have need of patience, that, after ye have '
+          'bible_text':
+              'For ye have need of patience, that, after ye have '
               'done the will of God, ye might receive the promise.',
           'egw_quote': 'Patience is faith holding on when it cannot see.',
           'egw_source': 'Testimonies for the Church',

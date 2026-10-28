@@ -131,12 +131,14 @@ class ProductTheme {
 
   // ---------------------------------------------------------------------
 
-  static ProductLook lookFor(Product p) {
-    final text = [
-      p.category,
-      p.subcategory,
-      p.title,
-    ].whereType<String>().join(' ').toLowerCase();
+  static ProductLook lookFor(Product p) => lookForText(
+    [p.category, p.subcategory, p.title].whereType<String>().join(' '),
+  );
+
+  /// A look from free text — product category/title, or a shop's
+  /// category and name.
+  static ProductLook lookForText(String raw) {
+    final text = raw.toLowerCase();
     bool has(List<String> words) => words.any(text.contains);
     if (has([
       'book',
@@ -384,6 +386,25 @@ class ProductTheme {
 
   static ProductTheme? cached(Product p) =>
       _cache['${p.firstImage}|${lookFor(p).name}'];
+
+  /// The same analysis for any image — a shop's logo or cover.
+  static Future<ProductTheme> resolveImage(
+    String? url,
+    ProductLook look,
+  ) async {
+    final u = (url ?? '').trim();
+    if (u.isEmpty) return preset(look);
+    final key = '$u|${look.name}';
+    final hit = _cache[key];
+    if (hit != null) return hit;
+    final pixels = await ProductImageSource.samplePixels(u);
+    final theme = pixels == null ? preset(look) : fromPixels(pixels, look);
+    _cache[key] = theme;
+    return theme;
+  }
+
+  static ProductTheme? cachedImage(String? url, ProductLook look) =>
+      _cache['${(url ?? '').trim()}|${look.name}'];
 
   // ----- colour maths ----------------------------------------------------
 

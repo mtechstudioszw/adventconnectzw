@@ -7,16 +7,16 @@ import '../test/helpers/fake_supabase.dart';
 import 'shot.dart';
 
 Map<String, Object?> _p(int id, String title, num price, String cat) => {
-      'id': id,
-      'seller_id': id.isEven ? 's1' : 's2',
-      'title': title,
-      'price': price,
-      'category': cat,
-      'status': 'available',
-      'country': 'ZW',
-      'location': 'Harare',
-      'image_urls': ['https://example.com/$id.jpg'],
-    };
+  'id': id,
+  'seller_id': id.isEven ? 's1' : 's2',
+  'title': title,
+  'price': price,
+  'category': cat,
+  'status': 'available',
+  'country': 'ZW',
+  'location': 'Harare',
+  'image_urls': ['https://example.com/$id.jpg'],
+};
 
 void main() {
   setUpAll(() async {

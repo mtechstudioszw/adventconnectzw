@@ -230,6 +230,14 @@ Owner decisions taken in this session:
   offline; else fallback) used in all seven.
 - `signInFake(userId)` added to the test harness.
   Test: `test/edit_product_fields_test.dart`. Full suite: **780 passed**.
+- **Seller profile (fixed):** pending / rejected / banned / deactivated
+  shops opened for buyers with their products (patch_031 rule only held
+  in the grid and product details) → now "This shop isn't open" for
+  everyone but the owner. A missing seller row no longer falls back to the
+  stale copy from the rail. Offline from the rail said "no products" →
+  now "Couldn't load products". Error card had a fixed "Seller not found"
+  title for every failure. Offline save no longer says "Sign in".
+  Test: `test/seller_profile_states_test.dart`. Full suite: **786 passed**.
 - **Marketplace findings NOT fixed (need a decision):**
   - `fetchProducts` sends every approved seller id in the URL
     (`inFilter('seller_id', …)`). Fine now; at a few hundred sellers the
@@ -239,8 +247,8 @@ Owner decisions taken in this session:
     links to it — and it ignores the country scope. Remove or relink.
 
 ### Resume point (exact)
-**Batch 2 → Marketplace audit, part 2 (continued):** seller profile,
-add/edit product flow, listing card hierarchy. Then Profile.
+**Batch 2 → Marketplace remaining:** cart / orders screens audit, listing
+card visual hierarchy (needs eyes on a device). Then **Profile** (Batch 2 D).
 - **Done:** Home left open overnight kept yesterday's devotion and
   hymn/track/book. Home now has an `AppLifecycleListener`; on resume, if the
   UTC day changed (devotion RPC and TodayCard picks both roll on UTC), it

@@ -15,6 +15,7 @@ import '../../services/messaging_service.dart';
 import '../../services/seller_rating_service.dart';
 import '../../services/seller_service.dart';
 import '../../services/user_profile_service.dart';
+import '../../services/connectivity_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -30,6 +31,7 @@ import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/rate_seller_sheet.dart';
+import '../../widgets/offline_toast.dart';
 
 /// Public storefront.
 ///
@@ -83,6 +85,16 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
       AuthService.currentUser?.id == _seller?.authUserId &&
       _seller?.authUserId.isNotEmpty == true;
 
+  /// A pending, rejected, banned or deactivated shop, seen by anyone but
+  /// its owner. patch_031's rule is that such a shop's products never reach
+  /// buyers; the marketplace grid and product details enforced it, but
+  /// this page loaded the storefront and its products for any link.
+  bool get _shopClosed {
+    final seller = _seller;
+    if (seller == null || _isOwner) return false;
+    return !(seller.isApproved && seller.isActive);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -103,7 +115,10 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
         UserProfileService.fetch(widget.authUserId),
       ]);
       if (!mounted) return;
-      final seller = (results[0] as Seller?) ?? _seller;
+      // No row is an answer, not a failure: the shop is gone or hidden
+      // from this viewer. Falling back to the copy passed in from the rail
+      // kept a closed shop open.
+      final seller = results[0] as Seller?;
       setState(() {
         _seller = seller;
         _products = results[1] as List<Product>;
@@ -117,7 +132,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'Could not load this seller. Pull to retry.';
+        _error = 'Pull down to try again.';
       });
     }
   }
@@ -165,10 +180,13 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
             ? {..._savedIds, product.id}
             : ({..._savedIds}..remove(product.id));
       });
+      if (maybeShowOffline(context)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Sign in to save listings.',
+            AuthService.currentUser == null
+                ? 'Sign in to save listings.'
+                : "Couldn't save this listing. Try again.",
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),
@@ -407,14 +425,28 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
       );
     }
     final seller = _seller;
-    if (seller == null) {
+    if (seller == null || _shopClosed) {
+      final offline = !ConnectivityService.isOnline;
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           _buildHeader(),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-            child: _ErrorCard(message: _error ?? 'Seller not found.'),
+            child: _shopClosed
+                ? const _ErrorCard(
+                    title: "This shop isn't open",
+                    message: 'It may be under review or no longer trading.',
+                  )
+                : _error == null
+                ? const _ErrorCard(
+                    title: 'Seller not found',
+                    message: 'This shop may have closed.',
+                  )
+                : _ErrorCard(
+                    title: offline ? "You're offline" : "Couldn't load shop",
+                    message: _error!,
+                  ),
           ),
         ],
       );
@@ -451,7 +483,17 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
                 AppSpace.lg,
                 0,
               ),
-              child: _EmptyProducts(),
+              // Opened from the shops rail the seller is already known, so
+              // a failed load used to land here and say the shop had no
+              // products — when they simply had not arrived.
+              child: _error != null
+                  ? _ErrorCard(
+                      title: !ConnectivityService.isOnline
+                          ? "You're offline"
+                          : "Couldn't load products",
+                      message: _error!,
+                    )
+                  : _EmptyProducts(),
             ),
           )
         else
@@ -1322,8 +1364,9 @@ class _ReportButton extends StatelessWidget {
 }
 
 class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.message});
+  const _ErrorCard({required this.title, required this.message});
 
+  final String title;
   final String message;
 
   @override
@@ -1344,7 +1387,8 @@ class _ErrorCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpace.md),
           Text(
-            'Seller not found',
+            title,
+            textAlign: TextAlign.center,
             style: AppTextStyles.titleMedium.copyWith(
               fontWeight: FontWeight.w700,
             ),

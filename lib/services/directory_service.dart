@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/member_directory_model.dart';
+import '../utils/postgrest_filter.dart';
 
 /// Reads/writes for the opt-in public member directory (Table 21).
 class DirectoryService {
@@ -25,7 +26,7 @@ class DirectoryService {
     }
 
     if (search != null && search.trim().isNotEmpty) {
-      final term = '%${search.trim()}%';
+      final term = orFilterValue('%${search.trim()}%');
       query = query.or(
         'profession.ilike.$term,skills.ilike.$term,city.ilike.$term,bio.ilike.$term',
       );

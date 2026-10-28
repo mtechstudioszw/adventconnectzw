@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/job_model.dart';
+import '../utils/postgrest_filter.dart';
 import 'analytics_service.dart';
 import 'post_limit_error.dart';
 
@@ -42,7 +43,7 @@ class JobService {
       query = query.eq('level', level);
     }
     if (search != null && search.trim().isNotEmpty) {
-      final term = '%${search.trim()}%';
+      final term = orFilterValue('%${search.trim()}%');
       query = query.or(
         'title.ilike.$term,company.ilike.$term,description.ilike.$term',
       );

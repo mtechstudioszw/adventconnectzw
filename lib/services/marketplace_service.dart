@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/product_model.dart';
+import '../utils/postgrest_filter.dart';
 import 'post_limit_error.dart';
 
 class MarketplaceService {
@@ -141,7 +142,7 @@ class MarketplaceService {
     }
 
     if (search != null && search.trim().isNotEmpty) {
-      final term = '%${search.trim()}%';
+      final term = orFilterValue('%${search.trim()}%');
       query = query.or('title.ilike.$term,description.ilike.$term');
     }
 

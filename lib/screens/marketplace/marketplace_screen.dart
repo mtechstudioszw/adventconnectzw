@@ -27,6 +27,7 @@ import '../../widgets/motion/content_reveal.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/offline_inline_notice.dart';
+import '../../widgets/offline_toast.dart';
 import '../../widgets/shimmer_loaders.dart';
 import '../widgets/post_form_widgets.dart';
 
@@ -72,6 +73,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   bool _loading = true;
   String? _error;
   Seller? _mySeller;
+
+  /// Bumped per product request; a response from an older one is dropped.
+  /// Flicking Books → Clothing used to let the slower Books answer land
+  /// last and fill the grid under the Clothing chip.
+  int _loadGen = 0;
+
+  /// The scope the offline cache holds (see [_loadProducts]).
+  bool get _isDefaultScope => _selectedCategory == 'all' && !_worldwide;
 
   static const _cacheKey = 'products_list';
 
@@ -150,8 +159,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
   }
 
-  Future<void> _loadProducts() async {
+  /// [filterChanged]: the category or scope changed, so what is on screen
+  /// is the wrong list. It is cleared — the old grid used to stay up under
+  /// the new chip while loading, and if the load failed it stayed up for
+  /// good with no error, because the error only showed over an empty grid.
+  Future<void> _loadProducts({bool filterChanged = false}) async {
+    final gen = ++_loadGen;
     setState(() {
+      if (filterChanged) _products = [];
       if (_products.isEmpty) _loading = true;
       _error = null;
     });
@@ -160,22 +175,33 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         category: _selectedCategory,
         country: _worldwide ? null : _country,
       );
-      if (!mounted) return;
+      if (!mounted || gen != _loadGen) return;
       setState(() {
         _products = list;
         _loading = false;
       });
       // Scope counts as a filter for caching: a cached worldwide grid would
       // greet the member with another country's listings on next launch.
-      if (_selectedCategory == 'all' && !_worldwide) {
+      if (_isDefaultScope) {
         unawaited(_writeCache(list));
       }
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || gen != _loadGen) return;
+      final hadProducts = _products.isNotEmpty;
+      // Back on the default scope with nothing showing (switched back to
+      // "All" offline): the cached grid is the right list, so use it.
+      if (!hadProducts && _isDefaultScope) _hydrateFromCache();
       setState(() {
         _error = 'Could not load products. Pull to retry.';
         _loading = false;
       });
+      // A failed refresh over a grid that is still showing said nothing;
+      // the spinner just retracted.
+      if (hadProducts && !maybeShowOffline(context)) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(content: Text("Couldn't refresh products.")),
+        );
+      }
     }
   }
 
@@ -195,7 +221,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   void _selectCategory(String id) {
     if (_selectedCategory == id) return;
     setState(() => _selectedCategory = id);
-    _loadProducts();
+    _loadProducts(filterChanged: true);
   }
 
   List<Product> get _visibleProducts {
@@ -326,7 +352,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 worldwide: _worldwide,
                 onChanged: (v) {
                   setState(() => _worldwide = v);
-                  _loadProducts();
+                  _loadProducts(filterChanged: true);
                 },
               ),
             ),
@@ -479,7 +505,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             const SizedBox(height: AppSpace.md),
           ],
           Text(
-            isOffline ? 'No products cached yet.' : _error!,
+            !isOffline
+                ? _error!
+                : _isDefaultScope
+                ? 'No products cached yet.'
+                // Only the default grid is cached; any other filter needs
+                // the network, which is not the same as "nothing cached".
+                : "This filter needs a connection. Switch back to All to "
+                      'see saved products.',
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium.copyWith(
               color: context.palette.textMuted,
@@ -552,7 +585,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             TextButton.icon(
               onPressed: () {
                 setState(() => _worldwide = true);
-                _loadProducts();
+                _loadProducts(filterChanged: true);
               },
               icon: const Icon(Icons.public, size: 18),
               label: const Text('Browse worldwide'),

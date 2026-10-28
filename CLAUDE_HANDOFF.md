@@ -182,8 +182,32 @@ Owner decisions taken in this session:
   a jump in the other direction. The cache solves the pop-in instead.
 - Full `flutter test`: **769 passed** (28 Oct 2026, cloud).
 
+- **Marketplace audit, part 1 (fixed):**
+  - Category/scope responses raced: flick Books → Clothing and the slower
+    Books answer could land last under the Clothing chip. `_loadGen` drops
+    stale responses.
+  - Switching category kept the OLD grid up while loading, and if the load
+    failed it stayed up forever with no error (error only showed over an
+    empty grid). A filter change now clears the grid (skeleton → result or
+    error); back on "All" offline falls back to the cached grid.
+  - A failed pull-to-refresh over a showing grid was silent → offline toast
+    or "Couldn't refresh products."
+  - **Search with a comma or bracket broke the query** in Marketplace,
+    Churches (x2), Directory, Events and Jobs — the raw term was pasted into
+    PostgREST `or()` syntax. New `lib/utils/postgrest_filter.dart`
+    `orFilterValue()` quotes it. Test: `test/or_filter_value_test.dart`.
+  - Full `flutter test`: 771 passed.
+- **Marketplace findings NOT fixed (need a decision):**
+  - `fetchProducts` sends every approved seller id in the URL
+    (`inFilter('seller_id', …)`). Fine now; at a few hundred sellers the
+    URL gets long enough to fail. Proper fix is server-side (a view or RLS
+    join) = schema change → owner approval.
+  - `CategoryScreen` (`/marketplace/categories`) is unreachable — nothing
+    links to it — and it ignores the country scope. Remove or relink.
+
 ### Resume point (exact)
-**Batch 2 → Home card visual pass**, then Marketplace (item 2 below).
+**Batch 2 → Marketplace audit, part 2:** product details, seller profile,
+add/edit product flow, listing card hierarchy. Then Profile.
 - **Done:** Home left open overnight kept yesterday's devotion and
   hymn/track/book. Home now has an `AppLifecycleListener`; on resume, if the
   UTC day changed (devotion RPC and TodayCard picks both roll on UTC), it

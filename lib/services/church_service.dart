@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/church_model.dart';
+import '../utils/postgrest_filter.dart';
 import 'analytics_service.dart';
 import 'cache_service.dart';
 import 'connectivity_service.dart';
@@ -44,7 +45,7 @@ class ChurchService {
     }
 
     if (search != null && search.trim().isNotEmpty) {
-      final term = '%${search.trim()}%';
+      final term = orFilterValue('%${search.trim()}%');
       query = query.or('name.ilike.$term,city.ilike.$term');
     }
 
@@ -91,7 +92,7 @@ class ChurchService {
 
     final term = query?.trim() ?? '';
     if (term.isNotEmpty) {
-      final like = '%$term%';
+      final like = orFilterValue('%$term%');
       q = q.or('name.ilike.$like,city.ilike.$like');
     }
 

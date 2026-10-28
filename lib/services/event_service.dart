@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/event_model.dart';
+import '../utils/postgrest_filter.dart';
 import 'post_limit_error.dart';
 import 'analytics_service.dart';
 
@@ -54,7 +55,7 @@ class EventService {
     }
 
     if (search != null && search.trim().isNotEmpty) {
-      final term = '%${search.trim()}%';
+      final term = orFilterValue('%${search.trim()}%');
       // Events table has separate `venue` + `city` columns (no
       // `location` column — the model composes that string from
       // venue/city at hydrate time). Searching the non-existent

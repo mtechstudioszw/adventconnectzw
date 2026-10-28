@@ -1,5 +1,6 @@
 // Soft profile glow (owner-approved 28 Oct 2026): the colour comes from
-// the photo, but never a banned hue and never from a grey photo.
+// the photo — any hue, including green and pink — but never from a grey
+// photo.
 
 import 'dart:typed_data';
 
@@ -29,9 +30,11 @@ void main() {
     expect(hsl.lightness, closeTo(0.52, 0.02));
   });
 
-  test('green and pink photos give no glow (palette bans them)', () {
-    expect(PhotoTint.fromPixels(_fill(const Color(0xFF2E9D3A))), isNull);
-    expect(PhotoTint.fromPixels(_fill(const Color(0xFFE85AA8))), isNull);
+  test('green and pink photos get their own glow (adaptive exception)', () {
+    final green = PhotoTint.fromPixels(_fill(const Color(0xFF2E9D3A)))!;
+    expect(HSLColor.fromColor(green).hue, inInclusiveRange(100, 140));
+    final pink = PhotoTint.fromPixels(_fill(const Color(0xFFE85AA8)))!;
+    expect(HSLColor.fromColor(pink).hue, inInclusiveRange(310, 340));
   });
 
   test('grey, black and white photos give no glow', () {

@@ -39,13 +39,14 @@ Success Green:  #2E7D32  // Status badges ONLY
 (18% light / 26% dark, fading to nothing) of the member's photo colour
 behind the top of a profile. It is background only — no text, button,
 badge or card may take that colour. `PhotoTint` (lib/utils/photo\_tint.dart)
-returns null for green and pink hues and for grey/dull photos, and the
-header is then plain. Do not widen this to whole sections, and do not
-remove the banned-hue check.
+returns null only for grey/dull photos, and the header is then plain.
+**Any hue is allowed here, green and pink included** (owner, 28 Oct
+2026): adaptive colour follows the photo, so the NEVER rules above don't
+apply to it. Do not widen this to whole sections.
 **Extended 28 Oct 2026 (owner-approved): product pages.** The same wash,
 from the product's first photo, across the top of the product details
 sheet (`_tint` in lib/screens/marketplace/product_details_screen.dart).
-Same limits: background only, same alphas, same banned hues. Organization
+Same limits: background only, same alphas, any hue. Organization
 Pages and storefronts use `ProfileGlow` from their logo. Nowhere else.
 **Superseded for the product page (28 Oct 2026, owner's "world-class
 adaptive marketplace" brief):** the product details screen uses the
@@ -54,10 +55,9 @@ wash. Per product it sets the hero STAGE colour (the photo's own plain
 background when it has one, else a category surface) and an ACCENT for the
 primary pill, seller link and fact icons. Deliberate departures from the
 palette, scoped to this screen only:
-  - Accents may be any hue taken from the product photo — including deep
-    botanical greens for herbal products — EXCEPT reds and pinks (red
-    stays reserved for errors; pink stays banned). Those fall back to the
-    category preset.
+  - Accents may be ANY hue taken from the product photo — green, pink and
+    red included (owner, 28 Oct 2026: "for the adaptive thing, make an
+    exception"). Colourless photos fall back to the category preset.
   - Every accent is forced to WCAG 4.5:1 against its label (tested).
   - The primary button is a solid accent pill, not the blue gradient.
 Text, navigation, cards and the rest of the app keep the palette. Do not

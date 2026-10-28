@@ -1,7 +1,7 @@
 // The adaptive product theme engine (lib/marketplace/product_theme.dart):
 // photos with plain backgrounds blend into the stage, the accent comes from
-// the product (never the backdrop), every accent passes WCAG 4.5:1 for its
-// label, and reds/pinks fall back to the category accent.
+// the product (never the backdrop), and every accent — any hue — passes
+// WCAG 4.5:1 for its label.
 
 import 'dart:typed_data';
 
@@ -80,16 +80,25 @@ void main() {
     expect(t.accentLight, ProductTheme.preset(ProductLook.tech).accentLight);
   });
 
-  test('red and pink products fall back to the category accent', () {
-    for (final c in [const Color(0xFFD2282D), const Color(0xFFE85AA8)]) {
+  test('red, pink and green products keep their own colour, legibly', () {
+    for (final (c, lo, hi) in [
+      (const Color(0xFFD2282D), 340.0, 380.0),
+      (const Color(0xFFE85AA8), 310.0, 340.0),
+      (const Color(0xFF2E9D3A), 100.0, 140.0),
+    ]) {
       final t = ProductTheme.fromPixels(
         _img(const Color(0xFFECECEE), c),
         ProductLook.fashion,
       );
-      expect(
-        t.accentLight,
-        ProductTheme.preset(ProductLook.fashion).accentLight,
-      );
+      var hue = HSLColor.fromColor(t.accentLight).hue;
+      if (hue < 40) hue += 360; // red wraps around 0
+      expect(hue, inInclusiveRange(lo, hi), reason: '$c');
+      for (final b in Brightness.values) {
+        expect(
+          ProductTheme.contrast(t.accent(b), t.onAccent(b)),
+          greaterThanOrEqualTo(4.5),
+        );
+      }
     }
   });
 
@@ -107,7 +116,7 @@ void main() {
   });
 
   test('photo-derived accents are legible for many hues', () {
-    for (var hue = 20.0; hue < 290; hue += 15) {
+    for (var hue = 0.0; hue < 360; hue += 15) {
       final fg = HSLColor.fromAHSL(1, hue, 0.7, 0.5).toColor();
       final t = ProductTheme.fromPixels(
         _img(const Color(0xFFFFFFFF), fg),

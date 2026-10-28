@@ -238,8 +238,9 @@ class ProductTheme {
   /// 2. The centre decides the accent: the strongest saturated hue, by
   ///    saturation-weighted vote, ignoring the ring so a coloured backdrop
   ///    can't masquerade as the product.
-  /// 3. Reds and pinks never become the accent (red means errors in this
-  ///    app; pink is off-palette) — the category accent is used instead.
+  /// 3. Any hue may become the accent — green and pink included (owner,
+  ///    28 Oct 2026: adaptive colour follows the product). Legibility is
+  ///    still enforced.
   static ProductTheme fromPixels(
     Uint8List pixels,
     ProductLook look, {
@@ -325,7 +326,7 @@ class ProductTheme {
       }
       final hue = hueSum[best] / weights[best];
       final sat = (satSum[best] / weights[best]).clamp(0.40, 0.70);
-      if (!_isRedOrPink(hue)) {
+      {
         accentLight = _readableOn(
           HSLColor.fromAHSL(1, hue, sat, 0.42),
           dark: false,
@@ -396,8 +397,6 @@ class ProductTheme {
 
   static double _distance(Color a, Color b) =>
       ((a.r - b.r).abs() + (a.g - b.g).abs() + (a.b - b.b).abs()) * 255 / 3;
-
-  static bool _isRedOrPink(double hue) => hue < 18 || hue >= 290;
 
   /// Darken (light mode, white label) or lighten (dark mode, dark label)
   /// until the label passes 4.5:1.

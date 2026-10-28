@@ -69,8 +69,7 @@ class PhotoTint {
   }
 
   /// The dominant colourful hue in RGBA [bytes], normalised to a calm
-  /// mid-tone — or null when the photo has no usable colour or its
-  /// colour is one the palette forbids.
+  /// mid-tone — or null when the photo has no usable colour.
   ///
   /// Hue is voted in 12 buckets weighted by saturation, so a small vivid
   /// area beats a large grey wall, but skin and backgrounds still count.
@@ -101,12 +100,8 @@ class PhotoTint {
       if (weights[b] > weights[best]) best = b;
     }
     final hue = hueSums[best] / weights[best];
-    if (isBannedHue(hue)) return null;
+    // Any hue (owner, 28 Oct 2026): adaptive colour follows the photo, so
+    // the palette's "no green / no pink" rule doesn't apply here.
     return HSLColor.fromAHSL(1, hue, 0.55, 0.52).toColor();
   }
-
-  /// Green (CLAUDE.md: never a background) and pink/magenta (never, in
-  /// any shade).
-  static bool isBannedHue(double hue) =>
-      (hue >= 70 && hue < 170) || (hue >= 285 && hue < 350);
 }

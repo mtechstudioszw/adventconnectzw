@@ -550,8 +550,8 @@ class ProfileActionButton extends StatelessWidget {
 /// A faint wash of the member's photo colour behind the top of a profile
 /// (owner-approved, 28 Oct 2026). Paints BEHIND [child] only; nothing in
 /// the header reads its colour, so text and buttons keep the palette and
-/// stay legible whatever the photo. No photo, a dull photo or a banned
-/// hue → no glow, and the header is exactly as before.
+/// stay legible whatever the photo. Any hue, green and pink included.
+/// No photo or a dull photo → no glow, and the header is exactly as before.
 class ProfileGlow extends StatefulWidget {
   const ProfileGlow({super.key, required this.photoUrl, required this.child});
 

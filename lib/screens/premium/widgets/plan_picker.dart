@@ -57,9 +57,18 @@ class PlanPicker extends StatelessWidget {
   /// anchor and the wrong order for a preselected row — a selected tile
   /// below two unselected ones reads as the last resort rather than the
   /// recommendation.
+  ///
+  /// Business (patch 289) is the exception: it is the dearest, but it is
+  /// for sellers and ministries, not the natural step up for a member, so
+  /// it sits last rather than on top of the recommended yearly plan.
   List<PremiumOffer> get _ordered {
+    int rank(PremiumOffer o) =>
+        o.basePlanId == BillingConfig.businessMonthlyBasePlanId ? 1 : 0;
     final sorted = [...offers]
-      ..sort((a, b) => b.rawPrice.compareTo(a.rawPrice));
+      ..sort((a, b) {
+        final r = rank(a).compareTo(rank(b));
+        return r != 0 ? r : b.rawPrice.compareTo(a.rawPrice);
+      });
     return sorted;
   }
 
@@ -78,10 +87,18 @@ class PlanPicker extends StatelessWidget {
   /// a comparison between two different tiers — true arithmetic, wrong
   /// claim. The honest baseline for "what does buying yearly save" is
   /// the same tier billed monthly.
+  ///
+  /// Pro monthly by id when the store returned it. Otherwise the dearest
+  /// monthly plan below Business — measuring against the US\$10 Business
+  /// plan would claim a saving on a tier the yearly plan doesn't include.
   PremiumOffer? get _monthlyPeer {
+    for (final o in offers) {
+      if (o.basePlanId == BillingConfig.proMonthlyBasePlanId) return o;
+    }
     PremiumOffer? best;
     for (final o in offers) {
       if (_isYearly(o)) continue;
+      if (o.basePlanId == BillingConfig.businessMonthlyBasePlanId) continue;
       if (best == null || o.rawPrice > best.rawPrice) best = o;
     }
     return best;
@@ -200,7 +217,13 @@ class _PlanTile extends StatelessWidget {
   /// it cannot drift from the entitlement the server will actually grant.
   String get _summary {
     final b = TierBenefits.of(tier);
-    return 'No ads · ${b.callAllowanceLabel} of calls a day · '
+    if (tier == PremiumTier.business) {
+      return 'Everything in Pro · Featured shop · '
+          '${b.listingBoostsPerMonth} listing boosts and '
+          '${b.jobBoostsPerMonth} featured jobs a month · Page gold tick';
+    }
+    return 'No ads · Gold tick after an ID check · '
+        '${b.callAllowanceLabel} of calls a day · '
         '${b.aiQuestionsPerMonth} Advent AI questions a month';
   }
 

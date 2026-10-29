@@ -1080,6 +1080,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                               onTap: () =>
                                   context.pushNamed('admin_event_approvals'),
                             ),
+                            const _Divider(),
+                            _NavRow(
+                              icon: Icons.verified_outlined,
+                              label: 'Gold tick requests',
+                              onTap: () =>
+                                  context.pushNamed('admin_verifications'),
+                            ),
                             if (!kHidePayments) ...[
                               const _Divider(),
                               _NavRow(

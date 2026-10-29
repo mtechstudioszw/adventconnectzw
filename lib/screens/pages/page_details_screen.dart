@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/countries.dart';
+import '../../config/platform_flags.dart';
 import '../../config/share_config.dart';
 import '../../models/org_page_model.dart';
 import '../../models/post_model.dart';
@@ -270,6 +271,15 @@ class _PageDetailsScreenState extends State<PageDetailsScreen> {
                 title: const Text('Page admins'),
                 onTap: () => Navigator.pop(ctx, 'admins'),
               ),
+              // The Page's gold tick (patch 289): its creator, Business.
+              // Android only, like every paid feature.
+              if (_stats.isOwner && !page.isVerified && !kHidePayments)
+                ListTile(
+                  leading: const Icon(Icons.verified_outlined),
+                  title: const Text('Verify this Page'),
+                  subtitle: const Text('Gold tick · ID check · Business plan'),
+                  onTap: () => Navigator.pop(ctx, 'get_verified'),
+                ),
             ] else ...[
               if (_stats.iFollow && alertsMuted('page', page.id) != null)
                 ListTile(
@@ -341,6 +351,11 @@ class _PageDetailsScreenState extends State<PageDetailsScreen> {
           type: 'page',
           id: page.id,
           name: page.name,
+        );
+      case 'get_verified':
+        context.pushNamed(
+          'get_verified',
+          queryParameters: {'pageId': page.id, 'pageName': page.name},
         );
       case 'edit':
         await context.pushNamed(

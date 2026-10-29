@@ -196,6 +196,7 @@ class AiTiers {
     PremiumTier.none => free,
     PremiumTier.plus => plus,
     PremiumTier.pro => pro,
+    PremiumTier.business => pro,
   };
 
   /// Warn a member at this many remaining, so the wall is never the

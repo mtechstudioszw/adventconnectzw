@@ -1,9 +1,19 @@
+import 'package:flutter/foundation.dart';
+
 import 'app_version.dart';
 
-/// Public Play Store listing for the app. Appended to shared content (Bible
-/// verses, etc.) so whoever receives it can install Adventist Super App.
-String get appDownloadUrl =>
-    'https://play.google.com/store/apps/details?id=$kAndroidPackageId';
+/// This platform's own store listing. Appended to shared content (Bible
+/// verses, etc.) so whoever receives it can install Adventist Super App,
+/// and opened by the update prompts.
+///
+/// The App Store on iPhone, Google Play everywhere else: an iOS app must
+/// never send people to another platform's store (Guideline 2.3.10), and
+/// an update prompt that opens Google Play on an iPhone is a dead end.
+String get appDownloadUrl => isIosBuild
+    ? 'https://apps.apple.com/app/id$kIosAppStoreId'
+    : 'https://play.google.com/store/apps/details?id=$kAndroidPackageId';
+
+bool get isIosBuild => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
 /// Base URL that serves the Open Graph share / landing pages for shared
 /// products, events, jobs and sellers.

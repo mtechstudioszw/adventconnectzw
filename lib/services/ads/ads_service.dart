@@ -1,3 +1,4 @@
+import '../../config/platform_flags.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -72,6 +73,8 @@ class AdsService {
   /// later lapses, main() calls this again and it re-arms.
   static Future<void> init() async {
     if (PremiumService.isActive) return;
+    // No ad SDK on iPhone yet — see kHideAds.
+    if (kHideAds) return;
 
     // Already initialised once and then suspended by a purchase that has
     // since lapsed — re-arm rather than initialising the SDK twice.

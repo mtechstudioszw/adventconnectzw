@@ -10,7 +10,7 @@ class PrivacyScreen extends StatelessWidget {
       kicker: 'LEGAL',
       title: 'Privacy Policy',
       subtitle: 'What we collect, why we collect it, and how we look after it.',
-      lastUpdated: '16 August 2026',
+      lastUpdated: '29 October 2026',
       intro:
           'Your privacy matters to us. This policy explains the personal information Adventist Super App collects when you use the app, how we use it, and the choices you have. We aim to keep this clear and honest — if anything is unclear please reach out and we\'ll explain.',
       sections: const [
@@ -25,6 +25,10 @@ class PrivacyScreen extends StatelessWidget {
             'Usage data: which screens you visit and how the app is performing.',
             'Device data: operating system and app version, used for diagnostics.',
             'A push-notification token, so we can deliver the alerts you opt into.',
+            'Location, only when you ask for it — to find churches near you or set your Sabbath times. It is used on your phone and is not stored on our servers.',
+            'Photos and voice notes you choose to post or send.',
+            'If you apply for the gold verified tick (Android version): your legal name, a photo of your ID and a selfie. Only our review team can see them, and they are deleted as soon as a decision is made.',
+            'If you buy Premium or a boost (Android version): Google Play takes the payment. We receive only a purchase token to confirm it — never your card details.',
           ],
         ),
         LegalSection(
@@ -50,6 +54,7 @@ class PrivacyScreen extends StatelessWidget {
             // third-party AI. The app also asks before the first message.
             'Google (Gemini), only if you use Advent AI and agree first: the messages you type to Advent AI are sent to Google to generate its answers. Don\'t include personal or sensitive details in them.',
             'Google Firebase delivers push notifications to your device.',
+            'Appodeal and its advertising partners show ads in the Android version to members without Premium, and may use your device\'s advertising ID. The iPhone app shows no ads.',
             'Crash and analytics tools that receive anonymised diagnostic data.',
             'Authorities, only when required by law and with proper legal process.',
           ],
@@ -57,7 +62,7 @@ class PrivacyScreen extends StatelessWidget {
         LegalSection(
           title: 'Data Security',
           body:
-              'We protect your data with industry-standard safeguards. Auth tokens are kept in your device\'s secure storage (Keychain on iOS, encrypted shared preferences on Android). All traffic between the app and our servers is encrypted in transit. Sensitive operations are protected at the database level with row-level security.',
+              'We protect your data with industry-standard safeguards. Auth tokens are kept in your device\'s own encrypted secure storage. All traffic between the app and our servers is encrypted in transit. Sensitive operations are protected at the database level with row-level security.',
         ),
         // SYNCED FROM THE PUBLISHED POLICY, NOT NEWLY DRAFTED.
         //

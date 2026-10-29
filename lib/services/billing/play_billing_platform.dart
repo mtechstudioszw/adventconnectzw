@@ -165,6 +165,43 @@ class PlayBillingPlatform implements BillingPlatform {
   }
 
   @override
+  Future<bool> buyConsumable(PremiumOffer offer, {String? accountTag}) async {
+    final details = offer.native;
+    if (details is! ProductDetails) return false;
+    try {
+      // autoConsume OFF: the plugin would otherwise spend the purchase
+      // the moment it arrives, before our server has granted the boost —
+      // and a crash in between would take the member's money for nothing.
+      return await _iap.buyConsumable(
+        purchaseParam: PurchaseParam(
+          productDetails: details,
+          applicationUserName: accountTag,
+        ),
+        autoConsume: false,
+      );
+    } catch (e) {
+      debugPrint('PlayBilling.buyConsumable threw: $e');
+      return false;
+    }
+  }
+
+  @override
+  Future<void> consume(BillingPurchase purchase) async {
+    final native = purchase.native;
+    if (native is! PurchaseDetails) return;
+    try {
+      final addition = _iap
+          .getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
+      await addition.consumePurchase(native);
+    } catch (e) {
+      // Not money lost: the server already granted and acknowledged it.
+      // It only blocks buying the same boost again until the next launch
+      // replays it and this runs once more.
+      debugPrint('PlayBilling.consume failed: $e');
+    }
+  }
+
+  @override
   Stream<List<BillingPurchase>> get purchaseUpdates =>
       _iap.purchaseStream.map(
         (list) => list.map(_toBillingPurchase).toList(growable: false),

@@ -818,6 +818,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: () => Navigator.pop(ctx, 'premium'),
                   ),
                 ),
+              // The gold tick's ID check (patch 289). Hidden on iOS with
+              // every other paid feature; hidden once the tick is on.
+              if (!kHidePayments && !(_publicRow?.showsVerifiedTick ?? false))
+                _MoreMenuRow(
+                  icon: Icons.verified_outlined,
+                  label: 'Get the gold tick',
+                  onTap: () => Navigator.pop(ctx, 'get_verified'),
+                ),
               if (_publicRow?.isPrivate ?? false)
                 _MoreMenuRow(
                   icon: Icons.how_to_reg_outlined,
@@ -874,6 +882,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (!mounted || result == null) return;
     switch (result) {
+      case 'get_verified':
+        context.pushNamed('get_verified');
+        break;
       case 'premium':
         context.pushNamed('premium');
         break;

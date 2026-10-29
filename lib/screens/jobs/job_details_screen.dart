@@ -27,6 +27,9 @@ import '../../widgets/screen_shell.dart';
 import '../../widgets/job_card.dart';
 import '../../widgets/jobs/quick_apply_sheet.dart';
 import '../../widgets/verified_tick.dart';
+import '../../widgets/premium/boost_sheet.dart';
+import '../../config/platform_flags.dart';
+import '../../services/billing/boost_catalog.dart';
 
 class JobDetailsScreen extends StatefulWidget {
   const JobDetailsScreen({super.key, required this.jobId, this.initialJob});
@@ -1543,6 +1546,22 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
                 Icons.check_circle_outline,
                 _markingFilled ? 'Saving…' : 'Mark as filled',
                 _markingFilled ? null : _confirmMarkFilled,
+              ),
+            // Paid boosts (patch 289) — Android only, live jobs only.
+            if (!kHidePayments && job.isOpen && !job.isExpired)
+              action(
+                Icons.trending_up_rounded,
+                job.isFeatured ? 'Feature again' : 'Feature this job',
+                () {
+                  final id = int.tryParse(job.id);
+                  if (id == null) return;
+                  showBoostSheet(
+                    context,
+                    kind: BoostKind.job,
+                    targetId: id,
+                    targetTitle: job.title,
+                  );
+                },
               ),
             if (job.isFilled)
               action(

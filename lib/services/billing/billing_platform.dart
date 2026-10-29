@@ -166,6 +166,16 @@ abstract class BillingPlatform {
   /// is presented; the result arrives on [purchaseUpdates].
   Future<bool> buy(PremiumOffer offer);
 
+  /// Start a ONE-TIME purchase that is spent, not kept — a boost (patch
+  /// 289). [accountTag] travels with the purchase in the store's own
+  /// record so the server can tell what it was for. Never consumed here:
+  /// [consume] is called only after the server has granted it.
+  Future<bool> buyConsumable(PremiumOffer offer, {String? accountTag});
+
+  /// Spend a verified one-time purchase so it can be bought again. Call
+  /// ONLY after the server has granted it.
+  Future<void> consume(BillingPurchase purchase);
+
   /// Every purchase the store tells us about: new ones, restored ones,
   /// renewals it decides to replay, and failures.
   Stream<List<BillingPurchase>> get purchaseUpdates;

@@ -96,6 +96,26 @@ earlier chat version; the FILE wins)
 - **QR on every profile:** `showFriendQrSheet(context, userId:, name:)`.
 - Contacts matching NOT built: 0 of 812 accounts have a phone number.
 
+### Premium (29 Oct 2026) — Android only, hidden on iOS
+- Levels: Plus $3 · Pro $5/$30yr · **Business $10** (new base plan
+  `business-monthly`, patch_289). One-off boosts: `boost_listing_7d` $1,
+  `boost_job_14d` $2 (Play one-time products → `verify-boost` →
+  `grant_boost()`; consumed only after the server grants).
+- **Gold tick = ID check + any paid level.** `verification_requests` +
+  private bucket `verification_docs`; admin decides in Settings → Gold tick
+  requests (`review_verification()`), docs deleted after.
+  `refresh_paid_perks()` keeps ticks, Page ticks (Business) and featured
+  shops in step with the plan; hourly cron `expire-paid-perks`.
+- featured_until NULL = hand-set by the team (never touched); non-NULL =
+  paid, expires itself. Guards on products/jobs/sellers snap the columns
+  back unless `app.granting_boost` is on.
+- patch_289 also fixes: Business falling to the FREE call cap, and every
+  paid level getting 500 AI questions (Plus now 100, as the paywall says).
+- iOS: `kHidePayments` on every entry; `kHideAds` — no ad SDK on iPhone.
+  Store links on iPhone → App Store (`appDownloadUrl`).
+- Page safety (patch_290): protected official names, 14-day account +
+  confirmed email, 1 Page/week, 10 admins max.
+
 ### Friends vs followers (29 Oct 2026, owner's call)
 - Every account is **personal by default**: friends only, followers OFF
   (`who_can_follow = 'nobody'`). Members turn on "Allow followers" in
@@ -533,9 +553,13 @@ Batch 2 items that were planned (kept for the record):
 
 0b. **DONE 29 Oct 2026:** patches 285, 286, 287 applied by the owner and
    verified (hymn_links empty by design; 687 profiles on 'nobody').
-0c. **Run patch_288 NOW** (security): members could delete and re-insert
-   their own profile row with is_super_admin = true. Also fixes the
-   US$30/year plan being graded Plus ('annualpermanent' vs 'annual').
+0c. **DONE 29 Oct 2026:** patch_288 applied and verified (self-delete
+   revoked, guard on INSERT, yearly plan → Pro).
+0d. **Premium (Android):** run `database/rehearsal_289.sql`, then patches
+   289 and 290; deploy `verify-boost`; create the Play products. Steps in
+   `docs/PREMIUM_SETUP.md`.
+0e. **App Store resubmission:** checklist + review message in
+   `docs/APP_REVIEW_NOTES.md` (Age Rating → None fixes 2.3.6).
 
 1. **Run `database/patch_269_country_metadata_resync.sql`** in Supabase
    (preview query first). Repairs members whose auth metadata kept a

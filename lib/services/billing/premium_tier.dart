@@ -52,7 +52,12 @@ enum PremiumTier {
 
   /// US$5 / month, or US$30 / year. Everything in Plus, plus the full
   /// Advent AI allowance on the better model.
-  pro('pro', 'Pro');
+  pro('pro', 'Pro'),
+
+  /// US$10 / month (base plan `business-monthly`, patch 289). Everything
+  /// in Pro, plus a featured shop, monthly boost credits and a gold tick
+  /// for a Page. For sellers, employers and ministries.
+  business('business', 'Business');
 
   const PremiumTier(this.id, this.label);
 
@@ -101,6 +106,11 @@ class TierBenefits {
     required this.callMinutesPerDay,
     required this.aiQuestionsPerMonth,
     required this.adFree,
+    this.goldTick = false,
+    this.featuredShop = false,
+    this.listingBoostsPerMonth = 0,
+    this.jobBoostsPerMonth = 0,
+    this.pageTick = false,
   });
 
   final PremiumTier tier;
@@ -114,6 +124,22 @@ class TierBenefits {
   final int aiQuestionsPerMonth;
 
   final bool adFree;
+
+  /// The gold verified tick — only after an ID check a super admin
+  /// approves (patch 289). Paying alone never shows it.
+  final bool goldTick;
+
+  /// The member's approved shop sits in Marketplace's Featured stores
+  /// while the plan runs.
+  final bool featuredShop;
+
+  /// Business credits, refilled on the 1st of each month. Mirror
+  /// `boost_credit_allowance()` in patch 289.
+  final int listingBoostsPerMonth;
+  final int jobBoostsPerMonth;
+
+  /// A gold tick on a Page the member created, after its own check.
+  final bool pageTick;
 
   static const free = TierBenefits(
     tier: PremiumTier.none,
@@ -151,6 +177,7 @@ class TierBenefits {
     callMinutesPerDay: 360,
     aiQuestionsPerMonth: 100,
     adFree: true,
+    goldTick: true,
   );
 
   static const pro = TierBenefits(
@@ -158,12 +185,27 @@ class TierBenefits {
     callMinutesPerDay: 720,
     aiQuestionsPerMonth: 500,
     adFree: true,
+    goldTick: true,
+  );
+
+  /// Pro's allowances, plus what a seller, employer or ministry needs.
+  static const business = TierBenefits(
+    tier: PremiumTier.business,
+    callMinutesPerDay: 720,
+    aiQuestionsPerMonth: 500,
+    adFree: true,
+    goldTick: true,
+    featuredShop: true,
+    listingBoostsPerMonth: 4,
+    jobBoostsPerMonth: 2,
+    pageTick: true,
   );
 
   static TierBenefits of(PremiumTier tier) => switch (tier) {
     PremiumTier.none => free,
     PremiumTier.plus => plus,
     PremiumTier.pro => pro,
+    PremiumTier.business => business,
   };
 
   /// "2 hours" / "6 hours" / "12 hours" — the call allowance in the unit

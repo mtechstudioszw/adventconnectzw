@@ -22,3 +22,18 @@ bool get kHidePayments =>
 /// UIBackgroundModes — then send App Review the recording they asked for.
 bool get kHideMusic =>
     !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+/// True on iOS builds. No ad SDK is started on iPhone (29 Oct 2026, before
+/// resubmitting to App Review).
+///
+/// Why: the Appodeal app key is registered for the Android app, so iOS
+/// earned nothing; and serving ads on iOS properly needs an App Tracking
+/// Transparency prompt (NSUserTrackingUsageDescription), the networks'
+/// SKAdNetwork ids in Info.plist and matching App Privacy answers — none
+/// of which exist yet. Shipping the SDK live without them is a rejection
+/// risk (Guideline 5.1.2) for no money. Android keeps its ads.
+///
+/// To bring ads to iOS: create the iOS app in Appodeal, use its key on
+/// iOS, add the ATT string and SKAdNetwork list, update the App Privacy
+/// answers, then return false here.
+bool get kHideAds => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;

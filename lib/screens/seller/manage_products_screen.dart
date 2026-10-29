@@ -11,6 +11,9 @@ import '../../widgets/cached_image.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/moderation_appeal_sheet.dart';
+import '../../widgets/premium/boost_sheet.dart';
+import '../../config/platform_flags.dart';
+import '../../services/billing/boost_catalog.dart';
 
 /// Owner view of a seller's full product list. Lets them toggle each
 /// listing between live/hidden, jump into product details, and delete
@@ -606,9 +609,17 @@ class _ProductRow extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 6),
-                        _AvailabilityChip(
-                          available: product.isAvailable,
-                          moderated: product.isModerated,
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            _AvailabilityChip(
+                              available: product.isAvailable,
+                              moderated: product.isModerated,
+                            ),
+                            if (product.isFeatured && product.isAvailable)
+                              const _PromotedChip(),
+                          ],
                         ),
                       ],
                     ),
@@ -676,9 +687,39 @@ class _RowMenu extends StatelessWidget {
           case 'delete':
             onDelete();
             break;
+          case 'boost':
+            final id = int.tryParse(product.id);
+            if (id != null) {
+              showBoostSheet(
+                context,
+                kind: BoostKind.listing,
+                targetId: id,
+                targetTitle: product.title,
+              );
+            }
+            break;
         }
       },
       itemBuilder: (context) => [
+        // Paid boosts (patch 289) — Android only, live listings only.
+        if (!kHidePayments && product.isAvailable && !product.isModerated)
+          PopupMenuItem<String>(
+            value: 'boost',
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.trending_up_rounded,
+                  color: AppColors.primaryBlue,
+                  size: 18,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  product.isFeatured ? 'Boost again' : 'Boost',
+                  style: AppTextStyles.bodyMedium,
+                ),
+              ],
+            ),
+          ),
         PopupMenuItem<String>(
           value: 'edit',
           child: Row(
@@ -732,6 +773,30 @@ class _RowMenu extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The seller's own reminder that a listing is being promoted.
+class _PromotedChip extends StatelessWidget {
+  const _PromotedChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.primaryBlue.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        'PROMOTED',
+        style: AppTextStyles.labelSmall.copyWith(
+          color: AppColors.primaryBlue,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }

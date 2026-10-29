@@ -1,7 +1,7 @@
 -- =====================================================================
 --  PATCH 288 — close the delete-and-reinsert self-grant on profiles,
 --              and fix the yearly plan being graded Plus
---  STATUS: not yet applied
+--  STATUS: APPLIED 29 Oct 2026 (by the owner, verified)
 --
 --  Found 29 Oct 2026 while studying the app for Premium.
 --

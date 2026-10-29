@@ -1,3 +1,4 @@
+import '../../config/platform_flags.dart';
 import 'package:flutter/material.dart';
 import 'widgets/legal_layout.dart';
 
@@ -21,7 +22,7 @@ class HelpCenterScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const LegalLayout(
+    return LegalLayout(
       kicker: 'HELP',
       title: 'How to use the app',
       subtitle: 'A plain guide to everything in Adventist Super App.',
@@ -204,6 +205,9 @@ class HelpCenterScreen extends StatelessWidget {
                 'first.',
           ],
         ),
+        // Hidden on iOS: no paid features there, and Guideline 2.3.10
+        // forbids naming another store.
+        if (!kHidePayments)
         LegalSection(
           title: 'Premium',
           body:

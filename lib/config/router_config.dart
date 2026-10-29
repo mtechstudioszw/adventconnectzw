@@ -4,6 +4,7 @@ import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_library_screen.dart';
 import '../screens/admin/admin_login_screen.dart';
 import '../screens/admin/admin_quiz_screen.dart';
+import '../screens/admin/verification_review_screen.dart';
 import '../screens/admin/church_members_screen.dart';
 import '../screens/admin/user_insights_screen.dart';
 import '../screens/admin/pending_approvals_screen.dart';
@@ -122,6 +123,7 @@ import '../screens/seller/seller_dashboard_screen.dart';
 import '../screens/seller/seller_profile_screen.dart';
 import '../screens/seller/setup_store_screen.dart';
 import '../services/usage_analytics.dart';
+import '../screens/premium/get_verified_screen.dart';
 import '../screens/premium/premium_screen.dart';
 import '../screens/settings/about_screen.dart';
 import '../screens/settings/delete_account_screen.dart';
@@ -214,6 +216,7 @@ String? _shareLinkRedirect(GoRouterState state) {
     final path = state.uri.path;
     if (path == '/donate' ||
         path == '/premium' ||
+        path == '/get-verified' ||
         path == '/iphone-fundraiser') {
       return '/home';
     }
@@ -1168,6 +1171,12 @@ final GoRouter appRouter = GoRouter(
           name: 'admin_quiz',
           builder: (context, state) => const AdminQuizScreen(),
         ),
+        GoRoute(
+          // Super-admin gold-tick ID checks (patch 289).
+          path: 'verifications',
+          name: 'admin_verifications',
+          builder: (context, state) => const VerificationReviewScreen(),
+        ),
       ],
     ),
     GoRoute(
@@ -1244,6 +1253,16 @@ final GoRouter appRouter = GoRouter(
       path: '/premium',
       name: 'premium',
       builder: (context, state) => const PremiumScreen(),
+    ),
+    // The gold tick's ID check (patch 289). ?pageId=&pageName= verifies a
+    // Page instead. Redirected away on iOS with the other paid screens.
+    GoRoute(
+      path: '/get-verified',
+      name: 'get_verified',
+      builder: (context, state) => GetVerifiedScreen(
+        pageId: state.uri.queryParameters['pageId'],
+        pageName: state.uri.queryParameters['pageName'],
+      ),
     ),
     GoRoute(
       path: '/settings',

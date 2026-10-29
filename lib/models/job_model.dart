@@ -38,6 +38,7 @@ class Job {
     this.payPeriod,
     this.payCurrency,
     this.isUrgent = false,
+    this.isFeatured = false,
   });
 
   final String id;
@@ -116,6 +117,12 @@ class Job {
 
   /// "Start now" — the poster needs someone urgently (patch_278).
   final bool isUrgent;
+
+  /// A paid or credited boost is pinning it to the top of Jobs (patch
+  /// 289). Always labelled "Featured" where it shows. Read-only here: the
+  /// server sets and expires it, and it is deliberately NOT in toJson so
+  /// a write can never carry it.
+  final bool isFeatured;
 
   /// "\$15 / day", "\$400–550 / month", or what the poster typed in the
   /// old free-text box. Null when no pay was given.
@@ -212,6 +219,7 @@ class Job {
     payPeriod: payPeriod,
     payCurrency: payCurrency,
     isUrgent: isUrgent,
+    isFeatured: isFeatured,
   );
 
   /// "Town, Province", without saying "Harare, Harare" twice.
@@ -320,6 +328,7 @@ class Job {
       payPeriod: json['pay_period'] as String?,
       payCurrency: json['pay_currency'] as String?,
       isUrgent: json['is_urgent'] == true,
+      isFeatured: json['is_featured'] == true,
     );
   }
 

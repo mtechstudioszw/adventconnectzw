@@ -19,6 +19,7 @@ import '../../config/platform_flags.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/app_version.dart';
+import '../../config/share_config.dart';
 import '../../models/advent_news_model.dart';
 import '../../models/org_page_model.dart';
 import '../../models/devotion_model.dart';
@@ -456,6 +457,13 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _openStore() async {
+    if (isIosBuild) {
+      await launchUrl(
+        Uri.parse(appDownloadUrl),
+        mode: LaunchMode.externalApplication,
+      );
+      return;
+    }
     final market = Uri.parse('market://details?id=$kAndroidPackageId');
     final web = Uri.parse(
       'https://play.google.com/store/apps/details?id=$kAndroidPackageId',

@@ -57,3 +57,7 @@ const String kAppVersionName = '2.0.2';
 /// the store from the "Update required" screen.
 const String kAndroidPackageId =
     'io.supabase.adventconnectzw.advent_connect_zw';
+
+/// The App Store id of "Adventist Super App" (App Store Connect → App
+/// Information → Apple ID).
+const String kIosAppStoreId = '6819068736';

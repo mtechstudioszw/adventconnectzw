@@ -17,6 +17,8 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:advent_connect_zw/services/billing/billing_platform.dart';
+import 'package:advent_connect_zw/services/billing/boost_catalog.dart';
+import 'package:advent_connect_zw/services/billing/boost_service.dart';
 import 'package:advent_connect_zw/services/billing/billing_service.dart';
 import 'package:advent_connect_zw/services/premium_service.dart';
 
@@ -88,6 +90,21 @@ class FakeBillingPlatform implements BillingPlatform {
     buyCalls++;
     return buySucceeds;
   }
+
+  int consumableBuys = 0;
+  String? lastAccountTag;
+  final List<BillingPurchase> consumed = [];
+
+  @override
+  Future<bool> buyConsumable(PremiumOffer offer, {String? accountTag}) async {
+    consumableBuys++;
+    lastAccountTag = accountTag;
+    return buySucceeds;
+  }
+
+  @override
+  Future<void> consume(BillingPurchase purchase) async =>
+      consumed.add(purchase);
 
   @override
   Stream<List<BillingPurchase>> get purchaseUpdates => _controller.stream;
@@ -318,6 +335,82 @@ void main() {
       expect(BillingService.state.value, PremiumFlowState.failed);
       expect(BillingService.errorMessage, contains('already linked'));
       expect(store.completed, isEmpty);
+    });
+  });
+
+  // Boosts (patch 289) share Play's ONE purchase stream with the
+  // subscription. They must go to verify-boost, be consumed only after
+  // the server grants them, and never move the subscription's state.
+  group('boost purchases', () {
+    BillingPurchase boost({String token = 'boost-tok'}) => BillingPurchase(
+      outcome: PurchaseOutcome.purchased,
+      store: BillingStore.googlePlay,
+      productId: 'boost_listing_7d',
+      verificationToken: token,
+      orderId: 'GPA.9',
+      needsCompletion: true,
+    );
+
+    Future<void> settleBoost() async {
+      for (var i = 0; i < 200; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        if (BoostService.state.value != BoostFlow.verifying &&
+            BoostService.state.value != BoostFlow.idle) {
+          return;
+        }
+      }
+    }
+
+    tearDown(BoostService.debugReset);
+
+    test('a verified boost is consumed and leaves Premium alone', () async {
+      var subscriptionVerifies = 0;
+      BillingService.debugConfigure(
+        platform: store,
+        verifier: (_) async {
+          subscriptionVerifies++;
+          return const VerificationResult.success();
+        },
+      );
+      BoostService.debugConfigure(
+        verifier: (p, target) async =>
+            (ok: true, endsAt: DateTime(2026, 11, 5), message: null),
+      );
+      await BillingService.init();
+      store.emit(boost());
+      await settleBoost();
+
+      expect(BoostService.state.value, BoostFlow.success);
+      expect(BoostService.lastEndsAt, DateTime(2026, 11, 5));
+      expect(store.consumed, hasLength(1));
+      // Never acknowledged as a subscription, never sent to verify-purchase.
+      expect(store.completed, isEmpty);
+      expect(subscriptionVerifies, 0);
+      expect(BillingService.state.value, PremiumFlowState.idle);
+    });
+
+    test('a boost the server refuses is NOT consumed (Play refunds it)',
+        () async {
+      BoostService.debugConfigure(
+        verifier: (p, target) async =>
+            (ok: false, endsAt: null, message: 'not yours'),
+      );
+      await BillingService.init();
+      store.emit(boost());
+      await settleBoost();
+
+      expect(BoostService.state.value, BoostFlow.failed);
+      expect(BoostService.message, 'not yours');
+      expect(store.consumed, isEmpty);
+    });
+
+    test('buying tags the purchase with the listing it is for', () async {
+      await BillingService.init();
+      // loadOffer on the fake returns its monthly offer for any id.
+      await BoostService.buy(BoostKind.listing, 42);
+      expect(store.consumableBuys, 1);
+      expect(store.lastAccountTag, 'boost:p:42');
+      expect(store.buyCalls, 0);
     });
   });
 }

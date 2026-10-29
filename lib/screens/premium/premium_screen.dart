@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../services/ads/ad_impression_counter.dart';
 import '../../services/ai/ai_balance_service.dart';
-import '../../services/ai/ai_tiers.dart';
 import '../../services/billing/billing_config.dart';
 import '../../services/billing/billing_service.dart';
 import '../../services/premium_service.dart';
@@ -13,6 +12,7 @@ import '../../widgets/motion/motion.dart';
 import '../../widgets/premium/premium_badge.dart';
 import '../../widgets/screen_shell.dart';
 import 'widgets/advent_ai_offer_card.dart';
+import 'widgets/plan_perks_card.dart';
 import 'widgets/plan_picker.dart';
 
 /// "Go Premium".
@@ -132,8 +132,8 @@ class _ActiveView extends StatelessWidget {
                 // told what they now HAVE. Ads follow as a second clause
                 // because it is still true and still worth saying.
                 Text(
-                  '${AiTiers.premium.monthlyMessages} Advent AI questions '
-                  'a month, and no ads anywhere in the app.'
+                  '${PremiumService.benefits.aiQuestionsPerMonth} Advent AI '
+                  'questions a month, and no ads anywhere in the app.'
                   '${until == null ? '' : ' Renews on '
                       '${_formatDate(until.toLocal())}.'}',
                   style: TextStyle(
@@ -152,6 +152,8 @@ class _ActiveView extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        const StaggeredReveal(index: 1, child: PlanPerksCard()),
         const SizedBox(height: 12),
         StaggeredReveal(
           index: 1,
@@ -240,6 +242,8 @@ class _OfferView extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               StaggeredReveal(index: 2, child: const _ComparisonCard()),
+              const SizedBox(height: 12),
+              StaggeredReveal(index: 2, child: const GoldTickPromoCard()),
               const SizedBox(height: 12),
               StaggeredReveal(index: 3, child: const _AdCostCard()),
               const SizedBox(height: 12),
@@ -400,6 +404,7 @@ class _ComparisonCard extends StatelessWidget {
     (label: 'Ads in the feed', free: 'Shown', premiumHas: false),
     (label: 'Quiz hints', free: 'Watch an ad', premiumHas: true),
     (label: 'Premium badge on your name', free: 'No', premiumHas: true),
+    (label: 'Gold verified tick (after an ID check)', free: 'No', premiumHas: true),
     (label: 'Supports the app', free: 'No', premiumHas: true),
   ];
 

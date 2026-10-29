@@ -50,6 +50,9 @@ class JobCard extends StatelessWidget {
     ].join('  ·  ');
 
     final chips = <Widget>[
+      // Paid placement is always named (patch 289).
+      if (job.isFeatured)
+        const JobChip('Featured', icon: Icons.trending_up_rounded, strong: true),
       if (job.isUrgent) const JobChip.urgent(),
       JobChip(job.formatType()),
       if (job.workArrangementLabel != null && job.workArrangement != 'on_site')
@@ -329,6 +332,12 @@ class SeekerCard extends StatelessWidget {
                 runSpacing: 6,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
+                  if (job.isFeatured)
+                    const JobChip(
+                      'Featured',
+                      icon: Icons.trending_up_rounded,
+                      strong: true,
+                    ),
                   if (job.isUrgent) const StatusBadge('Available now'),
                   JobChip(job.formatType()),
                   if (pay != null) JobChip(pay, strong: true),

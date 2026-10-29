@@ -474,8 +474,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           if (_featuredProducts.isNotEmpty)
             SliverToBoxAdapter(
               child: _ProductShelf(
-                title: 'Featured',
-                subtitle: 'Featured by the marketplace team',
+                // Paid placement is named as paid (patch 289): boosted
+                // listings and the team's own picks both land here.
+                title: 'Promoted',
+                subtitle: 'Sponsored listings',
                 products: _featuredProducts,
                 savedIds: _savedIds,
                 onToggleSave: _toggleSave,
@@ -646,9 +648,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
 
-  /// Stores the marketplace team featured (sellers.featured — admin-set;
-  /// patch_276 stops sellers setting it themselves). Labelled, never mixed
-  /// into the organic order.
+  /// Featured stores (sellers.featured): set by the marketplace team, or
+  /// held by a Business subscriber for as long as the plan runs (patch
+  /// 289). Sellers can't set it themselves (patch_276). Labelled, never
+  /// mixed into the organic order.
   List<Seller> get _featuredShops =>
       _scopedShops.where((s) => s.featured).toList();
 
@@ -675,7 +678,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(AppSpace.lg, 2, AppSpace.lg, 0),
             child: Text(
-              'Featured by the marketplace team',
+              'Business sellers and the marketplace team\'s picks',
               style: AppTextStyles.bodySmall.copyWith(
                 color: context.palette.textMuted,
               ),

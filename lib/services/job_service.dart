@@ -75,9 +75,16 @@ class JobService {
     final response = await query
         .order('created_at', ascending: false)
         .limit(200);
-    return (response as List)
+    final jobs = (response as List)
         .map((row) => Job.fromJson(row as Map<String, dynamic>))
         .toList();
+    // Featured (paid, patch 289) jobs lead, newest first among them; the
+    // rest keep their order. At most three are pinned, so paying can't
+    // bury every free listing. Each is labelled "Featured" on its card.
+    final featured = jobs.where((j) => j.isFeatured).take(3).toList();
+    if (featured.isEmpty) return jobs;
+    final pinned = featured.map((j) => j.id).toSet();
+    return [...featured, ...jobs.where((j) => !pinned.contains(j.id))];
   }
 
   static Future<Job?> fetchJobById(String id) async {

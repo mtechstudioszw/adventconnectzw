@@ -251,3 +251,77 @@ export function mapPlaySubscription(body: any): PlaySubscription {
     raw: body,
   };
 }
+
+// ---------------------------------------------------------------------
+//  One-time products (boosts, patch 289)
+// ---------------------------------------------------------------------
+
+export interface PlayProductPurchase {
+  /// 0 purchased, 1 cancelled, 2 pending — Play's own numbers.
+  purchaseState: number;
+  /// 0 not yet consumed, 1 consumed.
+  consumptionState: number;
+  /// 0 not yet acknowledged, 1 acknowledged.
+  acknowledgementState: number;
+  orderId: string | null;
+  /// What the app passed as `applicationUserName` when it opened the
+  /// purchase sheet — for a boost, "boost:p:<id>" or "boost:j:<id>".
+  accountTag: string | null;
+  isTestPurchase: boolean;
+  raw: unknown;
+}
+
+function productUrl(productId: string, purchaseToken: string): string {
+  return `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/` +
+    `${encodeURIComponent(PLAY_PACKAGE_NAME)}/purchases/products/` +
+    `${encodeURIComponent(productId)}/tokens/${encodeURIComponent(purchaseToken)}`;
+}
+
+/// Ask Play about a one-time purchase. Null when Play has never seen the
+/// token (a forged one lands here); throws when we couldn't ask.
+export async function getPlayProductPurchase(
+  productId: string,
+  purchaseToken: string,
+): Promise<PlayProductPurchase | null> {
+  const token = await getPlayAccessToken();
+  const res = await fetch(productUrl(productId, purchaseToken), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 404 || res.status === 410 || res.status === 400) {
+    return null;
+  }
+  if (!res.ok) {
+    throw new Error(`Play API ${res.status}: ${(await res.text()).slice(0, 400)}`);
+  }
+  const body = await res.json();
+  return {
+    purchaseState: Number(body?.purchaseState ?? 2),
+    consumptionState: Number(body?.consumptionState ?? 0),
+    acknowledgementState: Number(body?.acknowledgementState ?? 0),
+    orderId: body?.orderId ?? null,
+    accountTag: body?.obfuscatedExternalAccountId ?? null,
+    isTestPurchase: body?.purchaseType === 0,
+    raw: body,
+  };
+}
+
+/// Acknowledge a one-time purchase server-side, so Play never refunds a
+/// boost we granted even if the phone dies before it can consume it.
+export async function acknowledgePlayProductPurchase(
+  productId: string,
+  purchaseToken: string,
+): Promise<void> {
+  const token = await getPlayAccessToken();
+  const res = await fetch(`${productUrl(productId, purchaseToken)}:acknowledge`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: "{}",
+  });
+  // 400 "already acknowledged / consumed" is fine.
+  if (!res.ok && res.status !== 400) {
+    throw new Error(`Play acknowledge ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+}

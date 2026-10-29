@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../config/app_version.dart';
 import '../../config/share_config.dart';
 import '../../models/post_model.dart';
 import '../../theme/app_colors.dart';
@@ -174,7 +173,7 @@ class _PostCardState extends State<PostCard>
     // never broken and it never leaks.
     final link = post.visibility == PostVisibility.public
         ? postShareUrl(post.id)
-        : 'https://play.google.com/store/apps/details?id=$kAndroidPackageId';
+        : appDownloadUrl;
     final body = text.isEmpty
         ? '$author shared a post on Adventist Super App.\n$link'
         : '"$text"\n\n— $author on Adventist Super App\n$link';

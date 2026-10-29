@@ -235,6 +235,21 @@ class PageService {
     final s = e.toString();
     if (ContentFilterError.matches(e)) return ContentFilterError.message;
     if (s.contains('PAGE_LIMIT')) return 'You can create up to 3 Pages.';
+    // patch 290 — Page safety.
+    if (s.contains('PAGE_TOO_NEW')) {
+      return 'Your account needs to be 14 days old to create a Page.';
+    }
+    if (s.contains('PAGE_EMAIL')) {
+      return 'Confirm your email address before creating a Page.';
+    }
+    if (s.contains('PAGE_WEEKLY')) return 'You can create one Page a week.';
+    if (s.contains('PAGE_NAME_PROTECTED')) {
+      return 'That name is kept for official, verified Pages. Pick another '
+          'name, or contact support if you run that organisation.';
+    }
+    if (s.contains('PAGE_ADMIN_LIMIT')) {
+      return 'A Page can have up to 10 admins and editors.';
+    }
     if (s.contains('NO_SUCH_USER')) return 'No member has that username.';
     if (s.contains('LAST_OWNER')) {
       return 'A Page needs at least one owner. Add another owner first.';

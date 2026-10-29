@@ -21,6 +21,8 @@ import 'services/deep_link_service.dart';
 import 'services/messaging_service.dart';
 import 'services/music_download_service.dart';
 import 'services/music_player_service.dart';
+import 'config/platform_flags.dart';
+import 'services/billing/billing_service.dart';
 import 'services/premium_service.dart';
 import 'services/usage_analytics.dart';
 import 'services/maintenance_service.dart';
@@ -191,6 +193,12 @@ Future<void> _initBackgroundServices() async {
   // WHETHER AdsService.init() is called, never which SDK is behind it.
   await PremiumService.init();
   unawaited(PremiumService.refresh());
+  // Listen to Play's purchase stream from launch, not only once the
+  // Premium screen opens: Play replays a purchase interrupted by a crash
+  // or a flat battery here, and a boost or subscription paid for but not
+  // yet verified must land without the member hunting for a screen.
+  // Android only — iOS shows no paid features (kHidePayments).
+  if (!kHidePayments) unawaited(BillingService.init());
 
   // Appodeal: initialise off the critical path so the first frame isn't
   // blocked. The SDK gathers GDPR/CCPA consent itself during init (Stack

@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../premium_service.dart';
 import 'billing_config.dart';
 import 'billing_platform.dart';
+import 'boost_catalog.dart';
+import 'boost_service.dart';
 import 'play_billing_platform.dart';
 import 'premium_tier.dart';
 
@@ -136,6 +138,10 @@ class BillingService {
 
   static BillingPlatform get _store => _platform ??= PlayBillingPlatform();
 
+  /// The store, for [BoostService] — which shares this one purchase
+  /// stream and so must share the platform it comes from.
+  static BillingPlatform get platform => _store;
+
   static PurchaseVerifier get _verify => _verifier ??= _verifyWithServer;
 
   /// Wire up the purchase stream. Safe to call more than once.
@@ -251,6 +257,13 @@ class BillingService {
 
   static Future<void> _onPurchases(List<BillingPurchase> purchases) async {
     for (final purchase in purchases) {
+      // Boosts (patch 289) share Play's one purchase stream but are a
+      // different kind of thing: spent, not kept, and verified by
+      // verify-boost. They must never move the subscription's state.
+      if (BoostKind.isBoostSku(purchase.productId)) {
+        await BoostService.onPurchase(purchase);
+        continue;
+      }
       switch (purchase.outcome) {
         case PurchaseOutcome.pending:
           state.value = PremiumFlowState.pendingPayment;

@@ -302,7 +302,8 @@ class _FeaturedPip extends StatelessWidget {
           const Icon(Icons.star_rounded, size: 12, color: AppColors.darkNavy),
           const SizedBox(width: 3),
           Text(
-            'Featured',
+            // Paid boosts (patch 289) — say so.
+            'Promoted',
             style: AppTextStyles.labelSmall.copyWith(
               color: AppColors.darkNavy,
               fontWeight: FontWeight.w800,

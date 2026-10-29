@@ -58,6 +58,10 @@ class BillingConfig {
   static const String proMonthlyBasePlanId = 'pro-monthly';
   static const String annualBasePlanId = 'annualpermanent';
 
+  /// US\$10 / month, patch 289. NOT YET CREATED in Play Console — until it
+  /// is, Play simply doesn't return it and the picker shows three plans.
+  static const String businessMonthlyBasePlanId = 'business-monthly';
+
   /// Which tier each base plan grants.
   ///
   /// **This map is a MIRROR of the server's, in patch_268.** The server
@@ -68,6 +72,7 @@ class BillingConfig {
     monthlyBasePlanId: PremiumTier.plus,
     proMonthlyBasePlanId: PremiumTier.pro,
     annualBasePlanId: PremiumTier.pro,
+    businessMonthlyBasePlanId: PremiumTier.business,
   };
 
   /// The tier a base plan grants. Defaults to [PremiumTier.plus] for an
@@ -107,6 +112,7 @@ class BillingConfig {
   static const String fallbackPriceLabel = 'US\$3.00';
   static const String fallbackProPriceLabel = 'US\$5.00';
   static const String fallbackAnnualPriceLabel = 'US\$30.00';
+  static const String fallbackBusinessPriceLabel = 'US\$10.00';
 
   /// Human label for the billing period of a SPECIFIC offer.
   ///

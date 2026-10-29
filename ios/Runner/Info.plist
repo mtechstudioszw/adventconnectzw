@@ -23,10 +23,10 @@
 	<string>Adventist Super App needs microphone access so you can record voice notes in your chats.</string>
 
 	<key>NSCameraUsageDescription</key>
-	<string>Adventist Super App uses your camera to upload profile and product photos.</string>
+	<string>Adventist Super App uses your camera to take photos for your profile, posts, listings and chats, and to scan friend QR codes.</string>
 
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Adventist Super App accesses your photos to upload profile and product images.</string>
+	<string>Adventist Super App accesses your photos so you can add pictures to your profile, posts, listings and chats.</string>
 
 	<!-- gal package: saving a post image back to the user's photo
 	     library needs Add-Only access. -->
@@ -34,14 +34,14 @@
 	<string>Adventist Super App saves post images you tap "Save to gallery" on into your Photos library.</string>
 
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Adventist Super App uses your location to find SDA churches near you.</string>
+	<string>Adventist Super App uses your location to find SDA churches near you and to show Sabbath sunset times for where you are.</string>
 
 	<!-- The app only ever asks for "while using" (LocationService calls
 	     Geolocator.requestPermission). This key is here because the
 	     geolocator binary references the Always API, and App Store Connect
 	     warns (ITMS-90683) when its description is missing. -->
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Adventist Super App uses your location to find SDA churches near you.</string>
+	<string>Adventist Super App uses your location to find SDA churches near you and to show Sabbath sunset times for where you are.</string>
 
 	<key>NSFaceIDUsageDescription</key>
 	<string>Adventist Super App uses Face ID to securely unlock your account.</string>

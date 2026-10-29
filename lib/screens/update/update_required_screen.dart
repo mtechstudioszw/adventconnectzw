@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/app_version.dart';
+import '../../config/share_config.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -12,6 +13,12 @@ class UpdateRequiredScreen extends StatelessWidget {
   const UpdateRequiredScreen({super.key});
 
   Future<void> _openStore() async {
+    // iPhone: the App Store listing (opens the App Store app).
+    if (isIosBuild) {
+      await launchUrl(Uri.parse(appDownloadUrl),
+          mode: LaunchMode.externalApplication);
+      return;
+    }
     // Prefer the Play Store app; fall back to the web listing.
     final market = Uri.parse('market://details?id=$kAndroidPackageId');
     final web = Uri.parse(

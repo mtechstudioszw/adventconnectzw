@@ -453,6 +453,15 @@ class _PostCardState extends State<PostCard>
     }
   }
 
+  /// Short, photo-less, single-paragraph posts get the larger type.
+  bool get _isStatement {
+    final body = (post.body ?? '').trim();
+    return _images.isEmpty &&
+        body.isNotEmpty &&
+        body.length <= 120 &&
+        '\n'.allMatches(body).length <= 2;
+  }
+
   Widget _buildBody(BuildContext context) {
     final palette = context.palette;
     final body = post.body!;
@@ -471,10 +480,16 @@ class _PostCardState extends State<PostCard>
       child: ExpandableText(
         text: body,
         collapsedLines: _bodyCollapsedLines,
-        style: AppTextStyles.bodyMedium.copyWith(
-          color: palette.text,
-          height: 1.45,
-        ),
+        // A short post with no photo is set larger, the way Facebook does,
+        // so a one-line testimony reads as a statement rather than a
+        // caption floating in an empty card.
+        style: (_isStatement
+                ? AppTextStyles.titleMedium.copyWith(
+                    fontWeight: FontWeight.w500,
+                    height: 1.4,
+                  )
+                : AppTextStyles.bodyMedium.copyWith(height: 1.45))
+            .copyWith(color: palette.text),
       ),
     );
   }
@@ -515,20 +530,7 @@ class _PostCardState extends State<PostCard>
               child: Row(
                 children: [
                   if (post.likeCount > 0) ...[
-                    Container(
-                      width: 20,
-                      height: 20,
-                      decoration: const BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        _glyphFor(reaction ?? PostReaction.like),
-                        size: 11,
-                        color: AppColors.white,
-                      ),
-                    ),
+                    _ReactionStack(kinds: _summaryKinds),
                     const SizedBox(width: AppSpace.sm),
                     // Count rolls rather than snapping when it changes.
                     AnimatedSwitcher(
@@ -542,8 +544,8 @@ class _PostCardState extends State<PostCard>
                         ),
                       ),
                       child: Text(
-                        '${post.likeCount}',
-                        key: ValueKey(post.likeCount),
+                        _reactionSummary,
+                        key: ValueKey(_reactionSummary),
                         style: AppTextStyles.caption.copyWith(
                           color: palette.text,
                           fontWeight: FontWeight.w600,
@@ -564,6 +566,16 @@ class _PostCardState extends State<PostCard>
                 ],
               ),
             ),
+          // A hairline between the summary and the actions, so the card
+          // reads as content above, controls below.
+          Divider(
+            height: 1,
+            thickness: 0.6,
+            indent: AppSpace.sm,
+            endIndent: AppSpace.sm,
+            color: palette.divider,
+          ),
+          const SizedBox(height: 2),
           Row(
             children: [
               Expanded(
@@ -598,6 +610,27 @@ class _PostCardState extends State<PostCard>
         ],
       ),
     );
+  }
+
+  /// The kinds in the summary's icon stack: everything the post has, plus
+  /// the viewer's own (which an optimistic update hasn't written back yet).
+  List<PostReaction> get _summaryKinds {
+    final kinds = {...post.reactionKinds};
+    if (post.viewerReaction != null) kinds.add(post.viewerReaction!);
+    if (kinds.isEmpty) kinds.add(PostReaction.like);
+    return [
+      for (final r in PostReaction.values)
+        if (kinds.contains(r)) r,
+    ];
+  }
+
+  /// "12", or "You and 11 others" once the viewer has reacted.
+  String get _reactionSummary {
+    final n = post.likeCount;
+    if (post.viewerReaction == null) return '$n';
+    if (n <= 1) return 'You';
+    final others = n - 1;
+    return others == 1 ? 'You and 1 other' : 'You and $others others';
   }
 
   static IconData _glyphFor(PostReaction r) => switch (r) {
@@ -845,6 +878,48 @@ class _NaturalMediaState extends State<_NaturalMedia> {
       ),
     ),
   );
+}
+
+/// Overlapping reaction badges — Like, Amen, Praying — as many as the post
+/// has, so the summary shows what people actually said, not just a count.
+class _ReactionStack extends StatelessWidget {
+  const _ReactionStack({required this.kinds});
+  final List<PostReaction> kinds;
+
+  static const _size = 20.0;
+  static const _overlap = 6.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final card = context.palette.card;
+    return SizedBox(
+      width: _size + (kinds.length - 1) * (_size - _overlap),
+      height: _size,
+      child: Stack(
+        children: [
+          for (var i = 0; i < kinds.length; i++)
+            Positioned(
+              left: i * (_size - _overlap),
+              child: Container(
+                width: _size,
+                height: _size,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: card, width: 1.5),
+                ),
+                child: Icon(
+                  _PostCardState._glyphFor(kinds[i]),
+                  size: 10,
+                  color: AppColors.white,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class _CountPill extends StatelessWidget {

@@ -8,6 +8,7 @@ import '../../models/ministry_tag_model.dart';
 import '../../models/post_model.dart';
 import '../../services/directory_service.dart';
 import '../../services/ministry_service.dart';
+import '../../widgets/friend_qr_sheet.dart';
 import '../../widgets/ministry_chips.dart';
 import '../../utils/date_format.dart';
 import '../../services/auth_service.dart';
@@ -889,6 +890,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         icon: Icons.chat_bubble_outline,
         label: 'Message',
         onTap: _openChat,
+      ),
+      // Their QR card, to share their profile (owner, 29 Oct 2026).
+      ProfileActionButton.icon(
+        icon: Icons.qr_code_2_rounded,
+        label: 'QR code',
+        onTap: () => showFriendQrSheet(
+          context,
+          userId: widget.userId,
+          name: _profile?.fullName,
+        ),
       ),
       ProfileActionButton.icon(
         icon: Icons.more_horiz,

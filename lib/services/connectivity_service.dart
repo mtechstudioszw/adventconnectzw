@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 
 /// Online/offline state for the whole app. Backed by `connectivity_plus`
 /// — emits true whenever the device has any non-`none` connection.
@@ -34,6 +35,13 @@ class ConnectivityService {
   /// Broadcast stream of online/offline transitions. Late subscribers
   /// see the next transition — call `isOnline` for the current value.
   static Stream<bool> get onChanged => _onlineController.stream;
+
+  /// Tests only: pretend the connection changed.
+  @visibleForTesting
+  static void debugEmit(bool online) {
+    _lastOnline = online;
+    _onlineController.add(online);
+  }
 
   static Future<void> initialize() async {
     if (_initialized) return;

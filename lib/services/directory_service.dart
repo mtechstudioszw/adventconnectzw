@@ -154,9 +154,19 @@ class DirectoryService {
           (myProvince ?? '').isNotEmpty &&
           (e.province ?? '').toLowerCase() == myProvince!.toLowerCase();
 
-      final tiers = <List<MemberDirectoryEntry>>[[], [], [], []];
+      // Friends in common (patch_286) — the strongest honest signal, so it
+      // leads. Missing function or no friends → empty map, and everyone
+      // falls through to the church / city / province tiers as before.
+      final mutuals = await _mutualCounts();
+
+      final tiers = <List<MemberDirectoryEntry>>[[], [], [], [], []];
       for (final e in pool) {
-        if (sameChurch(e)) {
+        final m = mutuals[e.userId] ?? 0;
+        if (m > 0) {
+          tiers[4].add(e.withReason(
+            m == 1 ? '1 mutual friend' : '$m mutual friends',
+          ));
+        } else if (sameChurch(e)) {
           tiers[0].add(e.withReason('Goes to your church'));
         } else if (sameCity(e)) {
           tiers[1].add(e.withReason('Also in ${e.city!.trim()}'));
@@ -172,7 +182,11 @@ class DirectoryService {
       }
       // Within a tier: shuffled, then people with a photo first — a face
       // is what makes a suggestion card worth stopping for.
-      for (final t in tiers) {
+      // Most mutual friends first; shuffling would lose that.
+      tiers[4].sort(
+        (a, b) => (mutuals[b.userId] ?? 0).compareTo(mutuals[a.userId] ?? 0),
+      );
+      for (final t in tiers.take(4)) {
         t.shuffle();
         t.sort((a, b) {
           final pa = (a.profilePhotoUrl ?? '').isNotEmpty ? 0 : 1;
@@ -180,9 +194,28 @@ class DirectoryService {
           return pa.compareTo(pb);
         });
       }
-      return [for (final t in tiers) ...t].take(limit).toList();
+      return [...tiers[4], for (final t in tiers.take(4)) ...t]
+          .take(limit)
+          .toList();
     } catch (_) {
       return const [];
+    }
+  }
+
+  /// userId → friends in common with the viewer (patch_286). Empty when
+  /// the function isn't deployed yet or anything fails.
+  static Future<Map<String, int>> _mutualCounts() async {
+    try {
+      final rows = await _client.rpc(
+        'mutual_friend_counts',
+        params: {'p_limit': 500},
+      );
+      return {
+        for (final r in (rows as List).cast<Map<String, dynamic>>())
+          r['user_id'].toString(): (r['mutual'] as num).toInt(),
+      };
+    } catch (_) {
+      return const {};
     }
   }
 

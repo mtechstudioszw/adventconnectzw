@@ -152,6 +152,25 @@ class FeedService {
     return _diversify(posts).take(limit).toList();
   }
 
+  /// How many posts newer than [after] the viewer can see, not counting
+  /// their own — for Home's "↑ N new posts" pill. Ids only, at most
+  /// [cap], so it is a cheap call. Null on any failure (the pill just
+  /// doesn't show).
+  static Future<int?> countNewerThan(DateTime after, {int cap = 20}) async {
+    try {
+      var query = _client
+          .from(_postsTable)
+          .select('id')
+          .gt('created_at', after.toUtc().toIso8601String());
+      final viewer = _viewerId;
+      if (viewer != null) query = query.neq('author_id', viewer);
+      final rows = await query.limit(cap);
+      return (rows as List).length;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static const String _basePostCols =
       '*, '
       'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '

@@ -93,4 +93,34 @@ class MemberDirectoryEntry {
           profileMap?['is_verified'] == true,
     );
   }
+
+  /// Flat form for Home's offline cache — round-trips through
+  /// [MemberDirectoryEntry.fromCacheJson], reason included.
+  Map<String, dynamic> toCacheJson() => {
+        'id': id,
+        'user_id': userId,
+        'church_id': churchId,
+        'church_name': churchName,
+        'province': province,
+        'city': city,
+        'full_name': fullName,
+        'profile_photo_url': profilePhotoUrl,
+        'is_verified': isVerified,
+        'reason': suggestionReason,
+      };
+
+  factory MemberDirectoryEntry.fromCacheJson(Map<String, dynamic> j) =>
+      MemberDirectoryEntry(
+        id: '${j['id']}',
+        userId: '${j['user_id']}',
+        isVisible: true,
+        churchId: j['church_id'] as String?,
+        churchName: j['church_name'] as String?,
+        province: j['province'] as String?,
+        city: j['city'] as String?,
+        fullName: j['full_name'] as String?,
+        profilePhotoUrl: j['profile_photo_url'] as String?,
+        isVerified: j['is_verified'] == true,
+        suggestionReason: j['reason'] as String?,
+      );
 }

@@ -53,6 +53,7 @@ class Post {
     this.likeCount = 0,
     this.commentCount = 0,
     this.viewerReaction,
+    this.reactionKinds = const {},
     this.moderationHiddenAt,
     this.moderationReason,
     this.pageId,
@@ -116,6 +117,10 @@ class Post {
   /// The viewer's own reaction, or null if they haven't reacted.
   final PostReaction? viewerReaction;
 
+  /// Which kinds of reaction the post has (Like, Amen, Praying) — for the
+  /// summary line's icon stack. Counts per kind aren't needed there.
+  final Set<PostReaction> reactionKinds;
+
   /// True when the viewer reacted at all, whichever kind. Kept so the
   /// profile screens' like toggles keep reading naturally.
   bool get viewerLiked => viewerReaction != null;
@@ -156,6 +161,7 @@ class Post {
       viewerReaction: identical(viewerReaction, _unset)
           ? this.viewerReaction
           : viewerReaction as PostReaction?,
+      reactionKinds: reactionKinds,
       moderationHiddenAt: identical(moderationHiddenAt, _unset)
           ? this.moderationHiddenAt
           : moderationHiddenAt as DateTime?,
@@ -179,8 +185,17 @@ class Post {
     final likesRaw = json['post_likes'];
     int likeCount = 0;
     PostReaction? viewerReaction;
+    final reactionKinds = <PostReaction>{};
     if (likesRaw is List) {
       likeCount = likesRaw.length;
+      for (final row in likesRaw) {
+        if (row is Map<String, dynamic>) {
+          reactionKinds.add(
+            PostReactionX.fromWire(row['reaction']?.toString()) ??
+                PostReaction.like,
+          );
+        }
+      }
       if (viewerId != null) {
         for (final row in likesRaw) {
           if (row is Map<String, dynamic> &&
@@ -202,6 +217,10 @@ class Post {
       likeCount = (likesRaw['count'] as int?) ?? 0;
       viewerReaction =
           PostReactionX.fromWire(likesRaw['viewer_reaction']?.toString());
+      for (final k in (likesRaw['kinds'] as List?) ?? const []) {
+        final r = PostReactionX.fromWire(k?.toString());
+        if (r != null) reactionKinds.add(r);
+      }
       // Back-compat with caches written before reactions existed.
       if (viewerReaction == null && likesRaw['viewer_liked'] == true) {
         viewerReaction = PostReaction.like;
@@ -255,6 +274,7 @@ class Post {
           DateTime.now(),
       likeCount: likeCount,
       commentCount: commentCount,
+      reactionKinds: reactionKinds,
       viewerReaction: viewerReaction,
       moderationHiddenAt:
           DateTime.tryParse(json['moderation_hidden_at']?.toString() ?? ''),
@@ -295,6 +315,7 @@ class Post {
         'post_likes': {
           'count': likeCount,
           'viewer_reaction': viewerReaction?.wire,
+          'kinds': [for (final k in reactionKinds) k.wire],
         },
         'post_comments': {'count': commentCount},
         'moderation_hidden_at': moderationHiddenAt?.toIso8601String(),

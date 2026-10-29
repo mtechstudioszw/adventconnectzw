@@ -159,6 +159,11 @@ class _HomeScreenState extends State<HomeScreen>
   late final List<String> _versePool = _seeded(kFeedVerses);
   late final List<FundamentalBelief> _beliefPool = _seeded(kFundamentalBeliefs);
 
+  /// Posts published since this feed loaded (others', not the viewer's),
+  /// for the "↑ N new posts" pill. 0 hides it.
+  int _newPostCount = 0;
+  Timer? _newPostTimer;
+
   /// Blocks shown after the last post; raised as the member nears the end.
   int _extraModules = 8;
   int _videoOffset = 0;
@@ -297,6 +302,12 @@ class _HomeScreenState extends State<HomeScreen>
     // Header greeting, Sabbath wash and countdown follow the place and
     // flip at sundown without waiting for a refresh.
     SabbathService.changes.addListener(_onSabbathChanged);
+    // Quietly ask whether anyone has posted since the feed loaded, so the
+    // member is offered fresh posts instead of having to guess to refresh.
+    _newPostTimer = Timer.periodic(
+      const Duration(minutes: 2),
+      (_) => _checkForNewPosts(),
+    );
     FeedService.loadSavedAndHidden();
     FollowService.loadMyFollowing();
     // Tapping Home while already on Home returns to the top — the only way
@@ -473,6 +484,7 @@ class _HomeScreenState extends State<HomeScreen>
     _postChangesSub?.cancel();
     FeedService.hiddenPostIds.removeListener(_onHiddenChanged);
     SabbathService.changes.removeListener(_onSabbathChanged);
+    _newPostTimer?.cancel();
     _lifecycle.dispose();
     TabShell.unregisterReselect(TabShell.homeIndex, _scrollToTop);
     FeedService.friendshipsChanged.removeListener(_onFriendshipsChanged);
@@ -573,7 +585,36 @@ class _HomeScreenState extends State<HomeScreen>
   /// Back in the foreground. Only a new day triggers anything — a full
   /// refresh on every app switch would cost data for nothing.
   void _onResume() {
-    if (mounted && _utcDay() != _loadedDay) _refresh();
+    if (mounted && _utcDay() != _loadedDay) {
+      _refresh();
+    } else {
+      _checkForNewPosts();
+    }
+  }
+
+  Future<void> _checkForNewPosts() async {
+    if (!mounted || _posts.isEmpty || !ConnectivityService.isOnline) return;
+    var newest = _posts.first.createdAt;
+    for (final p in _posts) {
+      if (p.createdAt.isAfter(newest)) newest = p.createdAt;
+    }
+    final n = await FeedService.countNewerThan(newest);
+    if (!mounted || n == null || n == _newPostCount) return;
+    setState(() => _newPostCount = n);
+  }
+
+  /// Tap on the pill: back to the top and load what's new.
+  Future<void> _showNewPosts() async {
+    HapticFeedback.selectionClick();
+    setState(() => _newPostCount = 0);
+    if (_scroll.hasClients) {
+      await _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    await _refresh();
   }
 
   Future<void> _bootstrap() async {
@@ -606,6 +647,7 @@ class _HomeScreenState extends State<HomeScreen>
     _pagesLoaded = 0;
     _endOfFeed = false;
     _extraModules = 8;
+    _newPostCount = 0;
     _loadMoreFailed = false;
 
     final viewerId = AuthService.currentUser?.id;
@@ -1004,7 +1046,14 @@ class _HomeScreenState extends State<HomeScreen>
       final payload = jsonEncode({
         'events': events.map((e) => e.toJson()).toList(),
         'churches': churches.map((c) => c.toJson()).toList(),
-        'posts': posts.take(30).map((p) => p.toJson()).toList(),
+        // 60, not 30: the feed opens from this on a bad connection, and
+        // 30 posts ran out within a minute of scrolling.
+        'posts': posts.take(60).map((p) => p.toJson()).toList(),
+        // People groups work offline too.
+        'people': _suggestedMembers
+            .take(80)
+            .map((m) => m.toCacheJson())
+            .toList(),
         // Cache stories too — testers reported the rail occasionally
         // rendering empty on a flaky fetch until a manual refresh.
         // Painting the last-known set first hides that gap.
@@ -1045,12 +1094,18 @@ class _HomeScreenState extends State<HomeScreen>
       final news = ((decoded['news'] as List?) ?? const [])
           .map((n) => AdventNews.fromJson(n as Map<String, dynamic>))
           .toList();
+      final people = ((decoded['people'] as List?) ?? const [])
+          .map((m) => MemberDirectoryEntry.fromCacheJson(
+                Map<String, dynamic>.from(m as Map),
+              ))
+          .toList();
       final followed = ((decoded['followedChurchIds'] as List?) ?? const [])
           .map((e) => e.toString())
           .toSet();
       if (!mounted) return;
       setState(() {
         if (_events.isEmpty) _events = events;
+        if (_suggestedMembers.isEmpty) _suggestedMembers = people;
         if (_churches.isEmpty) _churches = churches;
         if (_posts.isEmpty) _posts = posts;
         if (_stories.isEmpty) _stories = stories;
@@ -1423,7 +1478,38 @@ class _HomeScreenState extends State<HomeScreen>
         // the body under the island, so a bottom-anchored bubble rendered
         // beneath the nav and could not be tapped, and it slid away with the
         // island on scroll. Chat is a real tab now — see MainBottomNav.
-        child: _buildScrollableContent(),
+        child: Stack(
+          children: [
+            _buildScrollableContent(),
+            // "↑ 3 new posts" — slides in under the header when others have
+            // posted since this feed loaded.
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + 64,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: AnimatedSlide(
+                  offset: _newPostCount > 0
+                      ? Offset.zero
+                      : const Offset(0, -3),
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutBack,
+                  child: AnimatedOpacity(
+                    opacity: _newPostCount > 0 ? 1 : 0,
+                    duration: const Duration(milliseconds: 220),
+                    child: IgnorePointer(
+                      ignoring: _newPostCount == 0,
+                      child: _NewPostsPill(
+                        count: _newPostCount,
+                        onTap: _showNewPosts,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
       // No NowPlayingBar here. The mini player belongs to the Music tab; away
       // from it, transport controls live where a real music player puts them
@@ -2265,7 +2351,9 @@ class _HomeScreenState extends State<HomeScreen>
     // countryBoost note in FeedService. Marketplace and Jobs DO carry the
     // toggle, because a listing in another country is one you cannot act
     // on; a post is not.
-    if (cachedAt != null) {
+    // Only while offline: online, "Updated just now" was a strip of chrome
+    // above every feed that told the member nothing (owner, 29 Oct 2026).
+    if (cachedAt != null && !ConnectivityService.isOnline) {
       children.add(const SizedBox(height: 4));
       children.add(
         LastUpdatedStrip(
@@ -3207,80 +3295,134 @@ class _SuggestedMemberTile extends StatelessWidget {
                     photoUrl: entry.profilePhotoUrl,
                     name: name,
                   ),
+                  // Name and reason sit ON the photo over a soft navy fade
+                  // (29 Oct 2026 redesign) — the face stays the hero and
+                  // the card reads at a glance.
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(10, 28, 10, 10),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            AppColors.darkNavy.withValues(alpha: 0),
+                            AppColors.darkNavy.withValues(alpha: 0.82),
+                          ],
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.titleMedium.copyWith(
+                                    color: AppColors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14.5,
+                                  ),
+                                ),
+                              ),
+                              if (entry.isVerified) ...[
+                                const SizedBox(width: 3),
+                                const VerifiedTick(size: 13),
+                              ],
+                            ],
+                          ),
+                          if (reason != null)
+                            Row(
+                              children: [
+                                Icon(
+                                  // A bare city (the fallback reason) is a
+                                  // place, whatever its wording.
+                                  reason == entry.city?.trim()
+                                      ? Icons.place_outlined
+                                      : _reasonIcon(reason),
+                                  size: 12,
+                                  color: AppColors.white.withValues(alpha: 0.85),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    reason,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color:
+                                          AppColors.white.withValues(alpha: 0.9),
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
                 // Dismiss. Session-only: nothing persists it, so the
                 // person can return on the next refresh. Storing it would
                 // need a table, and "not right now" is not "never".
                 Positioned(
                   top: 6,
                   right: 6,
-                  child: Pressable(
-                    onTap: onDismiss,
-                    haptics: true,
-                    child: Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.45),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.close_rounded,
-                        size: 14,
-                        color: AppColors.white,
+                  child: Semantics(
+                    button: true,
+                    label: 'Not now',
+                    child: Pressable(
+                      onTap: onDismiss,
+                      haptics: true,
+                      child: Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: AppColors.darkNavy.withValues(alpha: 0.45),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          size: 14,
+                          color: AppColors.white,
+                        ),
                       ),
                     ),
                   ),
-                  ),
+                ),
                 ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.titleMedium.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                      if (entry.isVerified) const VerifiedTick(size: 13),
-                    ],
-                  ),
-                  // Reserved whether or not there's a reason, so the Add
-                  // buttons line up across a row of mixed cards.
-                  SizedBox(
-                    height: 18,
-                    child: reason == null
-                        ? null
-                        : Text(
-                            reason,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: palette.textMuted,
-                              fontSize: 11.5,
-                            ),
-                          ),
-                  ),
-                  const SizedBox(height: 8),
-                  _friendButton(),
-                ],
-              ),
+              padding: const EdgeInsets.all(10),
+              child: _friendButton(),
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// A small icon that says what kind of reason it is.
+  static IconData _reasonIcon(String reason) {
+    final r = reason.toLowerCase();
+    if (r.contains('church') || r.startsWith('worships')) {
+      return Icons.church_outlined;
+    }
+    if (r.startsWith('also in') || r.contains('province')) {
+      return Icons.place_outlined;
+    }
+    if (r.contains('mutual') || r.contains('friend')) {
+      return Icons.people_alt_outlined;
+    }
+    return Icons.person_outline_rounded;
   }
 
   Widget _friendButton() {
@@ -4354,6 +4496,60 @@ class _JobsEmpty extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The floating "↑ N new posts" button.
+class _NewPostsPill extends StatelessWidget {
+  const _NewPostsPill({required this.count, required this.onTap});
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count >= 20
+        ? 'New posts'
+        : count == 1
+            ? '1 new post'
+            : '$count new posts';
+    return Semantics(
+      button: true,
+      label: '$label. Show them.',
+      excludeSemantics: true,
+      child: Pressable(
+        onTap: onTap,
+        pressedScale: 0.95,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryBlue.withValues(alpha: 0.35),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.arrow_upward_rounded,
+                  size: 16, color: AppColors.white),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

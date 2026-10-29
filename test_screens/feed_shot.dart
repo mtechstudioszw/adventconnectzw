@@ -43,7 +43,13 @@ void main() {
               'created_at': '2026-10-2${8 - i}T06:00:00Z',
               'visibility': 'public',
               'profiles': {'full_name': 'Member ${i + 1}'},
-              'post_likes': [],
+              'post_likes': i == 0
+                  ? [
+                      {'user_id': 'a', 'reaction': 'like'},
+                      {'user_id': 'b', 'reaction': 'amen'},
+                      {'user_id': 'me', 'reaction': 'amen'},
+                    ]
+                  : [],
               'post_comments': [],
             },
         ];

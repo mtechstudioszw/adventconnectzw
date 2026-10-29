@@ -151,23 +151,36 @@ class QrCentreMark extends StatelessWidget {
 /// Deliberately opens the scanned member's PROFILE rather than sending a
 /// friend request: scanning is an introduction, and consent to be added
 /// should still be a tap the user makes knowingly.
-Future<void> showFriendQrSheet(BuildContext context) {
+/// Your own code, or — with [userId] and [name] — another member's, so
+/// their profile can be shared as a scannable card (owner, 29 Oct 2026).
+Future<void> showFriendQrSheet(
+  BuildContext context, {
+  String? userId,
+  String? name,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => const _FriendQrSheet(),
+    builder: (ctx) => _FriendQrSheet(userId: userId, name: name),
   );
 }
 
 class _FriendQrSheet extends StatefulWidget {
-  const _FriendQrSheet();
+  const _FriendQrSheet({this.userId, this.name});
+
+  /// Null = the signed-in member's own code.
+  final String? userId;
+  final String? name;
 
   @override
   State<_FriendQrSheet> createState() => _FriendQrSheetState();
 }
 
 class _FriendQrSheetState extends State<_FriendQrSheet> {
+  bool get _isMine =>
+      widget.userId == null || widget.userId == AuthService.currentUser?.id;
+
   /// Wraps the QR card so it can be rasterised for sharing.
   final GlobalKey _qrKey = GlobalKey();
   bool _sharing = false;
@@ -181,6 +194,10 @@ class _FriendQrSheetState extends State<_FriendQrSheet> {
   /// bubble colour) and attach the deep link as text for anyone whose
   /// client strips images.
   Future<void> _share(String userId, String name) async {
+    final mine = _isMine;
+    final intro = mine
+        ? 'Scan my Adventist Super App friend code to open my profile.'
+        : 'Scan to open $name\'s profile on Adventist Super App.';
     if (_sharing) return;
     setState(() => _sharing = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -200,17 +217,13 @@ class _FriendQrSheetState extends State<_FriendQrSheet> {
 
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'image/png')],
-        text: 'Scan my Adventist Super App friend code to open my profile.\n'
-            '$name\n${friendQrPayload(userId)}',
+        text: '$intro\n$name\n${friendQrPayload(userId)}',
       );
     } catch (_) {
       // Rasterising can fail on odd devices; the link alone is still
       // useful, so fall back rather than telling them it didn't work.
       try {
-        await Share.share(
-          'Scan my Adventist Super App friend code to open my profile.\n'
-          '$name\n${friendQrPayload(userId)}',
-        );
+        await Share.share('$intro\n$name\n${friendQrPayload(userId)}');
       } catch (_) {
         messenger.showSnackBar(
           const SnackBar(content: Text('Could not open the share sheet.')),
@@ -225,9 +238,14 @@ class _FriendQrSheetState extends State<_FriendQrSheet> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final user = AuthService.currentUser;
-    final id = user?.id;
-    final name =
-        (user?.userMetadata?['full_name'] as String?)?.trim() ?? 'Your code';
+    final mine = _isMine;
+    final id = mine ? user?.id : widget.userId;
+    final name = mine
+        ? (user?.userMetadata?['full_name'] as String?)?.trim() ?? 'Your code'
+        : (widget.name?.trim().isNotEmpty ?? false)
+            ? widget.name!.trim()
+            : 'Member';
+    final first = name.split(RegExp(r'\s+')).first;
 
     return SafeArea(
       top: false,
@@ -250,14 +268,16 @@ class _FriendQrSheetState extends State<_FriendQrSheet> {
             ),
             const SizedBox(height: 18),
             Text(
-              'Your friend code',
+              mine ? 'Your friend code' : "$first's code",
               style: AppTextStyles.headlineMedium.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              'Let someone scan this to open your profile.',
+              mine
+                  ? 'Let someone scan this to open your profile.'
+                  : "Share it so others can open $first's profile.",
               textAlign: TextAlign.center,
               style: AppTextStyles.bodySmall.copyWith(
                 color: palette.textMuted,
@@ -423,6 +443,7 @@ class _FriendQrSheetState extends State<_FriendQrSheet> {
                   ),
                   const SizedBox(width: 10),
                 ],
+                if (mine)
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: () {

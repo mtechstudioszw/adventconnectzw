@@ -6,12 +6,11 @@ import '../services/connectivity_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 
-/// Silent-offline / brief-back-online overlay. The previous version
-/// kept a persistent grey strip pinned to the status bar while the
-/// device was offline; this version stays out of the way while
-/// offline (per-screen offline notices already speak up where data
-/// failed to load) and only surfaces a small "Back online" toast for
-/// three seconds when connectivity is restored.
+/// Calm connectivity overlay (29 Oct 2026). Going offline slides in a
+/// small navy "Offline · showing what's saved" pill for a few seconds and
+/// then gets out of the way; coming back online shows nothing. Screens keep
+/// showing their saved content, and per-screen notices speak up only where
+/// something actually failed to load.
 class OfflineBanner extends StatefulWidget {
   const OfflineBanner({super.key, required this.child});
 
@@ -22,37 +21,37 @@ class OfflineBanner extends StatefulWidget {
 }
 
 class _OfflineBannerState extends State<OfflineBanner> {
-  late bool _online;
-  bool _showRestored = false;
+  bool _showOffline = false;
   StreamSubscription<bool>? _sub;
-  Timer? _restoreTimer;
+  Timer? _hideTimer;
+
+  /// How long the "Offline" pill stays before it gets out of the way.
+  static const _visibleFor = Duration(seconds: 4);
 
   @override
   void initState() {
     super.initState();
-    _online = ConnectivityService.isOnline;
-    _sub = ConnectivityService.onChanged.listen((value) {
+    _sub = ConnectivityService.onChanged.listen((online) {
       if (!mounted) return;
-      final wasOffline = !_online;
-      setState(() => _online = value);
-      if (wasOffline && value) {
-        _flashRestored();
+      _hideTimer?.cancel();
+      // Calm by design (owner, 29 Oct 2026): going offline shows a small
+      // pill for a few seconds, then nothing — the screens keep showing
+      // what is saved. Coming back online shows nothing at all; the green
+      // "Back online" bar this replaced broke the no-green-backgrounds
+      // rule and interrupted every reconnect on a patchy network.
+      setState(() => _showOffline = !online);
+      if (!online) {
+        _hideTimer = Timer(_visibleFor, () {
+          if (mounted) setState(() => _showOffline = false);
+        });
       }
-    });
-  }
-
-  void _flashRestored() {
-    _restoreTimer?.cancel();
-    setState(() => _showRestored = true);
-    _restoreTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _showRestored = false);
     });
   }
 
   @override
   void dispose() {
     _sub?.cancel();
-    _restoreTimer?.cancel();
+    _hideTimer?.cancel();
     super.dispose();
   }
 
@@ -64,30 +63,58 @@ class _OfflineBannerState extends State<OfflineBanner> {
         Positioned(
           left: 0,
           right: 0,
-          bottom: 0,
+          top: 0,
           child: IgnorePointer(
             child: SafeArea(
-              top: false,
-              child: AnimatedSize(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOut,
-                alignment: Alignment.bottomCenter,
-                child: _showRestored
-                    ? Container(
-                        height: 24,
-                        color: AppColors.successGreen,
-                        alignment: Alignment.center,
-                        child: Text(
-                          'Back online',
-                          style: AppTextStyles.labelMedium.copyWith(
-                            color: AppColors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.1,
+              bottom: false,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: AnimatedSlide(
+                  offset: _showOffline ? Offset.zero : const Offset(0, -1.5),
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  child: AnimatedOpacity(
+                    opacity: _showOffline ? 1 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.darkNavy.withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(100),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.darkNavy.withValues(alpha: 0.25),
+                            blurRadius: 14,
+                            offset: const Offset(0, 4),
                           ),
-                        ),
-                      )
-                    : const SizedBox(height: 0, width: double.infinity),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.cloud_off_rounded,
+                            size: 14,
+                            color: AppColors.white,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            "Offline · showing what's saved",
+                            style: AppTextStyles.labelMedium.copyWith(
+                              color: AppColors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),

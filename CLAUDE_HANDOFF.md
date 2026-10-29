@@ -74,6 +74,27 @@ earlier chat version; the FILE wins)
    place's calendar (`placeCalendarNow`); Home's countdown ticks each
    minute; Sabbath mode's quiet window is re-stamped on resume and at
    sundown while the app is open.
+
+### Home feed redesign (29 Oct 2026)
+- **Endless feed:** `lib/services/feed_mixer.dart` lays out posts + a
+  rotation of recurring modules (people groups of 8 from ALL discoverable
+  members, news one-per-card, sermons paged from Watch, verse, inline quiz,
+  hymn, church, belief, music), each never repeating; one-off discovery
+  modules woven in once; after the posts a "You're up to date" line and
+  more blocks as you scroll (`_extraModules`). Cards in
+  `lib/widgets/home/feed_moments.dart`.
+- **Post card:** reaction-kind stack + "You and N others" (`Post.reactionKinds`,
+  cached as `post_likes.kinds`), larger type for short photo-less posts,
+  divider above actions. Rounded cards kept (CLAUDE.md card rule).
+- **People cards:** name + reason on the photo; suggestions lead with
+  mutual friends via `mutual_friend_counts` (**patch_286 — NOT YET APPLIED**;
+  falls back silently).
+- **Calm offline:** OfflineBanner = 4 s navy pill on going offline, nothing
+  on reconnect (the green bar is gone); "Updated…" strip only when offline;
+  cache holds 60 posts + 80 people.
+- **"↑ N new posts" pill:** `FeedService.countNewerThan` every 2 min / on resume.
+- **QR on every profile:** `showFriendQrSheet(context, userId:, name:)`.
+- Contacts matching NOT built: 0 of 812 accounts have a phone number.
 4. Bible app experience
 5. Sabbath School experience & date bug
 6. Hymnal (multilingual)

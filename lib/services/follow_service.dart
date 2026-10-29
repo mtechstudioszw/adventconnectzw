@@ -1,6 +1,39 @@
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Who may follow a member (patch_282). Personal accounts only — Pages can
+/// always be followed.
+enum WhoCanFollow { everyone, friends, nobody }
+
+extension WhoCanFollowX on WhoCanFollow {
+  String get wire => name;
+
+  String get label => switch (this) {
+    WhoCanFollow.everyone => 'Everyone',
+    WhoCanFollow.friends => 'Friends only',
+    WhoCanFollow.nobody => 'No one',
+  };
+
+  String get description => switch (this) {
+    WhoCanFollow.everyone =>
+      'Anyone can follow you. Private accounts still approve each request.',
+    WhoCanFollow.friends => 'Only your friends can follow you.',
+    WhoCanFollow.nobody =>
+      'Following is off. People can still add you as a friend.',
+  };
+
+  static WhoCanFollow fromWire(String? v) => switch (v) {
+    'friends' => WhoCanFollow.friends,
+    'nobody' => WhoCanFollow.nobody,
+    _ => WhoCanFollow.everyone,
+  };
+}
+
+/// The member's "who can follow me" setting refused this follow.
+class FollowNotAllowed implements Exception {
+  const FollowNotAllowed();
+}
+
 /// Where the viewer stands with a profile.
 enum FollowState { none, requested, following }
 
@@ -162,9 +195,53 @@ class FollowService {
           ? FollowState.requested
           : FollowState.following;
     } catch (e) {
+      // patch_282's gate. Checked first: it's a refusal, not a missing
+      // table.
+      if (e.toString().contains('FOLLOW_NOT_ALLOWED')) {
+        throw const FollowNotAllowed();
+      }
       if (_missing(e)) available = false;
       rethrow;
     }
+  }
+
+  /// The viewer's own setting, or null before patch_282 — the setting is
+  /// then left out of Edit profile rather than offered and failing.
+  static Future<WhoCanFollow?> myWhoCanFollow() async {
+    final me = _client.auth.currentUser?.id;
+    if (me == null) return null;
+    try {
+      final row = await _client
+          .from('profiles')
+          .select('who_can_follow')
+          .eq('id', me)
+          .maybeSingle();
+      if (row == null) return null;
+      return WhoCanFollowX.fromWire(row['who_can_follow'] as String?);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// How many current followers switching to [value] would remove — for
+  /// the warning before [setWhoCanFollow].
+  static Future<int> followersRemovedBy(WhoCanFollow value) async {
+    final res = await _client.rpc(
+      'followers_removed_by',
+      params: {'p_value': value.wire},
+    );
+    return (res as num?)?.toInt() ?? 0;
+  }
+
+  /// Saves the setting. The server removes followers it no longer allows
+  /// and returns how many.
+  static Future<int> setWhoCanFollow(WhoCanFollow value) async {
+    final res = await _client.rpc(
+      'set_who_can_follow',
+      params: {'p_value': value.wire},
+    );
+    revision.value++;
+    return (res as num?)?.toInt() ?? 0;
   }
 
   /// Unfollow, or withdraw a pending request.

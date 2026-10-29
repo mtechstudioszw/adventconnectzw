@@ -386,6 +386,9 @@ class _PostCardState extends State<PostCard>
               : 'Following $_authorFirstName.',
         );
       }
+    } on FollowNotAllowed {
+      // Their "who can follow me" setting (patch_282).
+      _toast("$_authorFirstName isn't taking followers.");
     } catch (_) {
       _toast(
         FollowService.available

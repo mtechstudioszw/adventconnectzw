@@ -146,6 +146,22 @@ class PageService {
     revision.value++;
   });
 
+  /// Pages the viewer follows — the Home feed ranks their updates higher.
+  /// Never throws: an empty set just means no boost.
+  static Future<Set<String>> myFollowedPageIds() async {
+    try {
+      final me = _client.auth.currentUser?.id;
+      if (me == null) return const <String>{};
+      final rows = await _client
+          .from('page_follows')
+          .select('page_id')
+          .eq('user_id', me);
+      return {for (final r in rows as List) (r as Map)['page_id'].toString()};
+    } catch (_) {
+      return const <String>{};
+    }
+  }
+
   static Future<void> follow(String id) => _guard(() async {
     final me = _client.auth.currentUser?.id;
     if (me == null) throw const AuthException('Sign in to follow Pages.');

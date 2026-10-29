@@ -36,6 +36,7 @@ import '../../services/devotion_service.dart';
 import '../../services/event_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/follow_service.dart';
+import '../../services/page_service.dart';
 import '../../services/force_update_service.dart';
 import '../../services/job_service.dart';
 import '../../services/library_service.dart';
@@ -110,6 +111,13 @@ class _HomeScreenState extends State<HomeScreen>
   Devotion? _devotion;
   List<Prayer> _prayers = const [];
   Set<String> _followedChurchIds = <String>{};
+
+  /// Pages the viewer follows; their updates rank higher on Home.
+  Set<String> _followedPageIds = <String>{};
+
+  /// People the viewer follows (FollowService's cache), for the same.
+  Set<String> get _followedUserIds =>
+      FollowService.followingIds.value ?? const <String>{};
   Set<String> _rsvpedEventIds = <String>{};
   int _unreadNotifications = 0;
   List<Post> _posts = [];
@@ -569,13 +577,17 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       // Tier 0: the two small queries the ranking needs. Cheap, and the
       // cache is already on screen while they run.
-      final social = await Future.wait([
+      final social = await Future.wait<Object?>([
         FeedService.fetchMyFriendships(),
         ChurchService.fetchUserFollowedChurchIds(),
+        PageService.myFollowedPageIds(),
+        // Fills FollowService.followingIds; fails soft.
+        FollowService.loadMyFollowing(),
       ]);
       if (!mounted) return;
       final friendships = social[0] as List<Friendship>;
       final followedChurchIds = social[1] as Set<String>;
+      final followedPageIds = social[2] as Set<String>;
       final friendsByUser = <String, Friendship>{};
       final friendIds = <String>{};
       if (viewerId != null) {
@@ -603,6 +615,8 @@ class _HomeScreenState extends State<HomeScreen>
           refreshNonce: DateTime.now().millisecondsSinceEpoch,
           friendIds: friendIds,
           followedChurchIds: followedChurchIds,
+          followedUserIds: _followedUserIds,
+          followedPageIds: followedPageIds,
           // Ranking hint, not a filter: posts from home rise to the top,
           // but an American member still sees Zimbabwe's feed.
           viewerCountry: _country,
@@ -621,6 +635,7 @@ class _HomeScreenState extends State<HomeScreen>
       setState(() {
         _friendshipsByUser = friendsByUser;
         _followedChurchIds = followedChurchIds;
+        _followedPageIds = followedPageIds;
         _posts = feedPosts;
         _stories = results[1] as List<Story>;
         _viewedStoryIds = results[2] as Set<String>;
@@ -781,6 +796,8 @@ class _HomeScreenState extends State<HomeScreen>
         limit: _pageSize,
         friendIds: friendIds,
         followedChurchIds: _followedChurchIds,
+        followedUserIds: _followedUserIds,
+        followedPageIds: _followedPageIds,
         before: oldest,
         viewerCountry: _country,
       );

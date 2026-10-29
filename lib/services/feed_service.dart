@@ -62,6 +62,8 @@ class FeedService {
   ///         + min(log(1 + likes + 2*comments) * 0.30, 0.55)   (engagement)
   ///         + 0.50 if the author is a friend
   ///         + 0.35 if the post is from a church you follow
+  ///         + 0.40 if the author is someone you follow (not a friend)
+  ///         + 0.35 if the post is from a Page you follow
   ///         + viewer-specific jitter (0..0.20)
   ///         - 0.70 if already seen (sinks, never hides)
   ///         + own_post penalty (-1, so your own post sinks)
@@ -91,6 +93,8 @@ class FeedService {
     int refreshNonce = 0,
     Set<String> friendIds = const {},
     Set<String> followedChurchIds = const {},
+    Set<String> followedUserIds = const {},
+    Set<String> followedPageIds = const {},
     DateTime? before,
     /// The viewer's ISO 3166-1 alpha-2 country. Used to RANK, not to
     /// filter: posts from here rise, posts from elsewhere still appear.
@@ -135,6 +139,8 @@ class FeedService {
           refreshNonce,
           friendIds: friendIds,
           followedChurchIds: followedChurchIds,
+          followedUserIds: followedUserIds,
+          followedPageIds: followedPageIds,
           viewerCountry: viewerCountry,
         );
     posts.sort((a, b) => score(b).compareTo(score(a)));
@@ -233,6 +239,8 @@ class FeedService {
     int nonce, {
     Set<String> friendIds = const {},
     Set<String> followedChurchIds = const {},
+    Set<String> followedUserIds = const {},
+    Set<String> followedPageIds = const {},
     String? viewerCountry,
   }) {
     final ageHours =
@@ -254,6 +262,16 @@ class FeedService {
     final churchId = p.churchId;
     final churchBoost =
         (churchId != null && followedChurchIds.contains(churchId)) ? 0.35 : 0.0;
+    // Following (patch_274/275). Before this a follow changed nothing on
+    // Home — it was a notification and a number. A followed person sits
+    // just under a friend (you chose them, but you're not mutual); a
+    // followed Page ranks like a followed church. A friend you also follow
+    // gets the friend boost only — the two don't stack.
+    final followBoost =
+        friendBoost == 0 && followedUserIds.contains(p.authorId) ? 0.40 : 0.0;
+    final pageId = p.pageId;
+    final pageBoost =
+        (pageId != null && followedPageIds.contains(pageId)) ? 0.35 : 0.0;
     // Already scrolled past: SINK it, don't hide it. -0.7 is enough to lose
     // to almost any unseen post, but a seen post with real engagement can
     // still resurface — which is what you want when a thread gets busy after
@@ -292,6 +310,8 @@ class FeedService {
         engagement +
         friendBoost +
         churchBoost +
+        followBoost +
+        pageBoost +
         countryBoost +
         jitter +
         seenPenalty +

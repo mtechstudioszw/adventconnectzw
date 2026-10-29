@@ -143,7 +143,67 @@ void main() {
       expect(p?.fullName, 'Rudo Moyo');
       expect(p?.username, 'rudo');
       expect(p?.isPrivate, isFalse);
-      expect(calls, 2);
+      // patch_282 columns, then patch_274 columns, then the base set.
+      expect(calls, 3);
+      // Learnt once: the next profile goes straight to what exists.
+      calls = 0;
+      await UserProfileService.fetch('them');
+      expect(calls, 1);
     },
   );
+
+  group('who can follow me (patch_282)', () {
+    test('a refused follow becomes FollowNotAllowed, not "missing"', () async {
+      setFakeSupabaseHandler((req) {
+        if (req.method == 'POST' && req.url.path.endsWith('/follows')) {
+          return const FakeError(403, {
+            'code': '42501',
+            'message': 'FOLLOW_NOT_ALLOWED',
+          });
+        }
+        return null;
+      });
+      await expectLater(
+        FollowService.follow('them'),
+        throwsA(isA<FollowNotAllowed>()),
+      );
+      expect(FollowService.available, isTrue);
+    });
+
+    test('setting is read, counted and saved through the RPCs', () async {
+      setFakeSupabaseHandler((req) {
+        final path = req.url.path;
+        if (path.endsWith('/rpc/followers_removed_by')) return 3;
+        if (path.endsWith('/rpc/set_who_can_follow')) return 3;
+        if (path.endsWith('/profiles')) return {'who_can_follow': 'friends'};
+        return null;
+      });
+      expect(await FollowService.myWhoCanFollow(), WhoCanFollow.friends);
+      expect(await FollowService.followersRemovedBy(WhoCanFollow.nobody), 3);
+      expect(await FollowService.setWhoCanFollow(WhoCanFollow.nobody), 3);
+      final set = fakeSupabaseRequests.lastWhere(
+        (r) => r.url.path.endsWith('/rpc/set_who_can_follow'),
+      );
+      expect(jsonDecode(set.body), {'p_value': 'nobody'});
+    });
+
+    test('unknown or missing values read as everyone', () {
+      expect(WhoCanFollowX.fromWire(null), WhoCanFollow.everyone);
+      expect(WhoCanFollowX.fromWire('weird'), WhoCanFollow.everyone);
+      expect(WhoCanFollowX.fromWire('nobody'), WhoCanFollow.nobody);
+    });
+
+    test('before the patch, the setting is simply unavailable', () async {
+      setFakeSupabaseHandler((req) {
+        if (req.url.path.endsWith('/profiles')) {
+          return const FakeError(400, {
+            'code': '42703',
+            'message': 'column profiles.who_can_follow does not exist',
+          });
+        }
+        return null;
+      });
+      expect(await FollowService.myWhoCanFollow(), isNull);
+    });
+  });
 }

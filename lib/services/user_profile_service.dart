@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'follow_service.dart' show WhoCanFollow, WhoCanFollowX;
+
 import '../utils/require_changed.dart';
 
 /// Snapshot of another user's public profile fields. Mirrors what the
@@ -26,6 +28,7 @@ class PublicUserProfile {
     this.username,
     this.website,
     this.isPrivate = false,
+    this.whoCanFollow = WhoCanFollow.everyone,
   });
 
   final String id;
@@ -61,6 +64,9 @@ class PublicUserProfile {
   /// (patch_274). Separate from [isDiscoverable], which hides the whole
   /// profile from search and strangers.
   final bool isPrivate;
+
+  /// Who may follow this member (patch_282). Everyone until the patch runs.
+  final WhoCanFollow whoCanFollow;
 
   /// Whether to show the gold verified tick next to this user's name.
   ///
@@ -114,6 +120,7 @@ class PublicUserProfile {
           ? (json['website'] as String).trim()
           : null,
       isPrivate: json['is_private'] == true,
+      whoCanFollow: WhoCanFollowX.fromWire(json['who_can_follow'] as String?),
     );
   }
 }
@@ -135,6 +142,9 @@ class UserProfileService {
   /// fetches go straight to the columns that exist.
   static bool _hasFollowColumns = true;
 
+  /// Same, for patch_282's `who_can_follow`.
+  static bool _hasWhoCanFollow = true;
+
   /// Undefined column (42703) or not granted (42501). Checked in the
   /// message too: on a `.maybeSingle()` request postgrest 2.7 rebuilds the
   /// exception with the HTTP status ("400") as its code, and the Postgres
@@ -151,6 +161,18 @@ class UserProfileService {
         _client.from('profiles').select(cols).eq('id', userId).maybeSingle();
 
     Map<String, dynamic>? row;
+    if (_hasFollowColumns && _hasWhoCanFollow) {
+      try {
+        row = await query('$_baseColumns, website, is_private, who_can_follow');
+        if (row == null) return null;
+        return PublicUserProfile.fromJson(row);
+      } on PostgrestException catch (e) {
+        // Before patch_282 the column is missing; fall through to the
+        // patch_274 columns.
+        if (!_isMissingColumn(e)) rethrow;
+        _hasWhoCanFollow = false;
+      }
+    }
     if (_hasFollowColumns) {
       try {
         row = await query('$_baseColumns, website, is_private');

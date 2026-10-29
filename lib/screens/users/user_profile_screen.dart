@@ -304,6 +304,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       // Following a private account that just let you in, or leaving one,
       // changes what the posts list may show.
       if (nowCounted != wasCounted && _profile!.isPrivate) _loadPosts();
+    } on FollowNotAllowed {
+      if (!mounted) return;
+      setState(() => _followBusy = false);
+      _showError(
+        _profile?.whoCanFollow == WhoCanFollow.friends
+            ? 'Only their friends can follow them.'
+            : "They aren't taking followers.",
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _followBusy = false);
@@ -769,11 +777,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           _posts.length == 1 ? 'Post' : 'Posts',
           open && _canSeeContent ? _posts.length : null,
         ),
-        ProfileStat(
-          'Followers',
-          follow?.followers,
-          onTap: () => openList('followers'),
-        ),
+        // Following turned off (patch_282): no follower count either — "0
+        // followers" with no way to follow reads as a broken profile.
+        if (_isSelf || p.whoCanFollow != WhoCanFollow.nobody)
+          ProfileStat(
+            'Followers',
+            follow?.followers,
+            onTap: () => openList('followers'),
+          ),
         ProfileStat(
           'Following',
           follow?.following,
@@ -812,8 +823,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (incoming) return ('Accept', _acceptIncoming);
       return ('Requested', _cancelOrUnfriend);
     })();
+    // Their "who can follow me" setting (patch_282). Someone who already
+    // follows keeps the button so they can still unfollow.
+    final who = _profile?.whoCanFollow ?? WhoCanFollow.everyone;
+    final followAllowed =
+        who == WhoCanFollow.everyone ||
+        (who == WhoCanFollow.friends && (f?.isAccepted ?? false));
+    final showFollow =
+        follow != null && (followAllowed || follow.state != FollowState.none);
     return [
-      if (follow != null)
+      if (showFollow)
         ProfileActionButton(
           label: switch (follow.state) {
             FollowState.none => follow.followsMe ? 'Follow back' : 'Follow',
@@ -828,8 +847,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         label: friendLabel,
         // Primary when following isn't available, so the row still has
         // one clear first action.
-        primary: follow == null && (f == null || incoming),
-        icon: follow == null ? Icons.person_add_alt_1 : null,
+        primary: !showFollow && (f == null || incoming),
+        icon: !showFollow ? Icons.person_add_alt_1 : null,
         busy: _friendBusy,
         onTap: friendTap,
       ),

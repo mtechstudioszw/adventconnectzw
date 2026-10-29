@@ -10,6 +10,7 @@ import '../../services/notification_preferences_service.dart';
 import '../../services/premium_service.dart';
 import '../../services/push_service.dart';
 import '../../services/sabbath_service.dart';
+import '../library/sabbath_place_picker.dart';
 import '../../services/seller_service.dart';
 import '../../services/theme_service.dart';
 import '../../services/youtube_prefs.dart';
@@ -34,7 +35,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   NotificationCategoryPrefs _categoryPrefs = NotificationCategoryPrefs.defaults;
   bool _sabbathEnabled = SabbathService.isEnabled();
   bool _sabbathMode = SabbathService.sabbathModeEnabled();
-  String _sabbathProvince = SabbathService.province() ?? 'Harare';
   ThemeMode _themeMode = ThemeService.current;
   // Watch (YouTube) preferences — synchronous reads from local prefs.
   bool _ytAutoplayNext = YoutubePrefs.autoplayNext;
@@ -348,19 +348,8 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-  Future<void> _pickSabbathProvince() async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      // Without this the sheet caps at ~50% of screen and the bottom
-      // provinces in the list get clipped behind the system nav bar.
-      isScrollControlled: true,
-      builder: (ctx) => _ProvinceSheet(selected: _sabbathProvince),
-    );
-    if (picked != null && mounted) {
-      await SabbathService.setProvince(picked);
-      setState(() => _sabbathProvince = picked);
-    }
+  Future<void> _pickSabbathPlace() async {
+    if (await pickSabbathPlace(context) && mounted) setState(() {});
   }
 
   Future<void> _openLegal(String url) async {
@@ -476,12 +465,12 @@ class _SettingsScreenState extends State<SettingsScreen>
         () => _pickTheme(),
       ),
       _SettingsEntry(
-        'Sabbath province',
+        'Sabbath place',
         'Preferences',
         Icons.location_on_outlined,
         AppColors.goldAccent,
-        'sundown sunset harare bulawayo countdown timer',
-        () => _pickSabbathProvince(),
+        'sundown sunset province state country location countdown timer',
+        () => _pickSabbathPlace(),
       ),
       _SettingsEntry(
         'Sabbath mode',
@@ -580,18 +569,16 @@ class _SettingsScreenState extends State<SettingsScreen>
     String hhmm(DateTime d) =>
         '${d.hour.toString().padLeft(2, '0')}:'
         '${d.minute.toString().padLeft(2, '0')}';
-    final start = SabbathService.nextSabbathStart(
-      overrideProvince: _sabbathProvince,
-    );
-    final end = SabbathService.currentSabbathEnd(
-      overrideProvince: _sabbathProvince,
-    );
-    if (SabbathService.isSabbathNow(overrideProvince: _sabbathProvince) &&
-        end != null) {
-      return 'Quiet until sundown, ${hhmm(end.toLocal())}';
+    // The member's own place (chosen place, GPS, province or country) —
+    // it used to pass a province that defaulted to Harare for everyone.
+    final start = SabbathService.nextSabbathStart();
+    final end = SabbathService.currentSabbathEnd();
+    if (end != null) {
+      return 'Quiet until sundown, ${hhmm(SabbathService.placeTime(end))}';
     }
     if (start == null) return 'Mutes non-essential alerts over the Sabbath';
-    return 'Quiet from Fri ${hhmm(start.toLocal())} to Saturday sundown';
+    return 'Quiet from Fri ${hhmm(SabbathService.placeTime(start))} to '
+        'Saturday sundown';
   }
 
   Widget _buildSearchField() {
@@ -646,7 +633,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   Widget _buildSearchResults() {
     final q = _settingsQuery.toLowerCase();
     // Match the label first, then the keyword bag, so typing "dark" finds
-    // Appearance and "sundown" finds Sabbath province.
+    // Appearance and "sundown" finds Sabbath place.
     final hits = _searchIndex()
         .where(
           (e) =>
@@ -972,9 +959,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                             const _Divider(),
                             _NavRow(
                               icon: Icons.place_outlined,
-                              label: 'Sabbath province',
-                              trailing: _sabbathProvince,
-                              onTap: _pickSabbathProvince,
+                              label: 'Sabbath place',
+                              trailing: SabbathService.locationLabel(),
+                              onTap: _pickSabbathPlace,
                             ),
                           ],
                         ],
@@ -1340,7 +1327,7 @@ class _DonationCard extends StatelessWidget {
 /// 60-row list gives the eye nothing to land on; a colour does.
 /// One searchable destination in Settings. [keywords] is a lowercase bag
 /// of synonyms so people find things by the word they actually use —
-/// "dark" for Appearance, "sundown" for Sabbath province.
+/// "dark" for Appearance, "sundown" for Sabbath place.
 class _SettingsEntry {
   const _SettingsEntry(
     this.label,
@@ -1634,116 +1621,6 @@ class _Divider extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Divider(height: 1, color: AppColors.divider),
-    );
-  }
-}
-
-class _ProvinceSheet extends StatelessWidget {
-  const _ProvinceSheet({required this.selected});
-  final String selected;
-
-  @override
-  Widget build(BuildContext context) {
-    final options = SabbathService.provinces;
-    return DraggableScrollableSheet(
-      initialChildSize: 0.65,
-      minChildSize: 0.35,
-      maxChildSize: 0.92,
-      expand: false,
-      builder: (ctx, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              children: [
-                const SizedBox(height: 12),
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.divider,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        'Choose your province',
-                        style: AppTextStyles.headlineSmall.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Used to compute Friday sundown.',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: ListView.builder(
-                    controller: scrollController,
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                    itemCount: options.length,
-                    itemBuilder: (_, i) {
-                      final opt = options[i];
-                      return Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => Navigator.pop(context, opt),
-                          borderRadius: BorderRadius.circular(14),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 12,
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  opt == selected
-                                      ? Icons.radio_button_checked
-                                      : Icons.radio_button_unchecked,
-                                  color: opt == selected
-                                      ? AppColors.primaryBlue
-                                      : AppColors.textMuted,
-                                  size: 22,
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Text(
-                                    opt,
-                                    style: AppTextStyles.titleMedium.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }

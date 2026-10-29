@@ -51,7 +51,6 @@ import '../screens/profile/member_directory_screen.dart';
 import '../screens/profile/my_directory_profile_screen.dart';
 import '../screens/profile/my_events_screen.dart';
 import '../screens/profile/notification_preferences_screen.dart';
-import '../screens/profile/sabbath_timer_screen.dart';
 import '../screens/profile/saved_listings_screen.dart';
 import '../screens/profile/saved_posts_screen.dart';
 import '../screens/profile/follow_list_screen.dart';
@@ -575,7 +574,10 @@ final GoRouter appRouter = GoRouter(
                   parentNavigatorKey: rootNavigatorKey,
                   path: 'sabbath-timer',
                   name: 'sabbath_timer',
-                  builder: (context, state) => const SabbathTimerScreen(),
+                  // One Sabbath screen, one set of times (29 Oct 2026): the
+                  // old timer kept its own province picker and ignored the
+                  // chosen place and GPS, so the two could disagree.
+                  builder: (context, state) => const SabbathHoursScreen(),
                 ),
                 GoRoute(
                   parentNavigatorKey: rootNavigatorKey,

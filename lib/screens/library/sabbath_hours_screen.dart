@@ -3,13 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../services/library_reminders.dart';
-import '../../services/location_service.dart';
+import '../../services/sabbath_places.dart';
 import '../../services/sabbath_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/screen_shell.dart';
+import 'sabbath_place_picker.dart';
 
 /// The Sabbath window this week, as two UTC instants.
 typedef SabbathWindow = ({DateTime start, DateTime end});
@@ -69,6 +70,9 @@ class _SabbathHoursScreenState extends State<SabbathHoursScreen> {
   @override
   void initState() {
     super.initState();
+    SabbathPlaces.byCode(SabbathService.profileCountryCode()).then((c) {
+      if (mounted) setState(() => _home = c);
+    });
     if (widget.now == null) {
       _tick = Timer.periodic(const Duration(seconds: 30), (_) {
         if (mounted) setState(() {});
@@ -82,100 +86,36 @@ class _SabbathHoursScreenState extends State<SabbathHoursScreen> {
     super.dispose();
   }
 
-  Future<void> _useLocation() async {
+  Future<void> _pickPlace() async {
     setState(() => _locating = true);
-    final pos = await LocationService.getCurrentPosition();
-    if (!mounted) return;
-    setState(() => _locating = false);
-    if (pos == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Couldn't get your location. Check that location is "
-            'on and allowed for the app.',
-          ),
-        ),
-      );
-      return;
-    }
-    await SabbathService.setGps(pos.latitude, pos.longitude);
-    await LibraryReminders.rearmSabbath();
-    if (mounted) setState(() {});
+    await pickSabbathPlace(context);
+    if (mounted) setState(() => _locating = false);
   }
 
-  Future<void> _pickPlace() async {
-    final palette = context.palette;
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: palette.sheet,
-      showDragHandle: true,
-      builder: (c) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.my_location_rounded),
-              title: const Text('Use my location'),
-              subtitle: const Text('Most accurate. Kept on this phone only.'),
-              onTap: () => Navigator.pop(c, '__gps'),
-            ),
-            if (SabbathService.usingGps())
-              ListTile(
-                leading: const Icon(Icons.location_off_rounded),
-                title: Text(
-                  SabbathService.inZimbabwe
-                      ? 'Stop using my location'
-                      : 'Use my country instead',
-                ),
-                onTap: () => Navigator.pop(c, '__nogps'),
-              ),
-            const Divider(height: 1),
-            // Provinces exist for Zimbabwe only; showing Harare to a
-            // member in Kenya would give them the wrong sundown.
-            if (SabbathService.inZimbabwe)
-              for (final p in SabbathService.provinces)
-                ListTile(
-                  title: Text(p),
-                  trailing:
-                      SabbathService.province() == p &&
-                          !SabbathService.usingGps()
-                      ? Icon(Icons.check_rounded, color: palette.brandBlue)
-                      : null,
-                  onTap: () => Navigator.pop(c, p),
-                ),
-          ],
-        ),
-      ),
-    );
-    if (choice == null) return;
-    if (choice == '__gps') {
-      await _useLocation();
-    } else if (choice == '__nogps') {
-      await SabbathService.clearGps();
-      await LibraryReminders.rearmSabbath();
-      if (mounted) setState(() {});
-    } else {
-      await SabbathService.setProvince(choice);
-      await LibraryReminders.rearmSabbath();
-      if (mounted) setState(() {});
-    }
-  }
+  /// The profile country, to know whether a state must be chosen.
+  SabbathCountry? _home;
 
   /// Why the times may not be exact here, or null when they are.
   String? _placeHint() {
-    if (SabbathService.usingGps()) return null;
+    if (SabbathService.usingGps() || SabbathService.place() != null) {
+      return null;
+    }
     final place = SabbathService.locationLabel();
     if (SabbathService.timeZoneMismatchHours() > 2) {
-      return "Your phone's time zone doesn't match $place. If you live "
-          'somewhere else, tap above and choose Use my location.';
+      return "Your phone's time zone doesn't match $place. Tap above to "
+          'choose where you are.';
     }
     if (SabbathService.usingProvince) return null;
-    return SabbathService.inZimbabwe
-        ? 'Choose your province, or use your location, for times closer '
-              'to you.'
-        : 'These times are for the middle of $place. In a large country '
-              'that can be many minutes out — tap above and choose Use my '
-              'location for your exact sundown.';
+    final home = _home;
+    if (home != null && home.spansTimeZones) {
+      return '${home.name} has several time zones. Tap above and choose '
+          'your state or province for the right sundown.';
+    }
+    if (home != null && home.regions.length > 1) {
+      return 'These times are for the middle of $place. Tap above and '
+          'choose your state or province for times closer to you.';
+    }
+    return null;
   }
 
   Future<void> _setReminder(int? minutes) async {
@@ -190,8 +130,9 @@ class _SabbathHoursScreenState extends State<SabbathHoursScreen> {
     if (mounted) setState(() {});
   }
 
+  /// In the chosen place's time zone (see [SabbathService.placeTime]).
   static String _time(BuildContext context, DateTime utc) =>
-      TimeOfDay.fromDateTime(utc.toLocal()).format(context);
+      TimeOfDay.fromDateTime(SabbathService.placeTime(utc)).format(context);
 
   static const _days = [
     'Monday',
@@ -218,7 +159,7 @@ class _SabbathHoursScreenState extends State<SabbathHoursScreen> {
   ];
 
   static String _date(DateTime utc) {
-    final d = utc.toLocal();
+    final d = SabbathService.placeTime(utc);
     return '${_days[d.weekday - 1]} ${d.day} ${_months[d.month - 1]}';
   }
 
@@ -343,7 +284,10 @@ class _SabbathHoursScreenState extends State<SabbathHoursScreen> {
                     ),
                   ),
                   subtitle: Text(
-                    'Tap to change',
+                    SabbathService.placeClockDiffers()
+                        ? 'Times in ${SabbathService.place()!.city} time · '
+                              'tap to change'
+                        : 'Tap to change',
                     style: AppTextStyles.caption.copyWith(
                       color: palette.textMuted,
                     ),
@@ -393,7 +337,7 @@ class _SabbathHoursScreenState extends State<SabbathHoursScreen> {
                           ),
                         ),
                         trailing: Text(
-                          'Fri ${_time(context, s.start)} → Sat ${_time(context, s.end)}',
+                          'Fri ${_time(context, s.start)} – Sat ${_time(context, s.end)}',
                           style: AppTextStyles.labelMedium.copyWith(
                             color: palette.textMuted,
                           ),

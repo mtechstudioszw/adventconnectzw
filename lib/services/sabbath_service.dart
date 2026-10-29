@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:timezone/data/latest_all.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 
 import '../config/countries.dart';
 import 'auth_service.dart';
@@ -32,8 +35,9 @@ class SabbathService {
 
   static Future<void> setProvince(String name) async {
     // Picking a province is an explicit choice of place, so it replaces
-    // a GPS fix rather than sitting silently underneath it.
+    // a GPS fix (or a chosen place) rather than sitting silently under it.
     await CacheService.deletePref(_gpsKey);
+    await CacheService.deletePref(_placeKey);
     await CacheService.writePref(_provinceKey, name);
     // The server's quiet window is derived from the province, so a
     // province change has to re-stamp it or notifications would keep
@@ -139,6 +143,103 @@ class SabbathService {
 
   static Future<void> clearGps() => CacheService.deletePref(_gpsKey);
 
+  // -- Chosen place: any country, any state (29 Oct 2026) ----------------
+  // Owner: "fix the Sabbath timer across the entire world … countries like
+  // America, states differ in terms of time". The member picks a country
+  // and its state/province (SabbathPlaces, from GeoNames); sundown is
+  // computed there and SHOWN in that place's time zone.
+  static const _placeKey = 'pref:sabbath_place';
+
+  static ({
+    String country,
+    String countryName,
+    String region,
+    String city,
+    double lat,
+    double lon,
+    String timeZone,
+  })? place() {
+    try {
+      final raw = CacheService.readPref(_placeKey);
+      if (raw == null) return null;
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      return (
+        country: j['cc'] as String,
+        countryName: j['cn'] as String,
+        region: j['r'] as String,
+        city: j['city'] as String,
+        lat: (j['lat'] as num).toDouble(),
+        lon: (j['lon'] as num).toDouble(),
+        timeZone: j['tz'] as String,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> setPlace({
+    required String country,
+    required String countryName,
+    required String region,
+    required String city,
+    required double lat,
+    required double lon,
+    required String timeZone,
+  }) async {
+    await CacheService.deletePref(_gpsKey);
+    await CacheService.deletePref(_provinceKey);
+    await CacheService.writePref(
+      _placeKey,
+      jsonEncode({
+        'cc': country,
+        'cn': countryName,
+        'r': region,
+        'city': city,
+        'lat': lat,
+        'lon': lon,
+        'tz': timeZone,
+      }),
+    );
+    if (sabbathModeEnabled()) await syncSabbathQuietWindow();
+  }
+
+  static bool _tzReady = false;
+
+  /// [utc] as wall-clock time where sundown is being calculated: the chosen
+  /// place's zone when there is one, otherwise the phone's. Use this, not
+  /// `toLocal()`, for every Sabbath time shown to the member.
+  static DateTime placeTime(DateTime utc) {
+    final zone = place()?.timeZone;
+    if (zone == null || usingGps()) return utc.toLocal();
+    try {
+      if (!_tzReady) {
+        tzdata.initializeTimeZones();
+        _tzReady = true;
+      }
+      return tz.TZDateTime.from(utc, tz.getLocation(zone));
+    } catch (_) {
+      return utc.toLocal();
+    }
+  }
+
+  /// True when the chosen place's clock differs from the phone's right now,
+  /// so the screen can say whose time it is showing.
+  static bool placeClockDiffers({DateTime? now}) {
+    final t = (now ?? DateTime.now()).toUtc();
+    final place = placeTime(t);
+    final local = t.toLocal();
+    return place.hour != local.hour || place.minute != local.minute;
+  }
+
+  /// The profile's country code (ZW when unknown).
+  static String profileCountryCode() {
+    try {
+      return _countryCode().toUpperCase();
+    } catch (_) {
+      return 'ZW';
+    }
+  }
+
   /// True when the member's profile country is Zimbabwe — the only
   /// country with province-level places. Everyone else gets their country
   /// centre or their exact location.
@@ -152,7 +253,7 @@ class SabbathService {
 
   /// A Zimbabwe province is set and is what sundown uses.
   static bool get usingProvince {
-    if (usingGps() || !inZimbabwe) return false;
+    if (usingGps() || place() != null || !inZimbabwe) return false;
     try {
       return _provinceCoords.containsKey(province());
     } catch (_) {
@@ -164,6 +265,9 @@ class SabbathService {
   /// implies (its longitude / 15). Over ~2 means the times are for
   /// somewhere else — e.g. a Zimbabwean profile on a phone in London.
   static double timeZoneMismatchHours({Duration? deviceOffset}) {
+    // A chosen place carries its own zone and is shown in it, so the
+    // phone's zone no longer matters.
+    if (place() != null && deviceOffset == null) return 0;
     final c = _coords();
     final expected = c.lon / 15.0;
     final actual =
@@ -174,6 +278,12 @@ class SabbathService {
   /// Where sundown is being computed for, in words.
   static String locationLabel() {
     if (usingGps()) return 'Your location';
+    final chosen = place();
+    if (chosen != null) {
+      return chosen.region == chosen.countryName
+          ? chosen.countryName
+          : '${chosen.region}, ${chosen.countryName}';
+    }
     String? p;
     try {
       p = province();
@@ -215,6 +325,8 @@ class SabbathService {
     if (overrideProvince == null && overrideCountry == null) {
       final gps = _gps();
       if (gps != null) return gps;
+      final chosen = place();
+      if (chosen != null) return (lat: chosen.lat, lon: chosen.lon);
     }
     String? p = overrideProvince;
     if (p == null) {

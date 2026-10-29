@@ -118,6 +118,7 @@ flutter:
     - assets/hymns/
     - assets/sounds/quiz/
     - assets/fonts/
+    - assets/geo/
 
 flutter_launcher_icons:
   android: "ic_launcher"

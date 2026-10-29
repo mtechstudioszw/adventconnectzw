@@ -10,6 +10,7 @@ import '../../services/devotion_service.dart';
 import '../../services/memory_verse_service.dart';
 import '../../services/quiz_progress_service.dart';
 import '../../services/reading_plan_service.dart';
+import '../../services/sabbath_service.dart';
 import '../../services/youtube_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -820,7 +821,7 @@ class _DailyTools extends StatelessWidget {
   final bool showSabbath;
 
   static String _hhmm(BuildContext context, DateTime utc) =>
-      TimeOfDay.fromDateTime(utc.toLocal()).format(context);
+      TimeOfDay.fromDateTime(SabbathService.placeTime(utc)).format(context);
 
   static String _span(Duration d) {
     if (d.inHours >= 48) return '${d.inDays} days';

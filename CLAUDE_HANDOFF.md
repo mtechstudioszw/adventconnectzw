@@ -58,6 +58,16 @@ earlier chat version; the FILE wins)
    from the printed book in the hymn editor. No mapping was guessed.
    Sabbath hours: ZW provinces only for ZW members; hint for country-centre
    times and time-zone mismatch. Tune playback NOT built (needs melody data).
+   **Sabbath worldwide (29 Oct 2026):** `assets/geo/sabbath_places.json`
+   (GeoNames CC BY 4.0 — credited in the picker; 244 countries, 2801
+   states/provinces, each = its most populous city + IANA zone; generator
+   is scratchpad make_places.py, aliases zones newer than timezone 0.9.4).
+   `SabbathService.setPlace` / `place()` / `placeTime()` — ALWAYS format
+   Sabbath times with `placeTime`, never `toLocal()`. Precedence: GPS >
+   chosen place > ZW province > country centre. One picker
+   (`pickSabbathPlace`) used by Sabbath hours and Settings ("Sabbath
+   place"); the old Profile "Sabbath timer" screen was removed and its
+   route now opens Sabbath hours.
 4. Bible app experience
 5. Sabbath School experience & date bug
 6. Hymnal (multilingual)

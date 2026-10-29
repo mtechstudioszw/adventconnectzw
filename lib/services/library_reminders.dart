@@ -251,7 +251,8 @@ class LibraryReminders {
       if (lead == null) return;
       final list = sabbathInstants(lead);
       for (var i = 0; i < list.length; i++) {
-        final local = list[i].sunset.toLocal();
+        // In the chosen place's zone, matching the Sabbath hours screen.
+        final local = SabbathService.placeTime(list[i].sunset);
         final hhmm =
             '${local.hour.toString().padLeft(2, '0')}:'
             '${local.minute.toString().padLeft(2, '0')}';

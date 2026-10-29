@@ -1339,7 +1339,7 @@ class _SearchScreenState extends State<SearchScreen>
         _landingHeader(
           'Videos to watch',
           actionLabel: 'See all',
-          onAction: () => context.goNamed('watch'),
+          onAction: () => context.pushNamed('watch'),
         ),
       );
       for (final v in _suggVideos) {
@@ -2689,7 +2689,7 @@ class _JumpGrid extends StatelessWidget {
       (Icons.storefront_outlined, 'Shop', () => context.goNamed('marketplace')),
       (Icons.work_outline_rounded, 'Jobs', () => context.pushNamed('jobs')),
       (Icons.event_outlined, 'Events', () => context.pushNamed('events')),
-      (Icons.play_circle_outline, 'Videos', () => context.goNamed('watch')),
+      (Icons.play_circle_outline, 'Videos', () => context.pushNamed('watch')),
       (Icons.menu_book_outlined, 'Library', () => context.pushNamed('library')),
     ];
     return Padding(

@@ -26,9 +26,9 @@ const bool kFloatingNavBlur = true;
 
 /// Custom bottom navigation shared by the 5 top-level tabs.
 ///
-/// Home, Watch, Chat, Marketplace, Profile. (Watch replaced the Events tab —
-/// Events now lives on Home via the featured-events strip + the events
-/// discovery row + a "See all" entry.)
+/// Home, Library, Chat, Marketplace, Profile. (Library replaced Watch on
+/// 2026-10-29: Watch now lives inside the Library and under Home's live
+/// banner. Watch had earlier replaced the Events tab, which lives on Home.)
 ///
 /// **Chat replaced Churches here on 2026-07-27.** The floating chat bubble it
 /// supersedes was unreachable: it sat *under* the island and slid away with it
@@ -87,7 +87,7 @@ class MainBottomNav extends StatelessWidget {
 
   static const _routes = [
     'home',
-    'watch',
+    'library_hub',
     'messages',
     'marketplace',
     'profile',
@@ -95,7 +95,7 @@ class MainBottomNav extends StatelessWidget {
 
   static const _tabs = <(IconData, IconData, String)>[
     (Icons.home_outlined, Icons.home_rounded, 'Home'),
-    (Icons.play_circle_outline, Icons.play_circle_fill_rounded, 'Watch'),
+    (Icons.menu_book_outlined, Icons.menu_book_rounded, 'Library'),
     (Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Chat'),
     // storefront, not a shopping bag — this is a marketplace members sell
     // in, not a checkout.

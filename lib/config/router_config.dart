@@ -28,6 +28,7 @@ import '../screens/churches/suggest_edit_screen.dart';
 import '../screens/home/post_notice_screen.dart';
 import '../screens/home/search_screen.dart';
 import '../screens/library/library_boot_screen.dart';
+import '../screens/library/library_hub_screen.dart';
 import '../screens/watch/watch_screen.dart';
 import '../screens/watch/saved_videos_screen.dart';
 import '../screens/watch/channels_screen.dart';
@@ -379,85 +380,16 @@ final GoRouter appRouter = GoRouter(
             ),
           ],
         ),
+        // Library tab (29 Oct 2026, owner): replaced Watch in the island.
+        // Watch moved INSIDE the Library (toolkit button + its own strip)
+        // and its routes moved to top level unchanged (see '/watch' below),
+        // so push taps, shared links and `watch_video` calls still work.
         StatefulShellBranch(
           routes: [
             GoRoute(
-              path: '/watch',
-              name: 'watch',
-              builder: (context, state) => const WatchScreen(),
-              routes: [
-                // Static segments must precede ':id' so they aren't captured
-                // as ids.
-                GoRoute(
-                  parentNavigatorKey: rootNavigatorKey,
-                  path: 'saved',
-                  name: 'watch_saved',
-                  builder: (context, state) => const SavedVideosScreen(),
-                ),
-                GoRoute(
-                  parentNavigatorKey: rootNavigatorKey,
-                  path: 'channels',
-                  name: 'watch_channels',
-                  builder: (context, state) => const ChannelsScreen(),
-                ),
-                GoRoute(
-                  parentNavigatorKey: rootNavigatorKey,
-                  path: 'shorts',
-                  name: 'watch_shorts',
-                  builder: (context, state) {
-                    final args = state.extra is ShortsArgs
-                        ? state.extra as ShortsArgs
-                        : const ShortsArgs(shorts: []);
-                    return ShortsScreen(args: args);
-                  },
-                ),
-                GoRoute(
-                  parentNavigatorKey: rootNavigatorKey,
-                  path: 'series/:playlistId',
-                  name: 'watch_series',
-                  builder: (context, state) {
-                    final id = state.pathParameters['playlistId'] ?? '';
-                    final initial = state.extra is YoutubePlaylist
-                        ? state.extra as YoutubePlaylist
-                        : null;
-                    final from =
-                        int.tryParse(state.uri.queryParameters['from'] ?? '') ??
-                        0;
-                    return SeriesScreen(
-                      playlistId: id,
-                      initial: initial,
-                      fromPosition: from,
-                    );
-                  },
-                ),
-                GoRoute(
-                  parentNavigatorKey: rootNavigatorKey,
-                  path: 'channel/:channelId',
-                  name: 'watch_channel',
-                  builder: (context, state) {
-                    final id = state.pathParameters['channelId'] ?? '';
-                    final initial = state.extra is YoutubeChannel
-                        ? state.extra as YoutubeChannel
-                        : null;
-                    return ChannelScreen(channelId: id, initial: initial);
-                  },
-                ),
-                GoRoute(
-                  parentNavigatorKey: rootNavigatorKey,
-                  path: ':id',
-                  name: 'watch_video',
-                  builder: (context, state) {
-                    final id = state.pathParameters['id'] ?? '';
-                    final initial = state.extra is YoutubeVideo
-                        ? state.extra as YoutubeVideo
-                        : null;
-                    return VideoPlayerScreen(
-                      videoId: id,
-                      initialVideo: initial,
-                    );
-                  },
-                ),
-              ],
+              path: '/library',
+              name: 'library_hub',
+              builder: (context, state) => const LibraryHubScreen(),
             ),
           ],
         ),
@@ -968,8 +900,14 @@ final GoRouter appRouter = GoRouter(
       name: 'follow_requests',
       builder: (context, state) => const FollowListScreen.requests(),
     ),
+    // The reader behind every Library section. Top level (root navigator),
+    // NOT nested under the Library tab: dozens of buttons across the app
+    // push it by name from other tabs, and a route inside another shell
+    // branch would switch the island to Library underneath them — Back
+    // would then land on the wrong tab. The path stays under `/library`
+    // so ResumeAdManager's `/library` block still covers it.
     GoRoute(
-      path: '/library',
+      path: '/library-read',
       name: 'library',
       // extra is an optional int initial tab
       // (0=Bible, 1=Sabbath School, 2=Hymnal, 3=EGW, 4=Music).
@@ -979,6 +917,87 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => LibraryBootScreen(
         initialTab: state.extra is int ? state.extra as int : 0,
       ),
+    ),
+    // Watch: no longer a tab (29 Oct 2026) — a full-screen page reached
+    // from the Library, Home's live banner, search, notifications and
+    // links. Paths and names unchanged.
+    GoRoute(
+      path: '/watch',
+      name: 'watch',
+      builder: (context, state) => const WatchScreen(),
+      routes: [
+        // Static segments must precede ':id' so they aren't captured
+        // as ids.
+        GoRoute(
+          parentNavigatorKey: rootNavigatorKey,
+          path: 'saved',
+          name: 'watch_saved',
+          builder: (context, state) => const SavedVideosScreen(),
+        ),
+        GoRoute(
+          parentNavigatorKey: rootNavigatorKey,
+          path: 'channels',
+          name: 'watch_channels',
+          builder: (context, state) => const ChannelsScreen(),
+        ),
+        GoRoute(
+          parentNavigatorKey: rootNavigatorKey,
+          path: 'shorts',
+          name: 'watch_shorts',
+          builder: (context, state) {
+            final args = state.extra is ShortsArgs
+                ? state.extra as ShortsArgs
+                : const ShortsArgs(shorts: []);
+            return ShortsScreen(args: args);
+          },
+        ),
+        GoRoute(
+          parentNavigatorKey: rootNavigatorKey,
+          path: 'series/:playlistId',
+          name: 'watch_series',
+          builder: (context, state) {
+            final id = state.pathParameters['playlistId'] ?? '';
+            final initial = state.extra is YoutubePlaylist
+                ? state.extra as YoutubePlaylist
+                : null;
+            final from =
+                int.tryParse(state.uri.queryParameters['from'] ?? '') ??
+                0;
+            return SeriesScreen(
+              playlistId: id,
+              initial: initial,
+              fromPosition: from,
+            );
+          },
+        ),
+        GoRoute(
+          parentNavigatorKey: rootNavigatorKey,
+          path: 'channel/:channelId',
+          name: 'watch_channel',
+          builder: (context, state) {
+            final id = state.pathParameters['channelId'] ?? '';
+            final initial = state.extra is YoutubeChannel
+                ? state.extra as YoutubeChannel
+                : null;
+            return ChannelScreen(channelId: id, initial: initial);
+          },
+        ),
+        GoRoute(
+          parentNavigatorKey: rootNavigatorKey,
+          path: ':id',
+          name: 'watch_video',
+          builder: (context, state) {
+            final id = state.pathParameters['id'] ?? '';
+            final initial = state.extra is YoutubeVideo
+                ? state.extra as YoutubeVideo
+                : null;
+            return VideoPlayerScreen(
+              videoId: id,
+              initialVideo: initial,
+            );
+          },
+        ),
+      ],
     ),
     GoRoute(
       path: '/quiz',

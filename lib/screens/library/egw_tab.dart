@@ -1428,6 +1428,19 @@ class EgwPrefs {
 
   static int? lastOpenedAt(String id) => _opened()[id];
 
+  /// The book opened most recently, for the Library home's Continue row.
+  static String? lastOpenedId() {
+    String? best;
+    var bestAt = 0;
+    _opened().forEach((id, at) {
+      if (at > bestAt) {
+        best = id;
+        bestAt = at;
+      }
+    });
+    return best;
+  }
+
   static void noteOpened(String id) {
     final map = _opened()..[id] = DateTime.now().millisecondsSinceEpoch;
     _persist(_kOpened, jsonEncode(map));

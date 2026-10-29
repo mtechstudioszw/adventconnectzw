@@ -42,7 +42,7 @@ class GlobalMediaBars extends StatelessWidget {
 
   static const _tabPaths = {
     '/home',
-    '/watch',
+    '/library',
     '/messages',
     '/marketplace',
     '/profile',

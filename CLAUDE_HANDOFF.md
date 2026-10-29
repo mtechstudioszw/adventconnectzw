@@ -27,7 +27,12 @@ Read this file, then `CLAUDE.md`, then the master prompt, before touching code.
 earlier chat version; the FILE wins)
 1. Audit, bug fixes, Advent AI cleanup — **DONE**
 2. Core app shell, Home, Marketplace, Profile — **IN PROGRESS** (redesign pass 1 done; acceptance needs a device check by the owner — see `docs/BATCH_2_REPORT.md`). Was marked done too early on 28 Oct; reopened.
-3. Library information architecture & design
+3. Library information architecture & design — **PART 1 DONE 29 Oct 2026**
+   (Library tab replaced Watch; Library home; Watch moved inside with every
+   route kept; Home: devotion opens `DevotionScreen`, Continue row, Watch row).
+   **Part 2 next:** Library search, Saved/Downloads, the More directory, and
+   28 Beliefs (our own summaries + a link to adventist.org; the toolkit's
+   "Prayer" tile is the slot it takes).
 4. Bible app experience
 5. Sabbath School experience & date bug
 6. Hymnal (multilingual)
@@ -52,12 +57,18 @@ earlier chat version; the FILE wins)
 - **Firebase:** FCM push, Crashlytics, Analytics only. `firebase_auth` is
   permanently excluded — Supabase does auth.
 - **Routing:** go_router 14.8.1, `lib/config/router_config.dart`.
-  - **NEW (Batch 2):** the five tabs — Home, Watch, Chat (`/messages`),
+  - **NEW (Batch 2):** the five tabs — Home, Library (`/library`, name
+    `library_hub`; Watch until 29 Oct 2026), Chat (`/messages`),
     Marketplace, Profile — are a `StatefulShellRoute.indexedStack` rendered by
     `lib/screens/widgets/tab_shell.dart`. Tabs stay alive when you switch.
   - Every **direct child route of a tab** carries
     `parentNavigatorKey: rootNavigatorKey` so it still opens full-screen above
     the island. A new child route without it will open inside the tab.
+  - **Watch is no longer a tab** (29 Oct 2026). Its routes (`watch`,
+    `watch_video`, …) are top level, unchanged, so push it — never
+    `goNamed('watch')`. The Library reader is `library` at `/library-read`,
+    also top level: it is pushed from every tab, and inside the Library
+    branch it would switch the island underneath the caller.
   - Never `push` a tab route (it duplicates the shell navigator). Use
     `goNamed`. For Chat → Requests use `ConversationsScreen.openRequests(router)`.
   - All other routes are flat top-level `GoRoute`s.

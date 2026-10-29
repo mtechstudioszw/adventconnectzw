@@ -12,7 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 const _tabScreens = <String>[
   'lib/screens/home/home_screen.dart',
-  'lib/screens/watch/watch_screen.dart',
+  'lib/screens/library/library_hub_screen.dart',
   'lib/screens/messaging/conversations_screen.dart',
   'lib/screens/marketplace/marketplace_screen.dart',
   'lib/screens/profile/profile_screen.dart',
@@ -46,7 +46,7 @@ void main() {
     final router = File('lib/config/router_config.dart').readAsStringSync();
     for (final path in const [
       "'/home'",
-      "'/watch'",
+      "'/library'",
       "'/messages'",
       "'/marketplace'",
       "'/profile'",
@@ -64,7 +64,9 @@ void main() {
     // (or ConversationsScreen.openRequests for Chat → Requests).
     final offenders = <String>[];
     final push = RegExp(
-      r"push(Named)?\(\s*'/?(home|watch|messages|marketplace|profile)['?]",
+      // Library's tab is `library_hub`; `library` (no suffix) is the
+      // reader, a full-screen route that is pushed on purpose.
+      r"push(Named)?\(\s*'(/?(home|messages|marketplace|profile)|library_hub|/library)['?]",
       multiLine: true,
     );
     for (final file

@@ -77,6 +77,7 @@ import '../../widgets/marketplace/product_tile.dart';
 import '../../widgets/home/report_sheet.dart';
 import '../../widgets/home/stories_rail.dart';
 import '../../widgets/home/live_banner.dart';
+import '../../widgets/home/watch_entry_row.dart';
 import '../../widgets/verified_tick.dart';
 import '../../widgets/youtube/youtube_video_card.dart';
 import '../../models/youtube_video.dart';
@@ -1422,6 +1423,10 @@ class _HomeScreenState extends State<HomeScreen>
                   // LIVE now — collapses to nothing when no channel is live,
                   // and becomes a swipeable deck when several are.
                   LiveBanner(live: _liveVideos, onTap: _openVideo),
+                  // Watch left the island for the Library (29 Oct 2026);
+                  // this keeps it one tap from Home, under the live cards,
+                  // whether or not anyone is on air.
+                  const WatchEntryRow(),
                   if (_banner != null &&
                       !_dismissedBannerIds.contains(_banner!.id)) ...[
                     const SizedBox(height: AppSpace.md),
@@ -1505,11 +1510,11 @@ class _HomeScreenState extends State<HomeScreen>
                     refreshTick: _refreshTick,
                   ),
                   const SizedBox(height: AppSpace.md),
-                  // Library launcher, and the quiz's only entry point ON THE
-                  // FEED — the Library app bar gained a second one in Aug
-                  // 2026, but that is only reachable once you are already in
-                  // the Library. See LibraryTiles before reordering it.
-                  const LibraryTiles(),
+                  // Quiz, then Continue (Bible chapter, lesson day, hymn,
+                  // EGW book), then Library — the section pills went with
+                  // the Library tab (29 Oct 2026). Quiz is still the feed's
+                  // primary door into `/quiz`; see LibraryTiles.
+                  LibraryTiles(refreshTick: _refreshTick),
                   // QuizLiveStrip used to sit here, under the Library row.
                   // The founder moved it to the top of Home on 18 Aug 2026,
                   // above the live video — do not add a second copy here.

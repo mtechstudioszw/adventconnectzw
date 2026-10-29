@@ -17,6 +17,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
+import '../../screens/library/devotion_screen.dart';
 import '../cached_image.dart';
 import '../verse_share_card.dart';
 import '../motion/pressable.dart';
@@ -417,18 +418,15 @@ class _DevotionPage extends StatelessWidget {
         reference: devotion.bibleRef,
         text: devotion.bibleText,
       ),
-      // Founder's call (4 Aug 2026): the devotion card routes to the
-      // Library rather than deep-linking into the reader at the verse.
-      //
-      // The deep link is still here in `_openVerse` and still works — it is
-      // just not what this tap does any more. Share (the button above) is
-      // the action people actually take on a verse of the day; tapping the
-      // card is a move toward "read something", and the Library is where
-      // that starts.
-      //
-      // Tab 0 is the Bible tab, so the member still lands on scripture,
-      // one step out from the verse instead of inside it.
-      onTap: () => GoRouter.of(context).pushNamed('library', extra: 0),
+      // Owner, 29 Oct 2026: the card opens the full devotion — verse,
+      // Ellen White reading, "Read the chapter", Share. (4 Aug–29 Oct it
+      // opened the Library's Bible tab; the Library is a tab of its own
+      // now, so that tap would just duplicate the island.)
+      onTap: () => Navigator.of(context, rootNavigator: true).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => DevotionScreen(devotion: devotion),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

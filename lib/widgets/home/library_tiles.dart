@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,7 +10,7 @@ import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../motion/pressable.dart';
 import '../motion/staggered_reveal.dart';
-import '../../config/platform_flags.dart';
+import '../../screens/library/library_continue.dart';
 
 /// The Library launcher on Home.
 ///
@@ -22,23 +24,20 @@ import '../../config/platform_flags.dart';
 /// horizontally halves the height and matches the chip vocabulary already used
 /// on the Marketplace.
 ///
-/// Ordering is the founder's, set 18 Aug 2026: **Bible, Quiz, EGW, Sabbath,
-/// Hymnal, Music**. Quiz moved from fourth to second, so it is now well
-/// inside the first screenful rather than at its edge; it keeps the brand
-/// gradient so it still reads as the one highlight of the row.
-///
-/// The display order and the Library's TAB order are deliberately allowed to
-/// differ — each entry carries its own tab index in the tuple below, so
-/// reordering this list moves the pill without moving the tab it opens. Do
-/// not "tidy" the indexes to match the display order.
+/// Contents changed 29 Oct 2026 (owner) — see [_LibraryTilesState]. Quiz
+/// stays first and keeps the brand gradient, so it still reads as the one
+/// highlight of the row.
 ///
 /// This row was the ONLY route into `/quiz` until Aug 2026, when a quiz action
 /// was added to the Library screen's app bar. It is still the PRIMARY one and
 /// the only one on the home feed — the app-bar action is a second door for
 /// people already inside the Library, not a replacement — so the warning
 /// stands: don't reorder this tile out of view.
-class LibraryTiles extends StatelessWidget {
-  const LibraryTiles({super.key});
+class LibraryTiles extends StatefulWidget {
+  const LibraryTiles({super.key, this.refreshTick = 0});
+
+  /// Home's pull-to-refresh / day-roll counter; a change re-reads Continue.
+  final int refreshTick;
 
   /// Row height. The pill itself is 40dp; the rest is room for its
   /// SHADOW.
@@ -50,56 +49,96 @@ class LibraryTiles extends StatelessWidget {
   /// row the same optical breathing space as the cards around it.
   static const double _rowHeight = 64;
 
-  // (label, icon, library tab index, isHero). Tab indexes map 1:1 onto
-  // LibraryScreen's TabBar order — keep the two in sync.
-  // Quiz uses index -1 because it routes to `/quiz`, not the Library.
-  static List<(String, IconData, int, bool)> get _items => [
-    ('Bible', Icons.menu_book_rounded, 0, false),
-    ('Quiz', Icons.emoji_events_rounded, -1, true),
-    ('EGW', Icons.auto_stories_rounded, 3, false),
-    ('Sabbath', Icons.school_rounded, 1, false),
-    ('Hymnal', Icons.queue_music_rounded, 2, false),
-    // Hidden on iOS — see kHideMusic.
-    if (!kHideMusic) ('Music', Icons.headphones_rounded, 4, false),
-  ];
+  @override
+  State<LibraryTiles> createState() => _LibraryTilesState();
+}
+
+/// Owner, 29 Oct 2026: with Library a tab of its own, the section pills
+/// (Bible, EGW, Sabbath, Hymnal, Music) were a second copy of its toolkit
+/// one tap away. The row now answers "where was I?" instead: **Quiz** first
+/// (still the feed's primary door into `/quiz`, live dot and all), then a
+/// Continue pill per section with real progress, then **Library**. A
+/// member who has started nothing sees Quiz and Library only.
+class _LibraryTilesState extends State<LibraryTiles> {
+  List<ContinueEntry> _continue = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+    for (final l in LibraryContinue.changes) {
+      l.addListener(_reload);
+    }
+  }
+
+  @override
+  void didUpdateWidget(LibraryTiles old) {
+    super.didUpdateWidget(old);
+    if (old.refreshTick != widget.refreshTick) _reload();
+  }
+
+  @override
+  void dispose() {
+    for (final l in LibraryContinue.changes) {
+      l.removeListener(_reload);
+    }
+    super.dispose();
+  }
+
+  Future<void> _reload() async {
+    final items = await LibraryContinue.load();
+    if (mounted) setState(() => _continue = items);
+  }
+
+  Future<void> _after(Future<Object?> route) async {
+    await route;
+    if (mounted) unawaited(_reload());
+  }
 
   @override
   Widget build(BuildContext context) {
+    final pills = <Widget>[
+      // Quiz (and only Quiz) carries the live signal — see [_Tile.live].
+      _Tile(
+        label: 'Quiz',
+        icon: Icons.emoji_events_rounded,
+        hero: true,
+        live: true,
+        onTap: () => context.pushNamed('quiz'),
+      ),
+      for (final c in _continue)
+        _Tile(
+          label: c.title,
+          semanticsLabel: 'Continue ${c.kind}: ${c.title}',
+          icon: c.icon,
+          hero: false,
+          onTap: () => _after(c.open(context)),
+        ),
+      _Tile(
+        label: 'Library',
+        icon: Icons.arrow_forward_rounded,
+        hero: false,
+        onTap: () => context.goNamed('library_hub'),
+      ),
+    ];
     return SizedBox(
-      height: _rowHeight,
+      height: LibraryTiles._rowHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
-        itemCount: _items.length,
+        itemCount: pills.length,
         separatorBuilder: (_, _) => const SizedBox(width: AppSpace.md),
-        itemBuilder: (context, i) {
-          final (label, icon, tab, hero) = _items[i];
-          // Only six items and they all build at once, so a stagger here
-          // can't replay on scroll the way it would in a long lazy list.
-          return StaggeredReveal(
-            index: i,
-            rise: 12,
-            interval: const Duration(milliseconds: 40),
-            // Centred in the row. A horizontal list hands its children
-            // loose vertical constraints, so the 40dp pill would sit
-            // against the TOP of the 64dp row and put all the slack
-            // underneath it — the row would look pushed up against the
-            // card above.
-            child: Center(
-              child: _Tile(
-                label: label,
-                icon: icon,
-                hero: hero,
-                // Quiz (and only Quiz) carries the live signal — see
-                // [_Tile.live].
-                live: tab < 0,
-                onTap: () => tab < 0
-                    ? context.pushNamed('quiz')
-                    : context.pushNamed('library', extra: tab),
-              ),
-            ),
-          );
-        },
+        itemBuilder: (context, i) => StaggeredReveal(
+          index: i,
+          rise: 12,
+          interval: const Duration(milliseconds: 40),
+          // Centred in the row. A horizontal list hands its children
+          // loose vertical constraints, so the 40dp pill would sit
+          // against the TOP of the 64dp row and put all the slack
+          // underneath it — the row would look pushed up against the
+          // card above.
+          child: Center(child: pills[i]),
+        ),
       ),
     );
   }
@@ -112,9 +151,13 @@ class _Tile extends StatelessWidget {
     required this.hero,
     required this.onTap,
     this.live = false,
+    this.semanticsLabel,
   });
 
   final String label;
+
+  /// Read instead of [label] when the pill's text alone is ambiguous.
+  final String? semanticsLabel;
   final IconData icon;
 
   /// The one tile that gets a full brand gradient instead of a tinted fill.
@@ -145,7 +188,9 @@ class _Tile extends StatelessWidget {
     final waiting = invites > 0;
     return Semantics(
       button: true,
-      label: waiting ? '$label, someone wants to play' : label,
+      label: waiting
+          ? '$label, someone wants to play'
+          : (semanticsLabel ?? label),
       child: Pressable(
         onTap: onTap,
         haptics: true,
@@ -205,8 +250,7 @@ class _Tile extends StatelessWidget {
                     // #2E7D32 is tuned for a light page and goes murky on
                     // the dark one, where this dot is the only thing on
                     // Home saying somebody is waiting for you. Lift it.
-                    color:
-                        Theme.of(context).brightness == Brightness.dark
+                    color: Theme.of(context).brightness == Brightness.dark
                         ? const Color(0xFF4CD964)
                         : AppColors.successGreen,
                     shape: BoxShape.circle,

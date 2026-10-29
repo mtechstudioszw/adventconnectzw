@@ -286,7 +286,7 @@ class _AdventAiScreenState extends State<AdventAiScreen> {
       itemBuilder: (context, i) => _Turn(
         message: items[i],
         onCopy: () => _copy(items[i].content),
-        onVerseTap: (ref) => context.push('/library'),
+        onVerseTap: (ref) => context.pushNamed('library'),
       ),
     );
   }

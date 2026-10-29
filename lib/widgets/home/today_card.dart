@@ -20,6 +20,7 @@ import '../../theme/app_tokens.dart';
 import '../cached_image.dart';
 import '../verse_share_card.dart';
 import '../motion/pressable.dart';
+import '../../config/platform_flags.dart';
 
 /// Home's spiritual anchor: one hero card carrying today's devotion, this
 /// quarter's Sabbath School lesson, and a hymn / track / EGW book of the day.
@@ -195,7 +196,9 @@ class _TodayCardState extends State<TodayCard> {
         if (_quarterly != null)
           _Slide(accent: 0.22, child: _LessonPage(quarterly: _quarterly!)),
         if (_hymn != null) _Slide(accent: 0.34, child: _HymnPage(hymn: _hymn!)),
-        if (_track != null)
+        // No music on iOS (kHideMusic) — this slide would open a Music tab
+        // that isn't there.
+        if (_track != null && !kHideMusic)
           _Slide(
             accent: 0.48,
             child: _LibraryPickPage(

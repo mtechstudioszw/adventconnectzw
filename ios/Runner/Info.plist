@@ -10,6 +10,8 @@
 	     here, flip kHideMusic, and send Apple a screen recording.
 	     `remote-notification` stays: it lets push notifications wake the
 	     app (chat delivered-ticks). -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

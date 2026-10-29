@@ -258,6 +258,8 @@ Future<void> _initBackgroundServices() async {
           // computes sundown — so it has to be refreshed whenever the
           // app comes up, which is when a window can newly be open.
           unawaited(SabbathService.syncSabbathQuietWindow());
+          // Wake Home exactly at sundown, while the app is open.
+          SabbathService.armBoundary();
           // Reading and Friday-sundown reminders are scheduled a week or
           // two ahead; top them up on every start.
           unawaited(LibraryReminders.rearm());
@@ -613,6 +615,14 @@ class _AdventConnectAppState extends State<AdventConnectApp>
       // the app was backgrounded take effect without a relaunch — and it
       // re-arms the expiry timer.
       if (AuthService.isSignedIn) unawaited(PremiumService.refresh());
+      // Sabbath may have begun or ended while the phone slept (timers do
+      // not run then): refresh everything showing it, re-stamp Sabbath
+      // mode's quiet window and re-arm the sundown timer.
+      SabbathService.changes.value++;
+      SabbathService.armBoundary();
+      if (AuthService.isSignedIn) {
+        unawaited(SabbathService.syncSabbathQuietWindow());
+      }
       // Full-screen ad on return-to-foreground (capped once / 3h), but
       // never over a sensitive flow — Chat, prayer, auth/onboarding,
       // splash/lock, banned/update, admin. Appodeal has no App-Open format,

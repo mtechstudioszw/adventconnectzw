@@ -34,7 +34,8 @@ class SabbathHoursScreen extends StatefulWidget {
     DateTime Function(DateTime localDate)? sunsetOn,
   }) {
     final sunset = sunsetOn ?? SabbathService.sunsetOn;
-    final local = now.toLocal();
+    // The place's calendar, not the phone's (see placeCalendarNow).
+    final local = SabbathService.placeCalendarNow(now);
     final utc = now.toUtc();
     // The Friday of this Sabbath: back to Friday if it's Saturday (or
     // Friday), otherwise forward.

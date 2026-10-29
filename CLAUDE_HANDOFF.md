@@ -68,6 +68,12 @@ earlier chat version; the FILE wins)
    (`pickSabbathPlace`) used by Sabbath hours and Settings ("Sabbath
    place"); the old Profile "Sabbath timer" screen was removed and its
    route now opens Sabbath hours.
+   **App-wide (29 Oct 2026):** `SabbathService.changes` fires on any place
+   change and exactly at Friday/Saturday sundown (`armBoundary`, re-armed on
+   resume); Home, Profile and the Library listen. "Which day" uses the
+   place's calendar (`placeCalendarNow`); Home's countdown ticks each
+   minute; Sabbath mode's quiet window is re-stamped on resume and at
+   sundown while the app is open.
 4. Bible app experience
 5. Sabbath School experience & date bug
 6. Hymnal (multilingual)

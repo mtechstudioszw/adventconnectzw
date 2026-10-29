@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -27,6 +29,7 @@ class SabbathService {
 
   static Future<void> setEnabled(bool value) async {
     await CacheService.writePref(_enabledKey, value ? 'true' : 'false');
+    _changed();
   }
 
   /// User-selected province (used to pick lat/lon). Returns null if
@@ -39,6 +42,7 @@ class SabbathService {
     await CacheService.deletePref(_gpsKey);
     await CacheService.deletePref(_placeKey);
     await CacheService.writePref(_provinceKey, name);
+    _changed();
     // The server's quiet window is derived from the province, so a
     // province change has to re-stamp it or notifications would keep
     // muting on the old town's sundown.
@@ -138,10 +142,14 @@ class SabbathService {
       _gpsKey,
       '${lat.toStringAsFixed(2)},${lon.toStringAsFixed(2)}',
     );
+    _changed();
     if (sabbathModeEnabled()) await syncSabbathQuietWindow();
   }
 
-  static Future<void> clearGps() => CacheService.deletePref(_gpsKey);
+  static Future<void> clearGps() async {
+    await CacheService.deletePref(_gpsKey);
+    _changed();
+  }
 
   // -- Chosen place: any country, any state (29 Oct 2026) ----------------
   // Owner: "fix the Sabbath timer across the entire world … countries like
@@ -200,10 +208,52 @@ class SabbathService {
         'tz': timeZone,
       }),
     );
+    _changed();
     if (sabbathModeEnabled()) await syncSabbathQuietWindow();
   }
 
   static bool _tzReady = false;
+
+  /// Bumped whenever Sabbath times or the Sabbath state may have changed:
+  /// a new place, GPS or province, the countdown switch, and the moment
+  /// Sabbath begins or ends. Home and anything showing Sabbath state
+  /// listens, so nothing waits for a restart (29 Oct 2026).
+  static final ValueNotifier<int> changes = ValueNotifier<int>(0);
+
+  static void _changed() {
+    changes.value++;
+    armBoundary();
+  }
+
+  static Timer? _boundary;
+
+  /// Fires [changes] (and re-stamps Sabbath mode's quiet window) exactly
+  /// when this Sabbath ends or the next one begins. Re-armed after each
+  /// boundary, on every place change and when the app returns to the
+  /// foreground (timers do not run while the phone is asleep).
+  static void armBoundary() {
+    _boundary?.cancel();
+    try {
+      final now = DateTime.now().toUtc();
+      final next = currentSabbathEnd() ?? nextSabbathStart();
+      if (next == null) return;
+      final wait = next.difference(now) + const Duration(seconds: 2);
+      if (wait.isNegative || wait > const Duration(days: 8)) return;
+      _boundary = Timer(wait, () {
+        changes.value++;
+        unawaited(syncSabbathQuietWindow());
+        armBoundary();
+      });
+    } catch (_) {
+      // Cache not open yet (tests) — nothing to arm.
+    }
+  }
+
+  /// Now, as a calendar date-time in the place's zone (see [placeTime]).
+  static DateTime placeCalendarNow([DateTime? from]) {
+    final t = placeTime((from ?? DateTime.now()).toUtc());
+    return DateTime(t.year, t.month, t.day, t.hour, t.minute, t.second);
+  }
 
   /// [utc] as wall-clock time where sundown is being calculated: the chosen
   /// place's zone when there is one, otherwise the phone's. Use this, not
@@ -379,8 +429,10 @@ class SabbathService {
     // Friday is it" is a question about the user's own wall clock. The
     // comparison then happens between UTC instants, which is the only
     // frame where "has the sun set yet" is meaningful.
-    final nowLocal = (from ?? DateTime.now()).toLocal();
-    final nowUtc = nowLocal.toUtc();
+    // The PLACE's calendar decides which day it is (a phone in London
+    // set to Los Angeles must not start Sabbath on London's Friday).
+    final nowLocal = placeCalendarNow(from);
+    final nowUtc = (from ?? DateTime.now()).toUtc();
 
     // Find the Friday that started the current Sabbath (today if it's
     // already Saturday or late Friday, yesterday if early Saturday, or
@@ -424,8 +476,10 @@ class SabbathService {
       overrideCountry: overrideCountry,
     );
 
-    final nowLocal = (from ?? DateTime.now()).toLocal();
-    final nowUtc = nowLocal.toUtc();
+    // The PLACE's calendar decides which day it is (a phone in London
+    // set to Los Angeles must not start Sabbath on London's Friday).
+    final nowLocal = placeCalendarNow(from);
+    final nowUtc = (from ?? DateTime.now()).toUtc();
 
     // Find the next Friday on the user's own calendar. If today is Friday
     // and sunset hasn't passed yet, use today.

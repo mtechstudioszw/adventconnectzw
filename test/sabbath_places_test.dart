@@ -100,6 +100,32 @@ void main() {
       },
     );
 
+    test('the place decides the day and the clock, not the phone', () async {
+      await choose('US', 'California');
+      // 05:00 UTC Saturday is still Friday evening in Los Angeles.
+      final t = DateTime.utc(2026, 10, 31, 5);
+      expect(SabbathService.placeCalendarNow(t).weekday, DateTime.friday);
+      expect(SabbathService.placeCalendarNow(t).hour, 22);
+      // ...and past Friday sundown there, so the Sabbath has begun.
+      expect(SabbathService.isSabbathNow(from: t), isTrue);
+      // 23:00 UTC Friday is 16:00 in LA: not yet.
+      expect(
+        SabbathService.isSabbathNow(from: DateTime.utc(2026, 10, 30, 23)),
+        isFalse,
+      );
+    });
+
+    test('changing the place tells the app', () async {
+      var heard = 0;
+      void listener() => heard++;
+      SabbathService.changes.addListener(listener);
+      await choose('ZW', 'Harare');
+      await SabbathService.setGps(-20.15, 28.58);
+      await SabbathService.clearGps();
+      SabbathService.changes.removeListener(listener);
+      expect(heard, 3);
+    });
+
     test(
       'a place replaces GPS and province, and the other way round',
       () async {

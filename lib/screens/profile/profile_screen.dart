@@ -1596,8 +1596,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         // the countdown on is still an Adventist on Sabbath,
                         // and greeting them is not the same as pestering
                         // them with a timer.
-                        if (SabbathService.isSabbathNow())
-                          Padding(
+                        // Rebuilds at sundown and when the place changes.
+                        ValueListenableBuilder<int>(
+                          valueListenable: SabbathService.changes,
+                          builder: (context, _, _) => !SabbathService
+                                  .isSabbathNow()
+                              ? const SizedBox.shrink()
+                              : Padding(
                             padding: const EdgeInsets.only(top: 2),
                             child: Text(
                               'Happy Sabbath',
@@ -1607,6 +1612,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                           ),
+                        ),
                       ],
                     ),
                     const Spacer(),

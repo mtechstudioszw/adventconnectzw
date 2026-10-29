@@ -835,6 +835,7 @@ class _DailyTools extends StatelessWidget {
       listenable: Listenable.merge([
         ReadingPlanService.revision,
         MemoryVerseService.revision,
+        SabbathService.changes,
       ]),
       builder: (context, _) {
         final active = ReadingPlanService.active();

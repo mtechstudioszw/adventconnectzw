@@ -258,6 +258,9 @@ class _HomeScreenState extends State<HomeScreen>
     _loadSuperAdmin();
     _postChangesSub = FeedService.postChanges.listen(_onPostChange);
     FeedService.hiddenPostIds.addListener(_onHiddenChanged);
+    // Header greeting, Sabbath wash and countdown follow the place and
+    // flip at sundown without waiting for a refresh.
+    SabbathService.changes.addListener(_onSabbathChanged);
     FeedService.loadSavedAndHidden();
     FollowService.loadMyFollowing();
     // Tapping Home while already on Home returns to the top — the only way
@@ -433,6 +436,7 @@ class _HomeScreenState extends State<HomeScreen>
   void dispose() {
     _postChangesSub?.cancel();
     FeedService.hiddenPostIds.removeListener(_onHiddenChanged);
+    SabbathService.changes.removeListener(_onSabbathChanged);
     _lifecycle.dispose();
     TabShell.unregisterReselect(TabShell.homeIndex, _scrollToTop);
     FeedService.friendshipsChanged.removeListener(_onFriendshipsChanged);
@@ -950,6 +954,10 @@ class _HomeScreenState extends State<HomeScreen>
     } catch (_) {
       // ignore — corrupt cache is just a missed-paint, not an error.
     }
+  }
+
+  void _onSabbathChanged() {
+    if (mounted) setState(() {});
   }
 
   /// English greeting. This was Shona ("Mangwanani / Masikati / Manheru",

@@ -162,7 +162,9 @@ class LibraryReminders {
     final t = now ?? DateTime.now();
     final sunset = sunsetOn ?? SabbathService.sunsetOn;
     final out = <({DateTime fireAt, DateTime sunset})>[];
-    var friday = DateTime(t.year, t.month, t.day);
+    // The place's calendar decides which day is Friday.
+    final today = SabbathService.placeCalendarNow(t);
+    var friday = DateTime(today.year, today.month, today.day);
     while (friday.weekday != DateTime.friday) {
       friday = friday.add(const Duration(days: 1));
     }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
@@ -547,7 +548,11 @@ class _TitleBlock extends StatelessWidget {
 
 /// The live line under the greeting. Always populated: Sabbath celebration,
 /// then the opt-in countdown, then today's date as the resting state.
-class _StatusLine extends StatelessWidget {
+///
+/// Stateful only for a once-a-minute tick, so "Sabbath in 5h 12m" counts
+/// down while Home sits open instead of freezing at the value it was built
+/// with. The remaining time is re-derived from the fixed sundown instant.
+class _StatusLine extends StatefulWidget {
   const _StatusLine({
     required this.sabbath,
     required this.color,
@@ -557,6 +562,39 @@ class _StatusLine extends StatelessWidget {
   final SabbathStatus sabbath;
   final Color color;
   final Color accent;
+
+  @override
+  State<_StatusLine> createState() => _StatusLineState();
+}
+
+class _StatusLineState extends State<_StatusLine> {
+  Timer? _tick;
+
+  SabbathStatus get sabbath => widget.sabbath;
+  Color get color => widget.color;
+  Color get accent => widget.accent;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  /// Time left until the sundown this line names, as of now.
+  Duration get _until {
+    final sundown = sabbath.sundown;
+    if (sundown == null) return sabbath.until ?? Duration.zero;
+    final d = sundown.difference(DateTime.now().toUtc());
+    return d.isNegative ? Duration.zero : d;
+  }
 
   static const _weekdays = [
     'Monday',
@@ -582,8 +620,9 @@ class _StatusLine extends StatelessWidget {
     'December',
   ];
 
+  /// In the chosen place's zone — the same clock as Sabbath hours.
   static String _clock(DateTime utc) {
-    final local = utc.toLocal();
+    final local = SabbathService.placeTime(utc);
     final h = local.hour.toString().padLeft(2, '0');
     final m = local.minute.toString().padLeft(2, '0');
     return '$h:$m';
@@ -608,7 +647,7 @@ class _StatusLine extends StatelessWidget {
           Icons.brightness_3_rounded,
           sabbath.sundown == null
               ? 'Sabbath soon'
-              : 'Sabbath in ${_remaining(sabbath.until!)}'
+              : 'Sabbath in ${_remaining(_until)}'
                   ' · sundown ${_clock(sabbath.sundown!)}',
         ),
       SabbathPhase.ordinary => (

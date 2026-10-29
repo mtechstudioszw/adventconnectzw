@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import '../../models/org_page_model.dart';
 import '../../screens/onboarding/widgets/film_scenes.dart'
     show AmbientPainter, byBrightness;
+import '../../services/sabbath_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/devotion_service.dart';
 import '../../services/page_service.dart';
@@ -229,9 +230,12 @@ class _CreateScreenState extends State<_CreateScreen>
   /// Openers for the posts people write from here. Day-aware: the Sabbath
   /// greeting leads on Friday and Saturday and is gone the rest of the week.
   List<_Starter> _starters() {
-    final day = DateTime.now().weekday;
+    // From Friday (the day the Sabbath begins, where the member keeps it)
+    // until sundown on Saturday — not by calendar day.
+    final sabbathNear = SabbathService.isSabbathNow() ||
+        SabbathService.placeCalendarNow().weekday == DateTime.friday;
     return [
-      if (day == DateTime.friday || day == DateTime.saturday)
+      if (sabbathNear)
         const _Starter(
           Icons.wb_twilight_rounded,
           'Sabbath greeting',

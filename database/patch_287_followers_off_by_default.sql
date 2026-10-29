@@ -1,6 +1,6 @@
 -- =====================================================================
 --  PATCH 287 — personal accounts by default: followers OFF
---  STATUS: not yet applied
+--  STATUS: APPLIED 29 Oct 2026 (by the owner, verified)
 --
 --  Owner, 29 Oct 2026: "every person gets a default personal account which
 --  doesn't allow people to follow you, but you switch to allow people to

@@ -1,6 +1,6 @@
 -- =====================================================================
 --  PATCH 286 — mutual-friend counts for friend suggestions
---  STATUS: not yet applied
+--  STATUS: APPLIED 29 Oct 2026 (by the owner, verified)
 --
 --  Owner, 29 Oct 2026: friend suggestions should be smart ("this is
 --  probably your friend"). The strongest honest signal the app has is

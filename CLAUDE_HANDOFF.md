@@ -53,8 +53,8 @@ earlier chat version; the FILE wins)
    (`christ_in_song` = same numbering in every vernacular edition);
    `HymnCollection.planned` lists 9 languages NOT in the app (no
    permission yet) — a collection shows in the switcher as soon as it has
-   hymns. `hymn_links` (patch_285 — **NOT YET APPLIED**, needs the owner's
-   go-ahead) maps Christ in Song number → SDA Hymnal number; admins fill it
+   hymns. `hymn_links` (patch_285 — applied 29 Oct 2026)
+   maps Christ in Song number → SDA Hymnal number; admins fill it
    from the printed book in the hymn editor. No mapping was guessed.
    Sabbath hours: ZW provinces only for ZW members; hint for country-centre
    times and time-zone mismatch. Tune playback NOT built (needs melody data).
@@ -87,7 +87,7 @@ earlier chat version; the FILE wins)
   cached as `post_likes.kinds`), larger type for short photo-less posts,
   divider above actions. Rounded cards kept (CLAUDE.md card rule).
 - **People cards:** name + reason on the photo; suggestions lead with
-  mutual friends via `mutual_friend_counts` (**patch_286 — NOT YET APPLIED**;
+  mutual friends via `mutual_friend_counts` (patch_286, applied;
   falls back silently).
 - **Calm offline:** OfflineBanner = 4 s navy pill on going offline, nothing
   on reconnect (the green bar is gone); "Updated…" strip only when offline;
@@ -101,7 +101,7 @@ earlier chat version; the FILE wins)
   (`who_can_follow = 'nobody'`). Members turn on "Allow followers" in
   Settings > Privacy (one switch, `chat_privacy_screen.dart`). Pages are
   always followable, as before.
-- **patch_287 — NOT YET APPLIED.** It sets the column default to 'nobody'
+- **patch_287 — applied 29 Oct 2026.** It sets the column default to 'nobody'
   and switches every existing 'everyone' row to 'nobody'. Rehearsed: 687
   rows, 0 follows exist, so nobody loses a follower. Until it is applied
   the server still says 'everyone', so the app treats people as followable.
@@ -531,9 +531,11 @@ Batch 2 items that were planned (kept for the record):
    can't be self-published, alerts and report-owner stamping work.
    Still the owner's call: patch_271 left hymn duplicate id 102/108.
 
-0b. **Apply patches 285 (hymn links), 286 (mutual friend counts) and 287
-   (followers off by default).** All three are rehearsed; the app falls back
-   without them.
+0b. **DONE 29 Oct 2026:** patches 285, 286, 287 applied by the owner and
+   verified (hymn_links empty by design; 687 profiles on 'nobody').
+0c. **Run patch_288 NOW** (security): members could delete and re-insert
+   their own profile row with is_super_admin = true. Also fixes the
+   US$30/year plan being graded Plus ('annualpermanent' vs 'annual').
 
 1. **Run `database/patch_269_country_metadata_resync.sql`** in Supabase
    (preview query first). Repairs members whose auth metadata kept a

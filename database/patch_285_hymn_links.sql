@@ -1,6 +1,6 @@
 -- ============================================================================
 --  patch_285 — Christ in Song number → SDA Hymnal number
---  STATUS: not yet applied
+--  STATUS: APPLIED 29 Oct 2026 (by the owner, verified)
 -- ============================================================================
 --
 --  Owner, 29 Oct 2026: "number one in Kristu MuNzwiyo … an option to switch

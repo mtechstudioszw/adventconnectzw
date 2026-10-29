@@ -1,6 +1,6 @@
 -- =====================================================================
 --  PATCH 291 — stop the Watch/Home video query timing out
---  STATUS: not yet applied
+--  STATUS: APPLIED 29 Oct 2026 (by the owner, verified: Index Scan)
 --
 --  Found 29 Oct 2026 in the logs: 231 "500" errors in 24 h on
 --    youtube_videos?live_status=neq.upcoming&order=published_at.desc.nullslast

@@ -207,7 +207,7 @@ void main() {
     await t.pump(const Duration(seconds: 30));
   });
 
-  testWidgets('an admin sees Post update and Edit instead of Follow', (
+  testWidgets('an admin sees Post update and Studio instead of Follow', (
     t,
   ) async {
     setFakeSupabaseHandler((req) {
@@ -231,7 +231,7 @@ void main() {
     );
     await _settle(t);
     expect(find.text('Post update'), findsOneWidget);
-    expect(find.text('Edit'), findsOneWidget);
+    expect(find.text('Studio'), findsOneWidget);
     expect(find.text('Follow'), findsNothing);
     await t.pump(const Duration(seconds: 30));
   });

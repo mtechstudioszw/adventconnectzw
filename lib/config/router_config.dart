@@ -55,6 +55,7 @@ import '../models/org_page_model.dart';
 import '../screens/pages/page_admins_screen.dart';
 import '../screens/pages/page_details_screen.dart';
 import '../screens/pages/page_edit_screen.dart';
+import '../screens/pages/page_studio_screen.dart';
 import '../screens/pages/pages_screen.dart';
 import '../screens/utility/report_submitted_screen.dart';
 import '../services/church_service.dart';
@@ -929,6 +930,14 @@ final GoRouter appRouter = GoRouter(
               builder: (context, state) => state.extra is OrgPage
                   ? PageEditScreen(existing: state.extra as OrgPage)
                   : PageEditLoader(pageId: state.pathParameters['id'] ?? ''),
+            ),
+            GoRoute(
+              path: 'studio',
+              name: 'page_studio',
+              builder: (context, state) => PageStudioScreen(
+                pageId: state.pathParameters['id'] ?? '',
+                initial: state.extra is OrgPage ? state.extra as OrgPage : null,
+              ),
             ),
             GoRoute(
               path: 'admins',

@@ -543,12 +543,13 @@ class _PageDetailsScreenState extends State<PageDetailsScreen> {
                 primary: true,
                 onTap: page.isHidden ? null : _compose,
               ),
+              // Edit lives in the studio and the ⋯ menu now.
               ProfileActionButton(
-                label: 'Edit',
-                icon: Icons.edit_outlined,
+                label: 'Studio',
+                icon: Icons.dashboard_customize_outlined,
                 onTap: () async {
                   await context.pushNamed(
-                    'page_edit',
+                    'page_studio',
                     pathParameters: {'id': page.id},
                     extra: page,
                   );

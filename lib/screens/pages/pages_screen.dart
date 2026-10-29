@@ -172,9 +172,11 @@ class _PagesScreenState extends State<PagesScreen> {
               for (final p in _mine)
                 PageTile(
                   page: p,
+                  // Your own Pages open where you manage them.
                   onTap: () => context.pushNamed(
-                    'page_details',
+                    'page_studio',
                     pathParameters: {'id': p.id},
+                    extra: p,
                   ),
                 ),
               const SizedBox(height: 8),

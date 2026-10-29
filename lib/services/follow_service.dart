@@ -205,6 +205,60 @@ class FollowService {
     }
   }
 
+  /// Sources whose post alerts the viewer muted (patch_283), as
+  /// `user:ID` / `page:ID`. Null until loaded or before the patch — the
+  /// mute item is then left out rather than offered and failing.
+  static final ValueNotifier<Set<String>?> mutedAlerts = ValueNotifier(null);
+
+  static String alertKey(String type, String id) => '$type:$id';
+
+  static Future<void> loadAlertMutes() async {
+    final me = _client.auth.currentUser?.id;
+    if (me == null) return;
+    try {
+      final rows = await _client
+          .from('follow_alert_mutes')
+          .select('target_type, target_id')
+          .eq('user_id', me);
+      mutedAlerts.value = {
+        for (final r in rows as List)
+          alertKey((r as Map)['target_type'].toString(), '${r['target_id']}'),
+      };
+    } catch (_) {
+      // Before patch_283: no mute table. Leave null.
+    }
+  }
+
+  /// Mute or unmute "new post" alerts from a person ([type] 'user') or a
+  /// Page ('page') you follow. Following itself is unchanged.
+  static Future<void> setAlertsMuted({
+    required String type,
+    required String id,
+    required bool muted,
+  }) async {
+    final me = _client.auth.currentUser?.id;
+    if (me == null) throw const AuthException('Sign in first.');
+    if (muted) {
+      await _client.from('follow_alert_mutes').upsert({
+        'user_id': me,
+        'target_type': type,
+        'target_id': id,
+      }, ignoreDuplicates: true);
+    } else {
+      await _client
+          .from('follow_alert_mutes')
+          .delete()
+          .eq('user_id', me)
+          .eq('target_type', type)
+          .eq('target_id', id);
+    }
+    final key = alertKey(type, id);
+    final current = mutedAlerts.value ?? <String>{};
+    mutedAlerts.value = muted
+        ? {...current, key}
+        : ({...current}..remove(key));
+  }
+
   /// The viewer's own setting, or null before patch_282 — the setting is
   /// then left out of Edit profile rather than offered and failing.
   static Future<WhoCanFollow?> myWhoCanFollow() async {

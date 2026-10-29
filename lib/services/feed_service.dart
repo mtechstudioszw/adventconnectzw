@@ -64,6 +64,7 @@ class FeedService {
   ///         + 0.35 if the post is from a church you follow
   ///         + 0.40 if the author is someone you follow (not a friend)
   ///         + 0.35 if the post is from a Page you follow
+  ///         + up to 0.25 for the author's / Page's follower count (log)
   ///         + viewer-specific jitter (0..0.20)
   ///         - 0.70 if already seen (sinks, never hides)
   ///         + own_post penalty (-1, so your own post sinks)
@@ -133,6 +134,7 @@ class FeedService {
     if (viewer == null || posts.length <= 1) {
       return posts.take(limit).toList();
     }
+    final reach = await _authorReach(posts);
     double score(Post p) => _personalisedScore(
           p,
           viewer,
@@ -142,6 +144,9 @@ class FeedService {
           followedUserIds: followedUserIds,
           followedPageIds: followedPageIds,
           viewerCountry: viewerCountry,
+          followers: p.pageId != null
+              ? reach['page:${p.pageId}']
+              : reach['user:${p.authorId}'],
         );
     posts.sort((a, b) => score(b).compareTo(score(a)));
     return _diversify(posts).take(limit).toList();
@@ -231,6 +236,35 @@ class FeedService {
         .toList();
   }
 
+  /// Follower counts for the authors and Pages in [posts] (patch_283),
+  /// keyed `user:ID` / `page:ID`. One round trip per feed page. Empty
+  /// before the patch or on any failure — reach is a nudge, never a reason
+  /// for the feed not to load.
+  static Future<Map<String, int>> _authorReach(List<Post> posts) async {
+    final users = <String>{};
+    final pages = <String>{};
+    for (final p in posts) {
+      if (p.pageId != null) {
+        pages.add(p.pageId!);
+      } else if (p.authorId.isNotEmpty) {
+        users.add(p.authorId);
+      }
+    }
+    try {
+      final rows = await _client.rpc(
+        'author_reach',
+        params: {'p_users': users.toList(), 'p_pages': pages.toList()},
+      );
+      return {
+        for (final r in rows as List)
+          '${(r as Map)['kind']}:${r['id']}':
+              (r['followers'] as num?)?.toInt() ?? 0,
+      };
+    } catch (_) {
+      return const {};
+    }
+  }
+
   /// Composite ranking score — higher = nearer the top of the feed.
   /// Pure function of post + viewer id + refresh nonce + social sets.
   static double _personalisedScore(
@@ -242,6 +276,7 @@ class FeedService {
     Set<String> followedUserIds = const {},
     Set<String> followedPageIds = const {},
     String? viewerCountry,
+    int? followers,
   }) {
     final ageHours =
         DateTime.now().difference(p.createdAt).inHours.toDouble();
@@ -272,6 +307,15 @@ class FeedService {
     final pageId = p.pageId;
     final pageBoost =
         (pageId != null && followedPageIds.contains(pageId)) ? 0.35 : 0.0;
+    // Reach (owner, 29 Oct 2026: "more followers more visibility in home
+    // screen only"). Logarithmic and capped at 0.25: 10 followers ≈ 0.10,
+    // 100 ≈ 0.20, ~300+ = 0.25. Below a followed Page (0.35) and a friend
+    // (0.50) on purpose, so a big account lifts in everyone's feed but
+    // never buries the people you actually know. Home only — nothing else
+    // calls this ranking.
+    final reachBoost = followers == null || followers <= 0
+        ? 0.0
+        : math.min(math.log(1 + followers) / math.ln10 * 0.10, 0.25);
     // Already scrolled past: SINK it, don't hide it. -0.7 is enough to lose
     // to almost any unseen post, but a seen post with real engagement can
     // still resurface — which is what you want when a thread gets busy after
@@ -312,6 +356,7 @@ class FeedService {
         churchBoost +
         followBoost +
         pageBoost +
+        reachBoost +
         countryBoost +
         jitter +
         seenPenalty +

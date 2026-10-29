@@ -1,6 +1,6 @@
 -- ============================================================================
 --  patch_281 — church admins no longer show the gold tick
---  STATUS: DRAFT, NOT YET RUN.
+--  STATUS: APPLIED to the live database 29 Oct 2026.
 -- ============================================================================
 --
 --  Owner, 28 Oct 2026: "remove golden tick from church admins". The gold

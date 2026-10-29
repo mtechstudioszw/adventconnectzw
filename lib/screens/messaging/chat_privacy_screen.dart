@@ -13,11 +13,11 @@ import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/profile/who_can_follow_change.dart';
 import '../../widgets/screen_shell.dart';
 
-/// Privacy: who can follow you, message you and call you, and what people
+/// Privacy: who can follow you and message you, and what people
 /// can see (28 Oct 2026 — owner: "combine it with who can message me").
 ///
 /// Was "Chat privacy". "Who can follow me" (patch_282) joined it so the
-/// three reach-me settings sit together — but they stay SEPARATE settings:
+/// reach-me settings sit together — but they stay SEPARATE settings:
 /// following someone never lets them message you. The friends-vs-followers
 /// card at the top states the difference, because the owner's rule is that
 /// on personal accounts the two must never blur.
@@ -61,11 +61,6 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
   bool _showOnlineStatus = true;
   bool _showReadReceipts = true;
   String _whoCanMessage = 'everyone';
-  // Defaults to 'friends', matching the column default in patch_265.
-  // A ringing phone is a far louder interruption than an unread badge,
-  // so calling starts tighter than messaging and the member opens it up
-  // rather than having to discover they need to close it down.
-  String _whoCanCall = 'friends';
 
   /// Null until patch_282's column answers; the section stays hidden.
   WhoCanFollow? _whoCanFollow;
@@ -94,7 +89,7 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
           .from('profiles')
           .select(
             'show_last_seen, show_online_status, show_read_receipts, '
-            'who_can_message, who_can_call',
+            'who_can_message',
           )
           .eq('id', user.id)
           .maybeSingle();
@@ -104,7 +99,6 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
         _showOnlineStatus = row?['show_online_status'] != false;
         _showReadReceipts = row?['show_read_receipts'] != false;
         _whoCanMessage = (row?['who_can_message'] as String?) ?? 'everyone';
-        _whoCanCall = (row?['who_can_call'] as String?) ?? 'friends';
         _loading = false;
       });
       final who = await FollowService.myWhoCanFollow();
@@ -205,17 +199,6 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
     });
   }
 
-  void _setWhoCanCall(String v) {
-    if (v == _whoCanCall) return;
-    final was = _whoCanCall;
-    setState(() => _whoCanCall = v);
-    _persist(
-      'who_can_call',
-      v,
-      revert: () => _whoCanCall = was,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -225,7 +208,7 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
           const ScreenHero(
             title: 'Privacy',
             tagline: 'Privacy',
-            subtitle: 'Who can follow you, message you and call you.',
+            subtitle: 'Who can follow you and message you.',
             fallbackRoute: 'settings',
           ),
           Expanded(child: _buildBody()),
@@ -320,50 +303,6 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
                 value: 'nobody',
                 group: _whoCanMessage,
                 onSelect: _setWhoCanMessage,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        _SectionLabel('Who can call me'),
-        const SizedBox(height: 8),
-        ScreenCard(
-          // Scoped so a test can tell the two identical option triples
-          // apart: both sections read Everyone / Friends only / Nobody, so a
-          // bare find.text('Everyone') matches this card and the one above.
-          key: const ValueKey('who-can-call-card'),
-          child: Column(
-            children: [
-              _ChoiceRow(
-                title: 'Everyone',
-                subtitle:
-                    'Anyone on Adventist Super App can ring you, including '
-                    'people you have never spoken to.',
-                value: 'everyone',
-                group: _whoCanCall,
-                onSelect: _setWhoCanCall,
-              ),
-              const _RowDivider(),
-              _ChoiceRow(
-                title: 'Friends only',
-                // Named as the default so nobody has to guess which one
-                // they are on before they have touched the screen.
-                subtitle:
-                    'Only people whose friend request you have accepted can '
-                    'call you. This is the default.',
-                value: 'friends',
-                group: _whoCanCall,
-                onSelect: _setWhoCanCall,
-              ),
-              const _RowDivider(),
-              _ChoiceRow(
-                title: 'Nobody',
-                subtitle:
-                    'No one can call you. You can still call other people, '
-                    'and messaging is unaffected.',
-                value: 'nobody',
-                group: _whoCanCall,
-                onSelect: _setWhoCanCall,
               ),
             ],
           ),
@@ -503,7 +442,7 @@ class _FriendsVsFollowers extends StatelessWidget {
           column(Icons.people_alt_outlined, 'Friends', const [
             'Both of you agree',
             'See your friends-only posts',
-            'Can message and call you, if your settings below allow',
+            'Can message you, if your setting below allows',
           ]),
           const SizedBox(width: 12),
           column(Icons.person_add_alt_outlined, 'Followers', const [
@@ -546,8 +485,12 @@ class _RowDivider extends StatelessWidget {
       Divider(height: 20, color: context.palette.divider);
 }
 
-/// One of a set of mutually exclusive options — used by both the
-/// "Who can message me" and "Who can call me" sections.
+/// One of a set of mutually exclusive options — used by the "Who can
+/// follow me" and "Who can message me" sections.
+///
+/// "Who can call me" was removed 29 Oct 2026 (owner: "we have no calls").
+/// The app has no calling feature, so the setting controlled nothing. The
+/// `who_can_call` column is left in place, unread.
 class _ChoiceRow extends StatelessWidget {
   const _ChoiceRow({
     required this.title,

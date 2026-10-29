@@ -9,6 +9,7 @@ import '../../models/org_page_model.dart';
 import '../../models/post_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
+import '../../services/follow_service.dart';
 import '../../services/page_service.dart';
 import '../../services/seller_service.dart';
 import '../../theme/app_colors.dart';
@@ -24,6 +25,7 @@ import '../../widgets/home/report_sheet.dart';
 import '../../widgets/moderation_appeal_sheet.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
+import '../../widgets/profile/post_alerts.dart';
 import '../../widgets/profile/profile_header.dart';
 import '../../widgets/screen_shell.dart';
 
@@ -61,6 +63,9 @@ class _PageDetailsScreenState extends State<PageDetailsScreen> {
     super.initState();
     _page = widget.initial;
     _load();
+    if (FollowService.mutedAlerts.value == null) {
+      FollowService.loadAlertMutes();
+    }
     SellerService.isCurrentUserSuperAdmin().then((v) {
       if (mounted && v) setState(() => _isSuperAdmin = true);
     });
@@ -265,7 +270,25 @@ class _PageDetailsScreenState extends State<PageDetailsScreen> {
                 title: const Text('Page admins'),
                 onTap: () => Navigator.pop(ctx, 'admins'),
               ),
-            ] else
+            ] else ...[
+              if (_stats.iFollow && alertsMuted('page', page.id) != null)
+                ListTile(
+                  leading: Icon(
+                    alertsMuted('page', page.id)!
+                        ? Icons.notifications_active_outlined
+                        : Icons.notifications_off_outlined,
+                  ),
+                  title: Text(
+                    alertsMuted('page', page.id)!
+                        ? 'Turn post alerts back on'
+                        : 'Mute post alerts',
+                  ),
+                  subtitle: const Text(
+                    "Notifications when this Page posts. You'll still follow "
+                    'it.',
+                  ),
+                  onTap: () => Navigator.pop(ctx, 'alerts'),
+                ),
               ListTile(
                 leading: const Icon(Icons.flag_outlined, color: AppColors.red),
                 title: const Text(
@@ -274,6 +297,7 @@ class _PageDetailsScreenState extends State<PageDetailsScreen> {
                 ),
                 onTap: () => Navigator.pop(ctx, 'report'),
               ),
+            ],
             if (_isSuperAdmin) ...[
               ListTile(
                 leading: Icon(
@@ -311,6 +335,13 @@ class _PageDetailsScreenState extends State<PageDetailsScreen> {
     switch (choice) {
       case 'share':
         await _share();
+      case 'alerts':
+        await toggleAlertMute(
+          context,
+          type: 'page',
+          id: page.id,
+          name: page.name,
+        );
       case 'edit':
         await context.pushNamed(
           'page_edit',

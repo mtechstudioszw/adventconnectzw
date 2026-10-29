@@ -1,6 +1,6 @@
 -- ============================================================================
 --  patch_282 — "Who can follow me": Everyone / Friends only / No one
---  STATUS: DRAFT — NOT APPLIED. Apply only on the owner's go-ahead.
+--  STATUS: APPLIED to the live database 29 Oct 2026 (owner: "apply everything").
 -- ============================================================================
 --
 --  Owner (28 Oct 2026): personal accounts choose who may follow them;

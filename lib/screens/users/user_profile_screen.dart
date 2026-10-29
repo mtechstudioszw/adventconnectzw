@@ -30,6 +30,7 @@ import '../../services/seller_service.dart';
 import '../../widgets/moderation_actions.dart';
 import '../../config/share_config.dart';
 import '../../services/follow_service.dart';
+import '../../widgets/profile/post_alerts.dart';
 import '../../widgets/profile/profile_header.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -94,6 +95,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   void initState() {
     super.initState();
     _bootstrap();
+    if (FollowService.mutedAlerts.value == null) {
+      FollowService.loadAlertMutes();
+    }
     SellerService.isCurrentUserSuperAdmin().then((admin) {
       if (mounted && admin) setState(() => _isSuperAdmin = true);
     });
@@ -389,6 +393,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   Future<void> _openMoreMenu() async {
     final palette = context.palette;
+    // Post alerts only make sense once you follow them (patch_283).
+    final muted = _follow?.state == FollowState.following
+        ? alertsMuted('user', widget.userId)
+        : null;
     final choice = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: palette.sheet,
@@ -405,6 +413,24 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               title: const Text('Share profile'),
               onTap: () => Navigator.pop(ctx, 'share'),
             ),
+            if (muted != null)
+              ListTile(
+                leading: Icon(
+                  muted
+                      ? Icons.notifications_active_outlined
+                      : Icons.notifications_off_outlined,
+                ),
+                title: Text(
+                  muted ? 'Turn post alerts back on' : 'Mute post alerts',
+                ),
+                subtitle: Text(
+                  muted
+                      ? "You're not notified when they post."
+                      : "Stop notifications when they post. You'll still "
+                            'follow them.',
+                ),
+                onTap: () => Navigator.pop(ctx, 'alerts'),
+              ),
             ListTile(
               leading: const Icon(Icons.flag_outlined),
               title: const Text('Report'),
@@ -430,6 +456,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     switch (choice) {
       case 'share':
         await _shareProfile();
+      case 'alerts':
+        await toggleAlertMute(
+          context,
+          type: 'user',
+          id: widget.userId,
+          name: (_profile?.fullName ?? 'they').split(' ').first,
+        );
       case 'report':
         await _reportUser();
       case 'block':

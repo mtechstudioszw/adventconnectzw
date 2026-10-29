@@ -206,4 +206,50 @@ void main() {
       expect(await FollowService.myWhoCanFollow(), isNull);
     });
   });
+
+  group('post alert mutes (patch_283)', () {
+    test('load, mute and unmute keep the local set in step', () async {
+      setFakeSupabaseHandler((req) {
+        if (req.method == 'GET' &&
+            req.url.path.endsWith('/follow_alert_mutes')) {
+          return [
+            {'target_type': 'page', 'target_id': 'pg1'},
+          ];
+        }
+        return null;
+      });
+      await FollowService.loadAlertMutes();
+      expect(FollowService.mutedAlerts.value, {'page:pg1'});
+
+      await FollowService.setAlertsMuted(type: 'user', id: 'u1', muted: true);
+      final post = fakeSupabaseRequests.lastWhere((r) => r.method == 'POST');
+      expect(jsonDecode(post.body), {
+        'user_id': 'me',
+        'target_type': 'user',
+        'target_id': 'u1',
+      });
+      expect(FollowService.mutedAlerts.value, contains('user:u1'));
+
+      await FollowService.setAlertsMuted(type: 'page', id: 'pg1', muted: false);
+      final del = fakeSupabaseRequests.lastWhere((r) => r.method == 'DELETE');
+      expect(del.url.queryParameters['user_id'], 'eq.me');
+      expect(del.url.queryParameters['target_id'], 'eq.pg1');
+      expect(FollowService.mutedAlerts.value, isNot(contains('page:pg1')));
+    });
+
+    test('before the patch, mutes stay unknown (null)', () async {
+      FollowService.mutedAlerts.value = null;
+      setFakeSupabaseHandler((req) {
+        if (req.url.path.endsWith('/follow_alert_mutes')) {
+          return const FakeError(404, {
+            'code': 'PGRST205',
+            'message': 'relation follow_alert_mutes does not exist',
+          });
+        }
+        return null;
+      });
+      await FollowService.loadAlertMutes();
+      expect(FollowService.mutedAlerts.value, isNull);
+    });
+  });
 }

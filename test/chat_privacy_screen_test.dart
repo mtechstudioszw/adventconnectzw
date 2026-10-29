@@ -6,10 +6,10 @@
 // next to scaling text are this project's most repeated overflow source.
 // So it gets the 1.0x / 1.6x / 2.5x sweep on a 360dp phone.
 //
-// "Who can call me" is the same three labels again, one card below. Every
-// finder here is therefore scoped to a card by key: a bare
-// find.text('Everyone') matches both sections and reports "too many",
-// which is precisely how this file broke when calling was added.
+// "Who can follow me" uses the same three labels in its own card, so every
+// finder here is scoped to a card by key: a bare find.text('Everyone')
+// would match both. ("Who can call me" was removed 29 Oct 2026 — the app
+// has no calls.)
 //
 // The Save button is gone: each control writes on change. A member who
 // flipped "Online status" off and walked away used to keep broadcasting.
@@ -39,9 +39,8 @@ Future<void> _pump(WidgetTester t, {double textScale = 1.0}) async {
 }
 
 /// The messaging option card. Scoping to it keeps the identical labels in
-/// the calling card from doubling every match.
+/// the follow card from doubling every match.
 final _messageCard = find.byKey(const ValueKey('who-can-message-card'));
-final _callCard = find.byKey(const ValueKey('who-can-call-card'));
 
 Finder _inCard(Finder card, Finder matching) =>
     find.descendant(of: card, matching: matching);
@@ -56,12 +55,10 @@ void main() {
     for (final option in const ['Everyone', 'Friends only', 'Nobody']) {
       expect(_inCard(_messageCard, find.text(option)), findsOneWidget);
     }
-    await t.scrollUntilVisible(_callCard, 120);
-    for (final option in const ['Everyone', 'Friends only', 'Nobody']) {
-      expect(_inCard(_callCard, find.text(option)), findsOneWidget);
-    }
+    // No calling feature exists, so no calls setting either.
+    expect(find.text('Who can call me'.toUpperCase()), findsNothing);
 
-    // Two option cards now sit above the visibility toggles, so these
+    // The option cards sit above the visibility toggles, so these
     // start below the fold on a 360x720 phone and the ListView has not
     // built them yet. Scroll down to each in turn — they are in this
     // order on screen, so one downward sweep reaches all three.
@@ -104,29 +101,6 @@ void main() {
     );
   });
 
-  testWidgets('exactly one call option is selected at a time', (t) async {
-    await _pump(t);
-
-    // Calling starts at 'friends' — tighter than messaging, because a
-    // ringing phone interrupts harder than an unread badge.
-    await t.scrollUntilVisible(
-      _inCard(_callCard, find.textContaining('This is the default')),
-      120,
-    );
-    expect(
-      _inCard(_callCard, find.byIcon(Icons.radio_button_checked)),
-      findsOneWidget,
-    );
-    expect(
-      _inCard(_callCard, find.byIcon(Icons.radio_button_unchecked)),
-      findsNWidgets(2),
-    );
-    expect(
-      _inCard(_callCard, find.textContaining('This is the default')),
-      findsOneWidget,
-    );
-  });
-
   for (final scale in <double>[1.0, 1.6, 2.5]) {
     testWidgets('lays out at ${scale}x text scale', (t) async {
       await _pump(t, textScale: scale);
@@ -143,11 +117,10 @@ void main() {
       expect(everyone, findsOneWidget);
       expect(t.takeException(), isNull);
 
-      // The calling card sits below the messaging one, so reaching it
-      // exercises the far end of the scroll extent at every scale.
-      final calling = _inCard(_callCard, find.text('Nobody'));
-      await t.scrollUntilVisible(calling, 120);
-      expect(calling, findsOneWidget);
+      // The last toggle is the far end of the scroll extent at every scale.
+      final last = find.text('Read receipts');
+      await t.scrollUntilVisible(last, 120);
+      expect(last, findsOneWidget);
       expect(t.takeException(), isNull);
     });
   }

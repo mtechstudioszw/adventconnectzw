@@ -60,4 +60,45 @@ void main() {
     }
     expect(bothTop, lessThan(8));
   });
+
+  test('more followers, more visibility (capped below follows)', () async {
+    setFakeSupabaseHandler((req) {
+      if (req.url.path.endsWith('/posts')) {
+        return [
+          _row('s1', 'stranger1'),
+          _row('big', 'popular'),
+          _row('s2', 'stranger2'),
+          _row('s3', 'stranger3'),
+        ];
+      }
+      if (req.url.path.endsWith('/rpc/author_reach')) {
+        return [
+          {'id': 'popular', 'kind': 'user', 'followers': 5000},
+          {'id': 'stranger1', 'kind': 'user', 'followers': 0},
+        ];
+      }
+      return null;
+    });
+    var top = 0;
+    for (var n = 0; n < 6; n++) {
+      final posts = await FeedService.fetchFeed(limit: 4, refreshNonce: n);
+      if (posts.first.id == 'big') top++;
+    }
+    // +0.25 beats the 0..0.20 jitter every time.
+    expect(top, 6);
+  });
+
+  test('reach failing never breaks the feed', () async {
+    setFakeSupabaseHandler((req) {
+      if (req.url.path.endsWith('/posts')) {
+        return [_row('a', 'x'), _row('b', 'y')];
+      }
+      if (req.url.path.endsWith('/rpc/author_reach')) {
+        return const FakeError(404, {'code': 'PGRST202', 'message': 'missing'});
+      }
+      return null;
+    });
+    final posts = await FeedService.fetchFeed(limit: 2);
+    expect(posts, hasLength(2));
+  });
 }

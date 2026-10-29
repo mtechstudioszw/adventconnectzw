@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/follow_service.dart';
 import '../../widgets/profile/follow_back_button.dart';
+import '../../widgets/profile/post_alerts.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/church_service.dart';
@@ -44,6 +45,10 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
     // Follow back on follower notifications needs who you already follow.
     if (FollowService.followingIds.value == null) {
       FollowService.loadMyFollowing();
+    }
+    // Post alerts carry a mute switch (patch_283).
+    if (FollowService.mutedAlerts.value == null) {
+      FollowService.loadAlertMutes();
     }
     // Paint the last-known inbox instantly; only show a spinner when
     // there's nothing cached yet.
@@ -550,9 +555,26 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
               item: n,
               onTap: () => _open(n),
               // "X started following you" → follow them back from here.
-              action: n.type == 'new_follower' && n.referenceId != null
-                  ? FollowBackButton(userId: n.referenceId!)
-                  : null,
+              action: n.referenceId == null
+                  ? null
+                  : switch (n.type) {
+                      'new_follower' => FollowBackButton(
+                        userId: n.referenceId!,
+                      ),
+                      // A new post from someone / a Page you follow: the
+                      // off switch sits right under it.
+                      'followed_post' => PostAlertMuteButton(
+                        type: 'user',
+                        id: n.referenceId!,
+                        name: n.title.split(' ').first,
+                      ),
+                      'followed_page_post' => PostAlertMuteButton(
+                        type: 'page',
+                        id: n.referenceId!,
+                        name: n.title,
+                      ),
+                      _ => null,
+                    },
             ),
           ),
         ),
@@ -694,6 +716,9 @@ class _NotificationRow extends StatelessWidget {
       case 'follow_request':
       case 'follow_approved':
         return Icons.person_add_alt_outlined;
+      case 'followed_post':
+        return Icons.article_outlined;
+      case 'followed_page_post':
       case 'page_follower':
       case 'page_admin_added':
       case 'page_hidden':

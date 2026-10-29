@@ -1,6 +1,6 @@
 -- =====================================================================
 --  PATCH 289 — Premium: Business tier, gold-tick verification, boosts
---  STATUS: not yet applied
+--  STATUS: APPLIED 29 Oct 2026 (by the owner, verified)
 --
 --  Owner, 29 Oct 2026: "We need to start making money with this thing …
 --  the first premium feature which is basic is getting a verified golden

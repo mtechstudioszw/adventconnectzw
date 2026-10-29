@@ -1,6 +1,6 @@
 -- =====================================================================
 --  PATCH 290 — Page safety
---  STATUS: not yet applied
+--  STATUS: APPLIED 29 Oct 2026 (by the owner, verified)
 --
 --  The second half of the Friends/Follow plan the owner approved ("build
 --  both", 29 Oct 2026). Pages can be followed by anyone and can post

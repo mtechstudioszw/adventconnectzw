@@ -559,15 +559,15 @@ Batch 2 items that were planned (kept for the record):
    verified (hymn_links empty by design; 687 profiles on 'nobody').
 0c. **DONE 29 Oct 2026:** patch_288 applied and verified (self-delete
    revoked, guard on INSERT, yearly plan → Pro).
-0d. **Premium (Android):** run `database/rehearsal_289.sql`, then patches
-   289 and 290; deploy `verify-boost`; create the Play products. Steps in
-   `docs/PREMIUM_SETUP.md`.
+0d. **DONE 29 Oct 2026:** rehearsal passed; patches 289, 290, 269 and 291
+   applied and verified. Play products created (business-monthly plan;
+   one-time listing_boost_7d, job_boost_14d). STILL TO DO: deploy
+   `verify-boost` (dashboard: add play.ts beside index.ts and import
+   "./play.ts", Verify JWT ON).
 0e. **App Store resubmission:** checklist + review message in
    `docs/APP_REVIEW_NOTES.md` (Age Rating → None fixes 2.3.6).
 
-1. **Run `database/patch_269_country_metadata_resync.sql`** in Supabase
-   (preview query first). Repairs members whose auth metadata kept a
-   country the cooldown rejected.
+1. **DONE 29 Oct 2026:** patch_269 applied (0 mismatched members left).
 2. **Rotate the App Store Connect API key `5DP8YVY728`** if the repo is or was
    public — it is still in git history (old commits). New key → update the
    `APP_STORE_CONNECT_API_*` secrets. Distribution cert rotation optional if

@@ -46,11 +46,9 @@ class _EditProfileScreenState extends State<EditProfileScreen>
   String? _initialWebsite;
   bool _initialPrivate = false;
 
-  /// "Who can follow me" (patch_282); null until the column answers, and
-  /// the row stays hidden until then. Saved on its own, immediately — it
-  /// can remove followers, so it isn't bundled into the Save button.
+  /// "Who can follow me" (patch_282), shown as a signpost to Privacy; null
+  /// until the column answers, and the row stays hidden until then.
   WhoCanFollow? _whoCanFollow;
-  bool _whoBusy = false;
   DateTime? _dob; // current date of birth (for the age editor)
 
   late final AnimationController _entrance;
@@ -137,110 +135,13 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     if (who != null && mounted) setState(() => _whoCanFollow = who);
   }
 
-  Future<void> _chooseWhoCanFollow() async {
-    final current = _whoCanFollow;
-    if (current == null || _whoBusy) return;
-    final picked = await showModalBottomSheet<WhoCanFollow>(
-      context: context,
-      backgroundColor: context.palette.sheet,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-              child: Text(
-                'Who can follow you?',
-                style: AppTextStyles.titleMedium.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            for (final w in WhoCanFollow.values)
-              ListTile(
-                onTap: () => Navigator.of(ctx).pop(w),
-                title: Text(
-                  w.label,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                subtitle: Text(
-                  w.description,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: ctx.palette.textMuted,
-                  ),
-                ),
-                trailing: w == current
-                    ? const Icon(
-                        Icons.check_rounded,
-                        color: AppColors.primaryBlue,
-                      )
-                    : null,
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (picked == null || picked == current || !mounted) return;
-    setState(() => _whoBusy = true);
-    try {
-      // Warn before anyone is removed — this can't be undone.
-      final losing = await FollowService.followersRemovedBy(picked);
-      if (!mounted) return;
-      if (losing > 0) {
-        final ok = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text('Remove $losing follower${losing == 1 ? '' : 's'}?'),
-            content: Text(
-              picked == WhoCanFollow.nobody
-                  ? 'Turning following off removes everyone who follows you. '
-                        "They won't be told."
-                  : "Followers who aren't your friends will be removed. "
-                        "They won't be told.",
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.red,
-                ),
-                child: const Text('Remove'),
-              ),
-            ],
-          ),
-        );
-        if (ok != true || !mounted) {
-          if (mounted) setState(() => _whoBusy = false);
-          return;
-        }
-      }
-      await FollowService.setWhoCanFollow(picked);
-      if (!mounted) return;
-      setState(() {
-        _whoCanFollow = picked;
-        _whoBusy = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _whoBusy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Couldn't change who can follow you. Try again."),
-        ),
-      );
-    }
+  /// The setting itself lives on the Privacy screen, beside who can
+  /// message and call you; this row is a signpost to it.
+  Future<void> _openFollowPrivacy() async {
+    await context.pushNamed('chat_privacy');
+    if (mounted) _loadWhoCanFollow();
   }
+
 
   Future<void> _loadLinkSettings() async {
     try {
@@ -996,7 +897,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
           if (_whoCanFollow != null) ...[
             ListTile(
               contentPadding: EdgeInsets.zero,
-              onTap: _whoBusy ? null : _chooseWhoCanFollow,
+              onTap: _openFollowPrivacy,
               leading: const Icon(
                 Icons.person_add_alt_outlined,
                 color: AppColors.primaryBlue,
@@ -1013,19 +914,13 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                   color: context.palette.textMuted,
                 ),
               ),
-              trailing: _whoBusy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(
-                      _whoCanFollow!.label,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: context.palette.brandBlue,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+              trailing: Text(
+                _whoCanFollow!.label,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: context.palette.brandBlue,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
             Divider(height: 1, color: context.palette.divider),
           ],

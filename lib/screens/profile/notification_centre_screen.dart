@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../services/follow_service.dart';
+import '../../widgets/profile/follow_back_button.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/church_service.dart';
@@ -38,6 +41,10 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
   @override
   void initState() {
     super.initState();
+    // Follow back on follower notifications needs who you already follow.
+    if (FollowService.followingIds.value == null) {
+      FollowService.loadMyFollowing();
+    }
     // Paint the last-known inbox instantly; only show a spinner when
     // there's nothing cached yet.
     final cached = NotificationService.cached();
@@ -539,7 +546,14 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
               child: const Icon(Icons.delete_outline, color: AppColors.white),
             ),
             onDismissed: (_) => _dismiss(n),
-            child: _NotificationRow(item: n, onTap: () => _open(n)),
+            child: _NotificationRow(
+              item: n,
+              onTap: () => _open(n),
+              // "X started following you" → follow them back from here.
+              action: n.type == 'new_follower' && n.referenceId != null
+                  ? FollowBackButton(userId: n.referenceId!)
+                  : null,
+            ),
           ),
         ),
       if (hiddenCount > 0 || expanded)
@@ -640,10 +654,17 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
 enum _NotifCategory { messages, social, engagement, announcements, activity }
 
 class _NotificationRow extends StatelessWidget {
-  const _NotificationRow({required this.item, required this.onTap});
+  const _NotificationRow({
+    required this.item,
+    required this.onTap,
+    this.action,
+  });
 
   final AppNotification item;
   final VoidCallback onTap;
+
+  /// An inline action under the text (Follow back).
+  final Widget? action;
 
   IconData _iconFor(String type) {
     switch (type) {
@@ -798,6 +819,10 @@ class _NotificationRow extends StatelessWidget {
                           height: 1.5,
                         ),
                       ),
+                      if (action != null) ...[
+                        const SizedBox(height: 8),
+                        action!,
+                      ],
                     ],
                   ),
                 ),

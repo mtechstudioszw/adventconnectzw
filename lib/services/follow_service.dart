@@ -11,7 +11,7 @@ extension WhoCanFollowX on WhoCanFollow {
   String get label => switch (this) {
     WhoCanFollow.everyone => 'Everyone',
     WhoCanFollow.friends => 'Friends only',
-    WhoCanFollow.nobody => 'No one',
+    WhoCanFollow.nobody => 'Nobody',
   };
 
   String get description => switch (this) {

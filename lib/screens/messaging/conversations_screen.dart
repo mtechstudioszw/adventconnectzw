@@ -1087,7 +1087,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(Icons.lock_outline),
-                      title: Text('Chat privacy'),
+                      title: Text('Privacy'),
                     ),
                   ),
                 ],

@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:advent_connect_zw/screens/messaging/chat_privacy_screen.dart';
+import 'package:advent_connect_zw/services/follow_service.dart';
 import 'package:advent_connect_zw/theme/app_theme.dart';
 
 Future<void> _pump(WidgetTester t, {double textScale = 1.0}) async {
@@ -25,13 +26,15 @@ Future<void> _pump(WidgetTester t, {double textScale = 1.0}) async {
   t.view.devicePixelRatio = 1.0;
   addTearDown(t.view.reset);
 
-  await t.pumpWidget(MaterialApp(
-    theme: AppTheme.light,
-    home: MediaQuery(
-      data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
-      child: const ChatPrivacyScreen(autoLoad: false),
+  await t.pumpWidget(
+    MaterialApp(
+      theme: AppTheme.light,
+      home: MediaQuery(
+        data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+        child: const ChatPrivacyScreen(autoLoad: false),
+      ),
     ),
-  ));
+  );
   await t.pump();
 }
 
@@ -44,12 +47,17 @@ Finder _inCard(Finder card, Finder matching) =>
     find.descendant(of: card, matching: matching);
 
 void main() {
-  testWidgets('offers all three message settings and every section',
-      (t) async {
+  testWidgets('offers all three message settings and every section', (t) async {
     await _pump(t);
 
+    // The friends-vs-followers card now sits first, so scroll to each
+    // option card before reading it.
+    await t.scrollUntilVisible(_messageCard, 120);
     for (final option in const ['Everyone', 'Friends only', 'Nobody']) {
       expect(_inCard(_messageCard, find.text(option)), findsOneWidget);
+    }
+    await t.scrollUntilVisible(_callCard, 120);
+    for (final option in const ['Everyone', 'Friends only', 'Nobody']) {
       expect(_inCard(_callCard, find.text(option)), findsOneWidget);
     }
 
@@ -57,14 +65,17 @@ void main() {
     // start below the fold on a 360x720 phone and the ListView has not
     // built them yet. Scroll down to each in turn — they are in this
     // order on screen, so one downward sweep reaches all three.
-    for (final toggle in const ['Last seen', 'Online status', 'Read receipts']) {
+    for (final toggle in const [
+      'Last seen',
+      'Online status',
+      'Read receipts',
+    ]) {
       await t.scrollUntilVisible(find.text(toggle), 120);
       expect(find.text(toggle), findsOneWidget);
     }
   });
 
-  testWidgets('the one-message rule is stated on the option itself',
-      (t) async {
+  testWidgets('the one-message rule is stated on the option itself', (t) async {
     await _pump(t);
 
     // A member picking "Everyone" should be able to see exactly how much a
@@ -83,10 +94,14 @@ void main() {
     await _pump(t);
 
     // Messaging defaults to everyone, so exactly one filled radio.
-    expect(_inCard(_messageCard, find.byIcon(Icons.radio_button_checked)),
-        findsOneWidget);
-    expect(_inCard(_messageCard, find.byIcon(Icons.radio_button_unchecked)),
-        findsNWidgets(2));
+    expect(
+      _inCard(_messageCard, find.byIcon(Icons.radio_button_checked)),
+      findsOneWidget,
+    );
+    expect(
+      _inCard(_messageCard, find.byIcon(Icons.radio_button_unchecked)),
+      findsNWidgets(2),
+    );
   });
 
   testWidgets('exactly one call option is selected at a time', (t) async {
@@ -94,10 +109,18 @@ void main() {
 
     // Calling starts at 'friends' — tighter than messaging, because a
     // ringing phone interrupts harder than an unread badge.
-    expect(_inCard(_callCard, find.byIcon(Icons.radio_button_checked)),
-        findsOneWidget);
-    expect(_inCard(_callCard, find.byIcon(Icons.radio_button_unchecked)),
-        findsNWidgets(2));
+    await t.scrollUntilVisible(
+      _inCard(_callCard, find.textContaining('This is the default')),
+      120,
+    );
+    expect(
+      _inCard(_callCard, find.byIcon(Icons.radio_button_checked)),
+      findsOneWidget,
+    );
+    expect(
+      _inCard(_callCard, find.byIcon(Icons.radio_button_unchecked)),
+      findsNWidgets(2),
+    );
     expect(
       _inCard(_callCard, find.textContaining('This is the default')),
       findsOneWidget,
@@ -128,4 +151,55 @@ void main() {
       expect(t.takeException(), isNull);
     });
   }
+
+  group('Privacy: following beside messaging (28 Oct 2026)', () {
+    Future<void> pumpWithFollow(WidgetTester t) async {
+      t.view.physicalSize = const Size(360, 720);
+      t.view.devicePixelRatio = 1.0;
+      addTearDown(t.view.reset);
+      await t.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: const ChatPrivacyScreen(
+            autoLoad: false,
+            initialWhoCanFollow: WhoCanFollow.everyone,
+          ),
+        ),
+      );
+      await t.pump();
+    }
+
+    final followCard = find.byKey(const ValueKey('who-can-follow-card'));
+
+    testWidgets('states how friends and followers differ', (t) async {
+      await pumpWithFollow(t);
+      final card = find.byKey(const ValueKey('friends-vs-followers'));
+      expect(card, findsOneWidget);
+      expect(_inCard(card, find.text('Friends')), findsOneWidget);
+      expect(_inCard(card, find.text('Followers')), findsOneWidget);
+      expect(
+        _inCard(card, find.textContaining('never lets them message')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('who can follow me: three choices, Everyone is default', (
+      t,
+    ) async {
+      await pumpWithFollow(t);
+      await t.scrollUntilVisible(followCard, 120);
+      for (final label in ['Everyone', 'Friends only', 'Nobody']) {
+        expect(_inCard(followCard, find.text(label)), findsOneWidget);
+      }
+      expect(
+        _inCard(followCard, find.textContaining('This is the default')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('no follow section before patch_282 answers', (t) async {
+      await _pump(t);
+      expect(followCard, findsNothing);
+    });
+  });
 }

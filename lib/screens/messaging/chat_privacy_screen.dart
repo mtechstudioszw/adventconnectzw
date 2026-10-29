@@ -3,15 +3,24 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../services/follow_service.dart';
 import '../../services/presence_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import '../../widgets/profile/who_can_follow_change.dart';
 import '../../widgets/screen_shell.dart';
 
-/// Who sees you in chat, and who may reach you.
+/// Privacy: who can follow you, message you and call you, and what people
+/// can see (28 Oct 2026 — owner: "combine it with who can message me").
+///
+/// Was "Chat privacy". "Who can follow me" (patch_282) joined it so the
+/// three reach-me settings sit together — but they stay SEPARATE settings:
+/// following someone never lets them message you. The friends-vs-followers
+/// card at the top states the difference, because the owner's rule is that
+/// on personal accounts the two must never blur.
 ///
 /// Persists four columns on `profiles`: `show_last_seen`,
 /// `show_online_status`, `show_read_receipts` and `who_can_message`.
@@ -22,11 +31,19 @@ import '../../widgets/screen_shell.dart';
 /// itself back if the write fails — the same optimistic pattern as
 /// `settings_screen.dart`.
 class ChatPrivacyScreen extends StatefulWidget {
-  const ChatPrivacyScreen({super.key, this.autoLoad = true});
+  const ChatPrivacyScreen({
+    super.key,
+    this.autoLoad = true,
+    this.initialWhoCanFollow,
+  });
 
   /// Test seam — `initState` reads the member's profile from Supabase.
   /// Same convention as `SearchScreen.autoLoad`.
   final bool autoLoad;
+
+  /// Test seam with [autoLoad] off: shows the follow section as if
+  /// patch_282 had answered with this value.
+  final WhoCanFollow? initialWhoCanFollow;
 
   @override
   State<ChatPrivacyScreen> createState() => _ChatPrivacyScreenState();
@@ -49,6 +66,10 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
   // so calling starts tighter than messaging and the member opens it up
   // rather than having to discover they need to close it down.
   String _whoCanCall = 'friends';
+
+  /// Null until patch_282's column answers; the section stays hidden.
+  WhoCanFollow? _whoCanFollow;
+  bool _whoBusy = false;
   String? _error;
 
   @override
@@ -58,6 +79,7 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
       _load();
     } else {
       _loading = false;
+      _whoCanFollow = widget.initialWhoCanFollow;
     }
   }
 
@@ -85,6 +107,8 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
         _whoCanCall = (row?['who_can_call'] as String?) ?? 'friends';
         _loading = false;
       });
+      final who = await FollowService.myWhoCanFollow();
+      if (mounted && who != null) setState(() => _whoCanFollow = who);
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -169,6 +193,18 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
     );
   }
 
+  Future<void> _setWhoCanFollow(WhoCanFollow v) async {
+    final current = _whoCanFollow;
+    if (current == null || v == current || _whoBusy) return;
+    setState(() => _whoBusy = true);
+    final now = await changeWhoCanFollow(context, current: current, picked: v);
+    if (!mounted) return;
+    setState(() {
+      _whoCanFollow = now;
+      _whoBusy = false;
+    });
+  }
+
   void _setWhoCanCall(String v) {
     if (v == _whoCanCall) return;
     final was = _whoCanCall;
@@ -187,9 +223,9 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
       body: Column(
         children: [
           const ScreenHero(
-            title: 'Chat privacy',
-            tagline: 'Chat',
-            subtitle: 'Who sees you, and who can reach you — in every chat.',
+            title: 'Privacy',
+            tagline: 'Privacy',
+            subtitle: 'Who can follow you, message you and call you.',
             fallbackRoute: 'settings',
           ),
           Expanded(child: _buildBody()),
@@ -218,6 +254,36 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
       children: [
         const _ScopeNote(),
         const SizedBox(height: 16),
+        const _FriendsVsFollowers(),
+        const SizedBox(height: 20),
+        if (_whoCanFollow != null) ...[
+          _SectionLabel('Who can follow me'),
+          const SizedBox(height: 8),
+          ScreenCard(
+            key: const ValueKey('who-can-follow-card'),
+            child: AbsorbPointer(
+              absorbing: _whoBusy,
+              child: Column(
+                children: [
+                  for (final w in WhoCanFollow.values) ...[
+                    if (w != WhoCanFollow.values.first) const _RowDivider(),
+                    _ChoiceRow(
+                      title: w.label,
+                      subtitle: w == WhoCanFollow.everyone
+                          ? '${w.description} This is the default.'
+                          : w.description,
+                      value: w.wire,
+                      group: _whoCanFollow!.wire,
+                      onSelect: (v) =>
+                          _setWhoCanFollow(WhoCanFollowX.fromWire(v)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
         _SectionLabel('Who can message me'),
         const SizedBox(height: 8),
         ScreenCard(
@@ -370,7 +436,8 @@ class _ScopeNote extends StatelessWidget {
               // carries the most wrappable text in the app and is swept at
               // 2.5x text scale; a paragraph here pushes the first real
               // control off a 360dp phone.
-              'Applies to every chat, not just the one you opened this from.',
+              'Applies everywhere — your profile and every chat, not just the '
+              'one you opened this from.',
               style: AppTextStyles.bodySmall.copyWith(
                 color: palette.textMuted,
                 fontSize: 11.5,
@@ -378,6 +445,72 @@ class _ScopeNote extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The difference between a friend and a follower, stated where people
+/// choose who may do what. Owner's rule (28 Oct 2026): on personal accounts
+/// the two must stay clearly different.
+class _FriendsVsFollowers extends StatelessWidget {
+  const _FriendsVsFollowers();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    Widget column(IconData icon, String title, List<String> lines) => Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: palette.brandBlue),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  title,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          for (final l in lines)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '• $l',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: palette.textMuted,
+                  height: 1.35,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+    return ScreenCard(
+      key: const ValueKey('friends-vs-followers'),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          column(Icons.people_alt_outlined, 'Friends', const [
+            'Both of you agree',
+            'See your friends-only posts',
+            'Can message and call you, if your settings below allow',
+          ]),
+          const SizedBox(width: 12),
+          column(Icons.person_add_alt_outlined, 'Followers', const [
+            'One-way — you don\'t have to follow back',
+            'See your public posts only',
+            'Following never lets them message you',
+          ]),
         ],
       ),
     );

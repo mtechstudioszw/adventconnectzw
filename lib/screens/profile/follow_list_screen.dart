@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/follow_service.dart';
+import '../../widgets/profile/follow_back_button.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -68,6 +69,10 @@ class _FollowListScreenState extends State<FollowListScreen> {
   void initState() {
     super.initState();
     _load(_tab);
+    // Follow back needs to know who you already follow.
+    if (FollowService.followingIds.value == null) {
+      FollowService.loadMyFollowing();
+    }
   }
 
   Future<void> _load(FollowListTab tab) async {
@@ -273,6 +278,13 @@ class _FollowListScreenState extends State<FollowListScreen> {
         ];
       case FollowListTab.followers:
         return [
+          // Followers aren't followed back automatically — that's what
+          // keeps a follower different from a friend — but it's one tap.
+          FollowBackButton(
+            userId: p.userId,
+            name: p.fullName.split(' ').first,
+          ),
+          const SizedBox(width: 6),
           _SmallButton(
             label: 'Remove',
             onTap: () => _run(

@@ -434,6 +434,15 @@ class _SettingsScreenState extends State<SettingsScreen>
         () => _changePassword(),
       ),
       _SettingsEntry(
+        'Privacy',
+        'Account',
+        Icons.shield_outlined,
+        AppColors.primaryBlue,
+        'privacy follow followers who can follow message call last seen '
+            'online read receipts',
+        () => context.pushNamed('chat_privacy'),
+      ),
+      _SettingsEntry(
         'Blocked contacts',
         'Account',
         Icons.block,
@@ -787,6 +796,12 @@ class _SettingsScreenState extends State<SettingsScreen>
                                   : (v) => _toggleBiometric(v),
                             ),
                           ],
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.shield_outlined,
+                            label: 'Privacy',
+                            onTap: () => context.pushNamed('chat_privacy'),
+                          ),
                           const _Divider(),
                           _NavRow(
                             icon: Icons.block,

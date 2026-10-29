@@ -14,18 +14,18 @@
 --  passes the statement timeout, and the slow queries crowd the database
 --  so unrelated calls (profiles, maintenance_status) time out too.
 --
---  Fix: an index in exactly the order the app asks for. Built
---  CONCURRENTLY so the table stays readable while it builds.
+--  Fix: an index in exactly the order the app asks for.
 --
---  RUN THIS AS IT IS, ON ITS OWN: CREATE INDEX CONCURRENTLY cannot run
---  inside a transaction, so there is deliberately no BEGIN/COMMIT here.
---  It takes well under a minute on this table.
+--  Not CONCURRENTLY: the Supabase SQL editor runs a pasted script as one
+--  transaction, where CONCURRENTLY is refused (ERROR 25001 — tried on
+--  29 Oct 2026). A plain build on ~71,600 rows takes a few seconds; reads
+--  carry on meanwhile, only writes to youtube_videos wait.
 --
 --  No profiles change, no triggers — the CLAUDE.md checklist doesn't
 --  arise.
 -- =====================================================================
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_yt_videos_published_nulls_last
+CREATE INDEX IF NOT EXISTS idx_yt_videos_published_nulls_last
   ON public.youtube_videos (published_at DESC NULLS LAST);
 
 ANALYZE public.youtube_videos;

@@ -33,6 +33,25 @@ name: Build AAB (Play Store)
 
 on:
   workflow_dispatch:
+    inputs:
+      play_track:
+        # Upload straight to Google Play, the way the iOS workflow uploads to
+        # App Store Connect. "none" keeps the old behaviour: the AAB lands on
+        # the "Latest Play Store build" GitHub release for a manual upload.
+        description: Send the AAB to Google Play (none = GitHub release only)
+        required: true
+        type: choice
+        default: none
+        options: [none, internal, alpha, beta, production]
+      release_now:
+        # Testing tracks (internal / alpha / beta) always go out at once.
+        # Production lands as a DRAFT unless this is ticked, so one wrong
+        # dropdown can never push an untested build to every member —
+        # finishing a draft is one tap in Play Console.
+        description: "Production only: release at once instead of saving a draft"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -245,6 +264,24 @@ jobs:
           files: release/advent-connect-release.aab
           prerelease: true
           make_latest: false
+
+      - name: Upload to Google Play
+        # Uses the Play Developer API with a service account, so the build
+        # reaches Play Console with no download/upload by hand. Needs the
+        # repository secret PLAY_SERVICE_ACCOUNT_JSON — the whole JSON key of
+        # a service account invited in Play Console → Users and permissions
+        # with "Release apps to testing tracks" (and "Release to production"
+        # for that track). It can be the same account the verify-purchase
+        # function uses, given those permissions.
+        if: ${{ inputs.play_track != 'none' }}
+        uses: r0adkll/upload-google-play@v1.1.3
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: io.supabase.adventconnectzw.advent_connect_zw
+          releaseFiles: release/advent-connect-release.aab
+          track: ${{ inputs.play_track }}
+          status: ${{ (inputs.play_track == 'production' && !inputs.release_now) && 'draft' || 'completed' }}
+          releaseName: ${{ github.run_number }} (${{ github.sha }})
 
       - name: Wipe restored secrets
         # Belt-and-braces: ensure the decoded keystore + plaintext

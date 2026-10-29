@@ -112,6 +112,13 @@ android {
         }
     }
 
+    // Is a RELEASE artifact actually being built in this invocation?
+    // (assembleRelease, bundleRelease, …). The keystore check below only
+    // applies then.
+    val releaseRequested = gradle.startParameter.taskNames.any {
+        it.contains("Release", ignoreCase = true)
+    }
+
     buildTypes {
         release {
             signingConfig = if (keystorePropertiesFile.exists()) {
@@ -124,6 +131,12 @@ android {
                     "The debug key is shared and publicly known — this " +
                     "artifact must never be distributed."
                 )
+                signingConfigs.getByName("debug")
+            } else if (!releaseRequested) {
+                // A DEBUG build (flutter build apk --debug, flutter run).
+                // Gradle still configures this release block, but nothing
+                // is ever signed with it — throwing here broke every debug
+                // APK on CI, which has no keystore by design.
                 signingConfigs.getByName("debug")
             } else {
                 // Used to fall back to the debug key silently. Play rejects

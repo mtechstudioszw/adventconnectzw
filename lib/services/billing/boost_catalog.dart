@@ -10,7 +10,7 @@
 enum BoostKind {
   /// A Marketplace listing in the Promoted row, with a badge.
   listing(
-    sku: 'boost_listing_7d',
+    sku: 'listing_boost_7d',
     targetType: 'product',
     tag: 'p',
     days: 7,
@@ -21,7 +21,7 @@ enum BoostKind {
 
   /// A job pinned to the top of Jobs as Featured.
   job(
-    sku: 'boost_job_14d',
+    sku: 'job_boost_14d',
     targetType: 'job',
     tag: 'j',
     days: 14,
@@ -40,8 +40,14 @@ enum BoostKind {
     required this.fallbackPrice,
   });
 
-  /// Play Console product id. NOT YET CREATED — until it is, the boost
-  /// sheet says buying isn't available yet and Business credits still work.
+  /// Play Console ONE-TIME product id. NOT YET CREATED — until it is, the
+  /// boost sheet says buying isn't available yet and Business credits
+  /// still work.
+  ///
+  /// Not `boost_listing_7d` / `boost_job_14d`: those were created by
+  /// mistake as SUBSCRIPTIONS in Play Console (29 Oct 2026), and Google
+  /// never lets a product id be reused — so the one-time products need
+  /// new ids. Leave those two empty subscriptions alone (no base plans).
   final String sku;
 
   /// `boosts.target_type`.

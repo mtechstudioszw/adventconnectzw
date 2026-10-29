@@ -35,10 +35,17 @@ Monetize → Products.
 
 | Product ID | Name | Price |
 |---|---|---|
-| `boost_listing_7d` | Boost a listing (7 days) | US$1 |
-| `boost_job_14d` | Feature a job (14 days) | US$2 |
+| `listing_boost_7d` | Boost a listing (7 days) | US$1 |
+| `job_boost_14d` | Feature a job (14 days) | US$2 |
 
 Activate both. IDs must match exactly; they can't be renamed later.
+
+> **Not under Subscriptions.** `boost_listing_7d` and `boost_job_14d` were
+> created as subscriptions by mistake on 29 Oct 2026. Play never reuses a
+> product id, so the app now uses `listing_boost_7d` and `job_boost_14d`.
+> Leave the two empty subscriptions as they are — don't add base plans.
+> One-time products: purchase option id `buy`, type **Buy**, marked
+> backwards compatible.
 
 ## 4. Levels and prices
 

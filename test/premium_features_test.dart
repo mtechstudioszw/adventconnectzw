@@ -63,8 +63,8 @@ void main() {
 
   group('boost catalog', () {
     test('mirrors verify-boost', () {
-      expect(BoostKind.forSku('boost_listing_7d'), BoostKind.listing);
-      expect(BoostKind.forSku('boost_job_14d'), BoostKind.job);
+      expect(BoostKind.forSku('listing_boost_7d'), BoostKind.listing);
+      expect(BoostKind.forSku('job_boost_14d'), BoostKind.job);
       expect(BoostKind.isBoostSku('premium_monthly'), isFalse);
       expect(BoostKind.listing.days, 7);
       expect(BoostKind.job.days, 14);

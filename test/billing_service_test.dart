@@ -345,7 +345,7 @@ void main() {
     BillingPurchase boost({String token = 'boost-tok'}) => BillingPurchase(
       outcome: PurchaseOutcome.purchased,
       store: BillingStore.googlePlay,
-      productId: 'boost_listing_7d',
+      productId: 'listing_boost_7d',
       verificationToken: token,
       orderId: 'GPA.9',
       needsCompletion: true,

@@ -25,8 +25,8 @@ BEGIN;
 --
 --  ONE-OFF BOOSTS (Play one-time products, verified by the verify-boost
 --  edge function, which calls grant_boost() below with the service role):
---    boost_listing_7d   US$1  a listing in Marketplace's Featured row, 7 days
---    boost_job_14d      US$2  a job pinned in Jobs as Featured, 14 days
+--    listing_boost_7d   US$1  a listing in Marketplace's Featured row, 7 days
+--    job_boost_14d      US$2  a job pinned in Jobs as Featured, 14 days
 --
 --  RULES THIS PATCH KEEPS
 --    * Money is only ever turned into perks by the server: by

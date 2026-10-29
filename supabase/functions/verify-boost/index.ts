@@ -34,8 +34,8 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 /// SKU → what it buys. Mirrors BoostCatalog in
 /// lib/services/billing/boost_catalog.dart; the server's copy decides.
 const SKUS: Record<string, { type: "product" | "job"; days: number }> = {
-  boost_listing_7d: { type: "product", days: 7 },
-  boost_job_14d: { type: "job", days: 14 },
+  listing_boost_7d: { type: "product", days: 7 },
+  job_boost_14d: { type: "job", days: 14 },
 };
 
 const CORS = {

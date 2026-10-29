@@ -98,8 +98,8 @@ earlier chat version; the FILE wins)
 
 ### Premium (29 Oct 2026) — Android only, hidden on iOS
 - Levels: Plus $3 · Pro $5/$30yr · **Business $10** (new base plan
-  `business-monthly`, patch_289). One-off boosts: `boost_listing_7d` $1,
-  `boost_job_14d` $2 (Play one-time products → `verify-boost` →
+  `business-monthly`, patch_289). One-off boosts: `listing_boost_7d` $1,
+  `job_boost_14d` $2 (Play one-time products → `verify-boost` →
   `grant_boost()`; consumed only after the server grants).
 - **Gold tick = ID check + any paid level.** `verification_requests` +
   private bucket `verification_docs`; admin decides in Settings → Gold tick

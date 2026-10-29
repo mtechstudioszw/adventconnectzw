@@ -859,7 +859,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     })();
     // Their "who can follow me" setting (patch_282). Someone who already
     // follows keeps the button so they can still unfollow.
-    final who = _profile?.whoCanFollow ?? WhoCanFollow.everyone;
+    final who = _profile?.whoCanFollow ?? WhoCanFollow.nobody;
     final followAllowed =
         who == WhoCanFollow.everyone ||
         (who == WhoCanFollow.friends && (f?.isAccepted ?? false));

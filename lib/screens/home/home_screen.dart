@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/rendering.dart' show FloatingHeaderSnapConfiguration;
 import 'package:flutter/scheduler.dart' show SchedulerBinding, SchedulerPhase;
 import 'package:go_router/go_router.dart';
+import '../../widgets/profile/followers_status_card.dart';
 import '../../data/feed_verses.dart';
 import '../../data/fundamental_beliefs.dart';
 import '../../models/hymn_model.dart';
@@ -158,6 +159,11 @@ class _HomeScreenState extends State<HomeScreen>
   List<Hymn> _hymnPool = const [];
   late final List<String> _versePool = _seeded(kFeedVerses);
   late final List<FundamentalBelief> _beliefPool = _seeded(kFundamentalBeliefs);
+
+  /// The viewer's own follower setting (patch_287), for the one-time
+  /// "your account is personal" notice. Null until loaded.
+  WhoCanFollow? _myWhoCanFollow;
+  bool _followersIntroSeen = FollowersStatusCard.seen();
 
   /// Posts published since this feed loaded (others', not the viewer's),
   /// for the "↑ N new posts" pill. 0 hides it.
@@ -870,6 +876,9 @@ class _HomeScreenState extends State<HomeScreen>
       // Best-effort cache write — failures here must never surface.
       unawaited(_writeCache(events, churches, _posts));
       unawaited(_loadMomentPools());
+      unawaited(FollowService.myWhoCanFollow().then((w) {
+        if (mounted && w != null) setState(() => _myWhoCanFollow = w);
+      }));
       _cacheBadges();
     } catch (_) {
       // Decorative content — the feed is already on screen.
@@ -2406,7 +2415,10 @@ class _HomeScreenState extends State<HomeScreen>
   /// last group only if it still has three people (a rail of one reads as
   /// emptier than no rail).
   List<List<MemberDirectoryEntry>> get _peopleGroups {
-    final open = _openSuggestions;
+    // Members who allow followers are offered in "Leaders to follow"
+    // instead, so nobody appears twice with two different buttons.
+    final open =
+        _openSuggestions.where((m) => !m.allowsFollowers).toList();
     final groups = <List<MemberDirectoryEntry>>[];
     for (var i = 0; i < open.length; i += _peoplePerGroup) {
       final g = open.sublist(i, min(i + _peoplePerGroup, open.length));
@@ -2415,9 +2427,63 @@ class _HomeScreenState extends State<HomeScreen>
     return groups;
   }
 
+  /// "Leaders to follow": members with followers on whom the viewer does
+  /// not follow yet, eight at a time. A group of one is fine here — there
+  /// may only be a handful of leaders.
+  List<List<MemberDirectoryEntry>> get _leaderGroups {
+    final following = FollowService.followingIds.value ?? const <String>{};
+    final me = AuthService.currentUser?.id;
+    final open = _suggestedMembers
+        .where((m) =>
+            m.allowsFollowers &&
+            m.userId != me &&
+            !following.contains(m.userId) &&
+            !_dismissedSuggestionIds.contains(m.userId))
+        .toList();
+    return [
+      for (var i = 0; i < open.length; i += _peoplePerGroup)
+        open.sublist(i, min(i + _peoplePerGroup, open.length)),
+    ];
+  }
+
+  Future<void> _toggleFollowSuggestion(MemberDirectoryEntry m) async {
+    final name = (m.fullName ?? 'them').split(' ').first;
+    final following =
+        FollowService.followingIds.value?.contains(m.userId) ?? false;
+    HapticFeedback.selectionClick();
+    setState(() => _addingFriendIds.add(m.userId));
+    try {
+      if (following) {
+        await FollowService.unfollow(m.userId);
+      } else {
+        await FollowService.follow(m.userId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Following $name. You'll see their posts.")),
+          );
+        }
+      }
+    } on FollowNotAllowed {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("$name isn't taking followers.")),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't update. Try again.")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _addingFriendIds.remove(m.userId));
+    }
+  }
+
   /// How many items each recurring module can still give.
   Map<FeedBlockKind, int> get _feedAvailable => {
         FeedBlockKind.people: _peopleGroups.length,
+        FeedBlockKind.leaders: _leaderGroups.length,
         FeedBlockKind.news: _topNews.length,
         FeedBlockKind.video: _homeVideos.length,
         FeedBlockKind.verse: _versePool.length,
@@ -2505,6 +2571,13 @@ class _HomeScreenState extends State<HomeScreen>
           onAction:
               i == 0 ? () => context.pushNamed('new_chat', extra: true) : null,
           child: _buildSuggestedMembersRow(groups[i]),
+        ));
+      case FeedBlockKind.leaders:
+        final groups = _leaderGroups;
+        if (i >= groups.length) return null;
+        return reveal(_discoverySection(
+          title: i == 0 ? 'Leaders to follow' : 'More voices to follow',
+          child: _buildSuggestedMembersRow(groups[i], follow: true),
         ));
       case FeedBlockKind.news:
         return reveal(NewsFeedCard(news: _topNews[i]));
@@ -2708,6 +2781,28 @@ class _HomeScreenState extends State<HomeScreen>
       // founder moved it above the composer on 25 Aug 2026 — see the
       // IphoneFundraiserCard in the header column. Do NOT add a second
       // copy here: one card, one place.
+      //
+      // First, once: accounts are personal now (patch_287) — say so, with
+      // the switch, until the member acts on it or dismisses it.
+      if (_myWhoCanFollow == WhoCanFollow.nobody && !_followersIntroSeen)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: FollowersStatusCard(
+            current: WhoCanFollow.nobody,
+            announcement: true,
+            onChanged: (now) {
+              FollowersStatusCard.markSeen();
+              setState(() {
+                _myWhoCanFollow = now;
+                _followersIntroSeen = true;
+              });
+            },
+            onDismiss: () {
+              FollowersStatusCard.markSeen();
+              setState(() => _followersIntroSeen = true);
+            },
+          ),
+        ),
       for (final slot in discoverable) slot.widget,
       const Padding(
         padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -3005,8 +3100,10 @@ class _HomeScreenState extends State<HomeScreen>
   /// two rails now (#13) and they must show disjoint slices, so the
   /// filtering lives in [_suggestionsForRail] rather than here.
   Widget _buildSuggestedMembersRow(
-    List<MemberDirectoryEntry> visibleSuggestions,
-  ) {
+    List<MemberDirectoryEntry> visibleSuggestions, {
+    /// "Leaders to follow": Follow instead of Add friend (patch_287).
+    bool follow = false,
+  }) {
     final viewerId = AuthService.currentUser?.id;
     // The text block below the photo takes its natural height and the
     // photo absorbs whatever is left (see _SuggestedMemberTile), so the
@@ -3029,6 +3126,10 @@ class _HomeScreenState extends State<HomeScreen>
               friendship: friendship,
               viewerId: viewerId,
               busy: _addingFriendIds.contains(m.userId),
+              followMode: follow,
+              following:
+                  FollowService.followingIds.value?.contains(m.userId) ?? false,
+              onFollow: () => _toggleFollowSuggestion(m),
               onDismiss: () {
                 setState(() => _dismissedSuggestionIds.add(m.userId));
                 // Reveal SOMEONE ELSE rather than leaving a gap (founder:
@@ -3236,7 +3337,16 @@ class _SuggestedMemberTile extends StatelessWidget {
     required this.onCancelOrUnfriend,
     required this.onOpenProfile,
     required this.onDismiss,
+    this.followMode = false,
+    this.following = false,
+    this.onFollow,
   });
+
+  /// A "Leaders to follow" card: Follow / Following instead of the friend
+  /// button. Only for members who turned followers on (patch_287).
+  final bool followMode;
+  final bool following;
+  final VoidCallback? onFollow;
 
   final MemberDirectoryEntry entry;
   final Friendship? friendship;
@@ -3426,6 +3536,17 @@ class _SuggestedMemberTile extends StatelessWidget {
   }
 
   Widget _friendButton() {
+    if (followMode) {
+      return InlineAction(
+        icon: following ? Icons.check_rounded : Icons.add_rounded,
+        label: following ? 'Following' : 'Follow',
+        expand: true,
+        filled: !following,
+        tint: AppColors.primaryBlue,
+        busy: busy,
+        onTap: onFollow ?? () {},
+      );
+    }
     final f = friendship;
     // No relationship yet → the primary action.
     if (f == null) {

@@ -337,10 +337,17 @@ class _PostCardState extends State<PostCard>
                     // the item is left out rather than guessed.
                     // Not on Page posts: the writer is an admin, and
                     // following them isn't following the Page.
+                    // Only offered when the author allows followers
+                    // (patch_287) — or to unfollow someone you already
+                    // follow. Personal accounts are friends-only.
                     followsAuthor:
                         _isOwner || followingIds == null || post.isPagePost
                         ? null
-                        : followingIds.contains(post.authorId),
+                        : followingIds.contains(post.authorId)
+                        ? true
+                        : post.authorAllowsFollowers
+                        ? false
+                        : null,
                     onToggleFollow: _toggleFollow,
                     isFriendsOnly:
                         post.visibility == PostVisibility.friendsOnly,

@@ -187,10 +187,12 @@ void main() {
       expect(jsonDecode(set.body), {'p_value': 'nobody'});
     });
 
-    test('unknown or missing values read as everyone', () {
-      expect(WhoCanFollowX.fromWire(null), WhoCanFollow.everyone);
-      expect(WhoCanFollowX.fromWire('weird'), WhoCanFollow.everyone);
-      expect(WhoCanFollowX.fromWire('nobody'), WhoCanFollow.nobody);
+    test('unknown or missing values read as OFF (patch_287 default)', () {
+      expect(WhoCanFollowX.fromWire(null), WhoCanFollow.nobody);
+      expect(WhoCanFollowX.fromWire('weird'), WhoCanFollow.nobody);
+      expect(WhoCanFollowX.fromWire('everyone'), WhoCanFollow.everyone);
+      expect(WhoCanFollow.nobody.allowsFollowers, isFalse);
+      expect(WhoCanFollow.everyone.allowsFollowers, isTrue);
     });
 
     test('before the patch, the setting is simply unavailable', () async {

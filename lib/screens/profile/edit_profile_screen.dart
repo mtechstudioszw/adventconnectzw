@@ -903,7 +903,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
                 color: AppColors.primaryBlue,
               ),
               title: Text(
-                'Who can follow me',
+                'Followers',
                 style: AppTextStyles.titleSmall.copyWith(
                   fontWeight: FontWeight.w700,
                 ),

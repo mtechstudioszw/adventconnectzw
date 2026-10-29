@@ -28,7 +28,7 @@ class PublicUserProfile {
     this.username,
     this.website,
     this.isPrivate = false,
-    this.whoCanFollow = WhoCanFollow.everyone,
+    this.whoCanFollow = WhoCanFollow.nobody,
   });
 
   final String id;

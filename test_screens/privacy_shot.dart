@@ -15,7 +15,7 @@ void main() {
         t,
         const ChatPrivacyScreen(
           autoLoad: false,
-          initialWhoCanFollow: WhoCanFollow.everyone,
+          initialWhoCanFollow: WhoCanFollow.nobody,
         ),
         dark: dark,
         size: const Size(412, 1500),

@@ -240,27 +240,47 @@ class _ChatPrivacyScreenState extends State<ChatPrivacyScreen> {
         const _FriendsVsFollowers(),
         const SizedBox(height: 20),
         if (_whoCanFollow != null) ...[
-          _SectionLabel('Who can follow me'),
+          _SectionLabel('Followers'),
           const SizedBox(height: 8),
+          // One switch, not three choices (owner, 29 Oct 2026): accounts
+          // are personal by default — friends only — and a member who
+          // posts publicly turns followers on.
           ScreenCard(
-            key: const ValueKey('who-can-follow-card'),
+            key: const ValueKey('allow-followers-card'),
+            padding: const EdgeInsets.fromLTRB(16, 6, 8, 14),
             child: AbsorbPointer(
               absorbing: _whoBusy,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final w in WhoCanFollow.values) ...[
-                    if (w != WhoCanFollow.values.first) const _RowDivider(),
-                    _ChoiceRow(
-                      title: w.label,
-                      subtitle: w == WhoCanFollow.everyone
-                          ? '${w.description} This is the default.'
-                          : w.description,
-                      value: w.wire,
-                      group: _whoCanFollow!.wire,
-                      onSelect: (v) =>
-                          _setWhoCanFollow(WhoCanFollowX.fromWire(v)),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _whoCanFollow!.allowsFollowers,
+                    onChanged: (on) => _setWhoCanFollow(
+                      on ? WhoCanFollow.everyone : WhoCanFollow.nobody,
                     ),
-                  ],
+                    title: Text(
+                      'Allow followers',
+                      style: AppTextStyles.titleSmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    subtitle: Text(
+                      _whoCanFollow!.description,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.palette.textMuted,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'Off by default. Turn it on if you share publicly — '
+                    'pastors, leaders, musicians, ministries — so people '
+                    'can follow you without being your friend.',
+                    style: AppTextStyles.caption.copyWith(
+                      color: context.palette.textMuted,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -448,6 +468,7 @@ class _FriendsVsFollowers extends StatelessWidget {
           column(Icons.person_add_alt_outlined, 'Followers', const [
             // Said plainly (owner, 29 Oct 2026): "don't have to follow
             // back" read as "can't follow back". You can — it's one tap.
+            'Only if you turn followers on (off by default)',
             'One-way — you can follow back, but it\'s your choice',
             'See your public posts only',
             'Following never lets them message you',

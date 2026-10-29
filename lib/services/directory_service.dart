@@ -110,7 +110,7 @@ class DirectoryService {
       var profilesQuery = _client
           .from('profiles')
           .select('id, full_name, profile_photo_url, province, city, bio, '
-              'church_id, is_verified, is_verified_admin, '
+              'church_id, is_verified, is_verified_admin, who_can_follow, '
               'churches:church_id(name)')
           .eq('is_discoverable', true)
           .eq('is_banned', false);
@@ -136,6 +136,8 @@ class DirectoryService {
               churchId: row['church_id']?.toString(),
               churchName: church is Map ? church['name'] as String? : null,
               isVerified: row['is_verified'] == true,
+              allowsFollowers: const {'everyone', 'friends'}
+                  .contains(row['who_can_follow']),
             );
           })
           .where((e) => (e.fullName ?? '').trim().isNotEmpty)

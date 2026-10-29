@@ -102,16 +102,19 @@ void main() {
   });
 
   group('post menu', () {
-    Post post() => Post(
+    // Tendai turned followers on (patch_287): the menu only offers Follow
+    // for authors who take followers.
+    Post post({bool allowsFollowers = true}) => Post(
       id: 'p1',
       authorId: 'them',
       authorName: 'Tendai Moyo',
       createdAt: DateTime(2026, 10, 28),
       body: 'Hello',
+      authorAllowsFollowers: allowsFollowers,
     );
 
-    Widget card() => PostCard(
-      post: post(),
+    Widget card({bool allowsFollowers = true}) => PostCard(
+      post: post(allowsFollowers: allowsFollowers),
       viewerId: 'me',
       onLikeToggled: () {},
       onCommentsTapped: () {},
@@ -128,6 +131,15 @@ void main() {
       FollowService.followingIds.value = null;
       setFakeSupabaseHandler((_) => null);
       await _pump(t, card());
+      await t.tap(find.byIcon(Icons.more_horiz));
+      await t.pumpAndSettle();
+      expect(find.textContaining('Follow'), findsNothing);
+    });
+
+    testWidgets('a personal account: no Follow in the menu', (t) async {
+      FollowService.followingIds.value = <String>{};
+      setFakeSupabaseHandler((_) => null);
+      await _pump(t, card(allowsFollowers: false));
       await t.tap(find.byIcon(Icons.more_horiz));
       await t.pumpAndSettle();
       expect(find.textContaining('Follow'), findsNothing);

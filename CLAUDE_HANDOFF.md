@@ -95,6 +95,23 @@ earlier chat version; the FILE wins)
 - **"↑ N new posts" pill:** `FeedService.countNewerThan` every 2 min / on resume.
 - **QR on every profile:** `showFriendQrSheet(context, userId:, name:)`.
 - Contacts matching NOT built: 0 of 812 accounts have a phone number.
+
+### Friends vs followers (29 Oct 2026, owner's call)
+- Every account is **personal by default**: friends only, followers OFF
+  (`who_can_follow = 'nobody'`). Members turn on "Allow followers" in
+  Settings > Privacy (one switch, `chat_privacy_screen.dart`). Pages are
+  always followable, as before.
+- **patch_287 — NOT YET APPLIED.** It sets the column default to 'nobody'
+  and switches every existing 'everyone' row to 'nobody'. Rehearsed: 687
+  rows, 0 follows exist, so nobody loses a follower. Until it is applied
+  the server still says 'everyone', so the app treats people as followable.
+- Telling people: `FollowersStatusCard` shows once on Home as a "NEW"
+  announcement (`followers_intro_seen_v1`) and on your own profile
+  (`followers_card_hidden_v1` once dismissed). Both keys are user-scoped.
+- Follow appears ONLY where it is allowed: the post menu (`followsAuthor`
+  stays null unless the author allows followers), the profile Followers
+  stat, and the "Leaders to follow" feed module (`FeedBlockKind.leaders`).
+  Members with followers on leave the friend-suggestion groups.
 4. Bible app experience
 5. Sabbath School experience & date bug
 6. Hymnal (multilingual)
@@ -513,6 +530,10 @@ Batch 2 items that were planned (kept for the record):
    ordinary member confirmed jobs land 'pending' with a 30-day expiry and
    can't be self-published, alerts and report-owner stamping work.
    Still the owner's call: patch_271 left hymn duplicate id 102/108.
+
+0b. **Apply patches 285 (hymn links), 286 (mutual friend counts) and 287
+   (followers off by default).** All three are rehearsed; the app falls back
+   without them.
 
 1. **Run `database/patch_269_country_metadata_resync.sql`** in Supabase
    (preview query first). Repairs members whose auth metadata kept a

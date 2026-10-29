@@ -42,6 +42,7 @@ class Post {
     required this.createdAt,
     this.authorPhotoUrl,
     this.authorIsVerified = false,
+    this.authorAllowsFollowers = false,
     this.churchId,
     this.country,
     this.churchName,
@@ -69,6 +70,10 @@ class Post {
 
   /// Cosmetic gold tick (super admin / approved church admin, patch_134).
   final bool authorIsVerified;
+
+  /// The author turned followers on (patch_287) — so the post menu may
+  /// offer "Follow". Off by default, like the account itself.
+  final bool authorAllowsFollowers;
 
   /// When set, this post is branded as a church update (patch_141) — shows the
   /// church's name + gold tick instead of the individual author.
@@ -145,6 +150,7 @@ class Post {
       authorName: authorName,
       authorPhotoUrl: authorPhotoUrl,
       authorIsVerified: authorIsVerified,
+      authorAllowsFollowers: authorAllowsFollowers,
       churchId: churchId,
       // Was missing: a liked or commented post lost its country, which the
       // feed's home-country ranking reads.
@@ -255,6 +261,8 @@ class Post {
       authorName: (authorMap?['full_name'] as String?) ?? 'Member',
       authorPhotoUrl: authorMap?['profile_photo_url'] as String?,
       authorIsVerified: authorMap?['is_verified'] == true,
+      authorAllowsFollowers: const {'everyone', 'friends'}
+          .contains(authorMap?['who_can_follow']),
       churchId: json['church_id']?.toString(),
       country: json['country'] as String?,
       churchName: (json['churches'] is Map<String, dynamic>)
@@ -298,6 +306,7 @@ class Post {
           'full_name': authorName,
           'profile_photo_url': authorPhotoUrl,
           'is_verified_admin': authorIsVerified,
+          'who_can_follow': authorAllowsFollowers ? 'everyone' : 'nobody',
         },
         'church_id': churchId,
         'country': country,

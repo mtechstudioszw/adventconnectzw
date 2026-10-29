@@ -9,6 +9,9 @@ enum FeedBlockKind {
   // Recurring modules — each comes back with NEW items until its source
   // runs dry.
   people,
+
+  /// Members who turned followers on (patch_287), offered with Follow.
+  leaders,
   news,
   video,
   verse,
@@ -67,6 +70,7 @@ class FeedMixer {
     FeedBlockKind.people,
     FeedBlockKind.news,
     FeedBlockKind.video,
+    FeedBlockKind.leaders,
     FeedBlockKind.verse,
     FeedBlockKind.people,
     FeedBlockKind.quiz,

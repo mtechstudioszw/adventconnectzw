@@ -18,6 +18,7 @@ class MemberDirectoryEntry {
     this.createdAt,
     this.isVerified = false,
     this.suggestionReason,
+    this.allowsFollowers = false,
   });
 
   final String id;
@@ -46,6 +47,10 @@ class MemberDirectoryEntry {
   /// the card says nothing rather than inventing something.
   final String? suggestionReason;
 
+  /// They turned followers on (patch_287): offered with Follow in Home's
+  /// "Leaders to follow" groups instead of Add friend.
+  final bool allowsFollowers;
+
   /// Same person, tagged with why they're being suggested.
   MemberDirectoryEntry withReason(String reason) => MemberDirectoryEntry(
         id: id,
@@ -63,6 +68,7 @@ class MemberDirectoryEntry {
         createdAt: createdAt,
         isVerified: isVerified,
         suggestionReason: reason,
+        allowsFollowers: allowsFollowers,
       );
 
   factory MemberDirectoryEntry.fromJson(Map<String, dynamic> json) {
@@ -107,6 +113,7 @@ class MemberDirectoryEntry {
         'profile_photo_url': profilePhotoUrl,
         'is_verified': isVerified,
         'reason': suggestionReason,
+        'follows': allowsFollowers,
       };
 
   factory MemberDirectoryEntry.fromCacheJson(Map<String, dynamic> j) =>
@@ -122,5 +129,6 @@ class MemberDirectoryEntry {
         profilePhotoUrl: j['profile_photo_url'] as String?,
         isVerified: j['is_verified'] == true,
         suggestionReason: j['reason'] as String?,
+        allowsFollowers: j['follows'] == true,
       );
 }

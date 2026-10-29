@@ -135,14 +135,14 @@ void main() {
           theme: AppTheme.light,
           home: const ChatPrivacyScreen(
             autoLoad: false,
-            initialWhoCanFollow: WhoCanFollow.everyone,
+            initialWhoCanFollow: WhoCanFollow.nobody,
           ),
         ),
       );
       await t.pump();
     }
 
-    final followCard = find.byKey(const ValueKey('who-can-follow-card'));
+    final followCard = find.byKey(const ValueKey('allow-followers-card'));
 
     testWidgets('states how friends and followers differ', (t) async {
       await pumpWithFollow(t);
@@ -161,18 +161,24 @@ void main() {
       );
     });
 
-    testWidgets('who can follow me: three choices, Everyone is default', (
-      t,
-    ) async {
+    testWidgets('followers: one switch, off by default (patch_287)', (t) async {
       await pumpWithFollow(t);
       await t.scrollUntilVisible(followCard, 120);
-      for (final label in ['Everyone', 'Friends only', 'Nobody']) {
-        expect(_inCard(followCard, find.text(label)), findsOneWidget);
-      }
+      expect(_inCard(followCard, find.text('Allow followers')), findsOneWidget);
+      final sw = t.widget<SwitchListTile>(
+        find.descendant(of: followCard, matching: find.byType(SwitchListTile)),
+      );
+      expect(sw.value, isFalse);
       expect(
-        _inCard(followCard, find.textContaining('This is the default')),
+        _inCard(followCard, find.textContaining('Personal account')),
         findsOneWidget,
       );
+      expect(
+        _inCard(followCard, find.textContaining('Off by default')),
+        findsOneWidget,
+      );
+      // No three-way choice any more.
+      expect(_inCard(followCard, find.text('Friends only')), findsNothing);
     });
 
     testWidgets('no follow section before patch_282 answers', (t) async {

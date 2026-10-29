@@ -173,7 +173,7 @@ class FeedService {
 
   static const String _basePostCols =
       '*, '
-      'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
+      'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin, who_can_follow), '
       'churches(name, profile_photo_url), '
       'post_likes(user_id, reaction), '
       'post_comments(id)';

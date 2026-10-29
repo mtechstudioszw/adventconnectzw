@@ -3,29 +3,42 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Who may follow a member (patch_282). Personal accounts only — Pages can
 /// always be followed.
+///
+/// Since patch_287 (29 Oct 2026, owner) every account starts PERSONAL —
+/// followers off ([nobody]) — and the member turns "Allow followers" on
+/// ([everyone]) if they post publicly: pastors, leaders, musicians,
+/// ministries. [friends] is kept for anyone who already chose it; the app
+/// no longer offers it, because two kinds of "on" was one too many.
 enum WhoCanFollow { everyone, friends, nobody }
 
 extension WhoCanFollowX on WhoCanFollow {
   String get wire => name;
 
+  /// Followers on — anyone (or, for older settings, friends) can follow.
+  bool get allowsFollowers => this != WhoCanFollow.nobody;
+
   String get label => switch (this) {
-    WhoCanFollow.everyone => 'Everyone',
+    WhoCanFollow.everyone => 'On',
     WhoCanFollow.friends => 'Friends only',
-    WhoCanFollow.nobody => 'Nobody',
+    WhoCanFollow.nobody => 'Off',
   };
 
   String get description => switch (this) {
     WhoCanFollow.everyone =>
-      'Anyone can follow you. Private accounts still approve each request.',
+      'Anyone can follow your public posts. Friends still see your '
+          'friends-only posts.',
     WhoCanFollow.friends => 'Only your friends can follow you.',
     WhoCanFollow.nobody =>
-      'Following is off. People can still add you as a friend.',
+      'Personal account: people connect with you by adding you as a '
+          'friend. Nobody can follow you.',
   };
 
+  /// Missing or unknown = off: that is the default since patch_287, and
+  /// guessing "on" would show a Follow button the server then refuses.
   static WhoCanFollow fromWire(String? v) => switch (v) {
+    'everyone' => WhoCanFollow.everyone,
     'friends' => WhoCanFollow.friends,
-    'nobody' => WhoCanFollow.nobody,
-    _ => WhoCanFollow.everyone,
+    _ => WhoCanFollow.nobody,
   };
 }
 

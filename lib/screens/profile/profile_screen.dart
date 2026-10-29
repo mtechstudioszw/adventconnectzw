@@ -9,6 +9,7 @@ import '../../models/friendship_model.dart';
 import '../../models/church_model.dart';
 import '../../models/ministry_tag_model.dart';
 import '../../services/ministry_service.dart';
+import '../../widgets/profile/followers_status_card.dart';
 import '../../widgets/ministry_chips.dart';
 import '../../models/post_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -272,6 +273,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context.pushNamed('admin_dashboard', extra: picked);
     }
   }
+
+  /// The "Personal account" card was dismissed on this phone. User-scoped
+  /// on purpose (cleared on sign-out).
+  static const _kFollowersCardHidden = 'followers_card_hidden_v1';
+  late bool _followersCardHidden =
+      CacheService.readPref(_kFollowersCardHidden) == '1';
 
   Future<void> _loadPublicRow() async {
     final me = AuthService.currentUser?.id;
@@ -566,6 +573,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
               ),
+              // Personal account (followers off) or followers on — said
+              // plainly, with the switch (patch_287, 29 Oct 2026).
+              if (_publicRow != null && !_followersCardHidden)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                  child: FollowersStatusCard(
+                    current: _publicRow!.whoCanFollow,
+                    onChanged: (_) => _loadPublicRow(),
+                    onDismiss: _publicRow!.whoCanFollow.allowsFollowers
+                        ? null
+                        : () {
+                            CacheService.writePref(_kFollowersCardHidden, '1');
+                            setState(() => _followersCardHidden = true);
+                          },
+                  ),
+                ),
               const SizedBox(height: 18),
               // Ministry & gifts (patch_168) — what you serve in and
               // what you bring. Sits above the tabs because it is
@@ -714,11 +737,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _myPosts.length,
             onTap: () => setState(() => _tabIndex = 0),
           ),
-          ProfileStat(
-            'Followers',
-            follow?.followers,
-            onTap: () => openList('followers'),
-          ),
+          // No "0 followers" on a personal account — it can't have any.
+          if (_publicRow?.whoCanFollow.allowsFollowers ?? false)
+            ProfileStat(
+              'Followers',
+              follow?.followers,
+              onTap: () => openList('followers'),
+            ),
           ProfileStat(
             'Following',
             follow?.following,

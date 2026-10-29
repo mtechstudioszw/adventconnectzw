@@ -1716,6 +1716,9 @@ class _StoryComposerState extends State<_StoryComposer> {
       title: 'How your story will look',
       confirmLabel: 'Share it',
       canvasColor: AppColors.darkNavy,
+      notes: const [
+        PreviewNote(Icons.timer_outlined, 'Disappears after 24 hours.'),
+      ],
       child: _storyPreview(),
     );
     if (!confirmed || !mounted) return;

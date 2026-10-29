@@ -66,6 +66,13 @@ Future<bool> showPostPreview(
     context,
     title: 'How your post will look',
     confirmLabel: 'Post it',
+    notes: postPreviewNotes(
+      body: trimmed,
+      photos: photos.length,
+      visibility: visibility,
+      churchName: churchName,
+      pageName: pageName,
+    ),
     // Interactions are inert because there is nothing to act on yet: the
     // post has no id until it is published.
     child: PostCard(
@@ -76,4 +83,43 @@ Future<bool> showPostPreview(
       onImageTapped: (_) {},
     ),
   );
+}
+
+/// The checklist under a post preview: who it's from, who can see it,
+/// what's attached, and a heads-up near the length limit.
+@visibleForTesting
+List<PreviewNote> postPreviewNotes({
+  required String body,
+  required int photos,
+  required PostVisibility visibility,
+  String? churchName,
+  String? pageName,
+}) {
+  final from = pageName ?? churchName;
+  return [
+    PreviewNote(
+      from == null ? Icons.person_outline_rounded : Icons.flag_outlined,
+      from == null ? 'Posting as you.' : 'Posting as $from.',
+    ),
+    visibility == PostVisibility.friendsOnly
+        ? const PreviewNote(
+            Icons.group_outlined,
+            'Only your friends can see it.',
+          )
+        : const PreviewNote(
+            Icons.public_rounded,
+            'Anyone on Adventist Super App can see it.',
+          ),
+    if (photos > 1)
+      PreviewNote(
+        Icons.photo_library_outlined,
+        '$photos photos — swipe the card to check each crop.',
+      ),
+    if (body.length > 1800)
+      PreviewNote(
+        Icons.short_text_rounded,
+        '${body.length} of 2,000 characters — close to the limit.',
+        warn: true,
+      ),
+  ];
 }

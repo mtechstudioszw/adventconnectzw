@@ -104,6 +104,19 @@ class _PostAdventNewsScreenState extends State<PostAdventNewsScreen> {
       context,
       title: 'How this story will look',
       confirmLabel: _isEdit ? 'Save changes' : 'Publish',
+      notes: [
+        if (!_isEdit)
+          const PreviewNote(
+            Icons.verified_outlined,
+            'An admin reviews it before it appears on Advent News.',
+          ),
+        if (_coverPhotoUrl == null)
+          const PreviewNote(
+            Icons.image_outlined,
+            'No cover photo yet.',
+            warn: true,
+          ),
+      ],
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: NewsHeroCard(

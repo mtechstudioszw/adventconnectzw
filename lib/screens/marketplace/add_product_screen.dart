@@ -329,6 +329,25 @@ class _AddProductScreenState extends State<AddProductScreen>
           ? 'How your listing will look'
           : 'How your listing will look',
       confirmLabel: widget.isEditing ? 'Save changes' : 'List it',
+      notes: [
+        if (_photoUrls.isEmpty)
+          const PreviewNote(
+            Icons.photo_outlined,
+            'No photo yet — buyers will see a placeholder tile.',
+            warn: true,
+          )
+        else
+          PreviewNote(
+            Icons.photo_library_outlined,
+            _photoUrls.length == 1
+                ? '1 photo — the first photo is the tile.'
+                : '${_photoUrls.length} photos — the first one is the tile.',
+          ),
+        const PreviewNote(
+          Icons.storefront_outlined,
+          'Listed on the marketplace under your store.',
+        ),
+      ],
       child: Padding(
         // The grid tile is half the screen wide; showing it full-bleed
         // would misrepresent exactly the crop it is here to check.

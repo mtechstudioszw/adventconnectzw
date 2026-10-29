@@ -269,6 +269,9 @@ class _PostEventScreenState extends State<PostEventScreen>
       context,
       title: 'How your event will look',
       confirmLabel: widget.isEditing ? 'Save changes' : 'Post it',
+      notes: const [
+        PreviewNote(Icons.event_outlined, 'Appears in Events for members.'),
+      ],
       child: EventCard(
         event: Event(
           // Never persisted — the real id comes from the insert.

@@ -15,6 +15,7 @@ import '../../theme/app_motion.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../motion/pressable.dart';
+import '../studio/artboard.dart';
 import '../user_avatar.dart';
 import 'composer_sheet.dart' show readPostDraft;
 
@@ -471,7 +472,7 @@ class _CreateScreenState extends State<_CreateScreen>
                               children: [
                                 _Enter(
                                   t: tile(0),
-                                  child: _Artboard(
+                                  child: StudioArtboard(
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.stretch,
@@ -834,59 +835,6 @@ class _Enter extends StatelessWidget {
       ),
     );
   }
-}
-
-/// The workspace: a dot-grid board, like a design tool's canvas, that the
-/// paper and the story tools sit on.
-class _Artboard extends StatelessWidget {
-  const _Artboard({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadius.sheet),
-      child: CustomPaint(
-        painter: _DotGridPainter(
-          background: context.palette.scaffoldBg,
-          dot: context.palette.textMuted.withValues(alpha: 0.22),
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpace.md),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.sheet),
-            border: Border.all(color: context.palette.divider),
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
-}
-
-class _DotGridPainter extends CustomPainter {
-  const _DotGridPainter({required this.background, required this.dot});
-
-  final Color background;
-  final Color dot;
-
-  static const _gap = 14.0;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = background);
-    final paint = Paint()..color = dot;
-    for (var y = _gap / 2; y < size.height; y += _gap) {
-      for (var x = _gap / 2; x < size.width; x += _gap) {
-        canvas.drawCircle(Offset(x, y), 0.9, paint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DotGridPainter old) =>
-      old.background != background || old.dot != dot;
 }
 
 /// The sheet of paper: who's writing, the words so far, and a toolbar.

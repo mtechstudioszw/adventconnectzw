@@ -128,7 +128,7 @@ class LibraryContinue {
             kind: 'Hymnal',
             icon: Icons.queue_music_rounded,
             title: h.title,
-            subtitle: h.number == null ? 'Last opened' : 'Hymn ${h.number}',
+            subtitle: h.reference,
             open: (ctx) => Navigator.of(ctx, rootNavigator: true).push<void>(
               MaterialPageRoute<void>(
                 builder: (_) => HymnReaderScreen(hymns: [h], initialIndex: 0),

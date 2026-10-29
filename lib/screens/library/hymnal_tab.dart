@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -39,7 +40,7 @@ class _HymnalTabState extends State<HymnalTab>
   bool _favOnly = false;
   String _query = '';
   String? _category;
-  String _collection = HymnCollection.kristuMunzwiyo.key;
+  String _collection = HymnPrefs.collection();
 
   @override
   bool get wantKeepAlive => true;
@@ -185,11 +186,13 @@ class _HymnalTabState extends State<HymnalTab>
           children: [
             for (final c in HymnCollection.all)
               Expanded(
+                flex: 2,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
                     if (_collection == c.key) return;
                     HapticFeedback.selectionClick();
+                    HymnPrefs.setCollection(c.key);
                     setState(() {
                       _collection = c.key;
                       // A category from the other hymnal won't exist here.
@@ -219,7 +222,7 @@ class _HymnalTabState extends State<HymnalTab>
                     child: Column(
                       children: [
                         Text(
-                          c.label,
+                          c.subtitle,
                           style: AppTextStyles.labelMedium.copyWith(
                             color: _collection == c.key
                                 ? AppColors.white
@@ -229,7 +232,9 @@ class _HymnalTabState extends State<HymnalTab>
                           ),
                         ),
                         Text(
-                          c.subtitle,
+                          '${c.label} · ${_countIn(c.key)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.labelSmall.copyWith(
                             color: _collection == c.key
                                 ? AppColors.white.withValues(alpha: 0.85)
@@ -242,11 +247,56 @@ class _HymnalTabState extends State<HymnalTab>
                   ),
                 ),
               ),
+            // Owner, 29 Oct 2026: only English and Shona hymnals exist in
+            // the app. Other languages get a visible slot that says so,
+            // rather than nothing — never a fake list.
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: 'Other languages, not available yet',
+                excludeSemantics: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Hymnals in other languages (Ndebele, Tonga and '
+                        'more) are not in the app yet.',
+                      ),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Other',
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: palette.textMuted,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        Text(
+                          'Not yet',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: palette.textMuted,
+                            fontSize: 10.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
+
+  int _countIn(String key) => _all.where((h) => h.collection == key).length;
 
   // ---- Search -------------------------------------------------------------
 
@@ -754,15 +804,16 @@ class _HymnReaderScreenState extends State<HymnReaderScreen> {
           ),
         ),
         const SizedBox(height: 6),
-        Row(
+        // Wrap, not Row: "Kristu MuNzwiyo 300" plus a long category no
+        // longer fits one line on a small phone.
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
           children: [
-            if (h.number != null)
-              _metaPill('#${h.number}', AppColors.primaryBlue),
-            if (h.category != null && h.category!.trim().isNotEmpty) ...[
-              const SizedBox(width: 6),
+            // The book as well as the number — each hymnal numbers its own.
+            _metaPill(h.reference, AppColors.primaryBlue),
+            if (h.category != null && h.category!.trim().isNotEmpty)
               _metaPill(h.category!.trim(), AppColors.goldAccent),
-            ],
-            const SizedBox(width: 6),
             _metaPill(h.language, AppColors.successGreen),
           ],
         ),
@@ -961,6 +1012,18 @@ class HymnPrefs {
   static const _kFontScale = 'hymn_font_scale_v1';
   static const _kFocusMode = 'hymn_focus_mode_v1';
   static const _kRecent = 'hymn_recent_v1';
+
+  /// The hymnal the member last chose. Device-level (`pref:`): it is a
+  /// language choice for this phone, not personal history.
+  static const _kCollection = 'pref:hymnal_collection';
+
+  /// Kristu MuNzwiyo until the member picks — the founder's default.
+  static String collection() =>
+      HymnCollection.fromKey(CacheService.readPref(_kCollection)).key;
+
+  static void setCollection(String key) {
+    unawaited(CacheService.writePref(_kCollection, key));
+  }
 
   static const _recentCap = 20;
 

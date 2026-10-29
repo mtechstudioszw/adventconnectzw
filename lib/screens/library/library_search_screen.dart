@@ -210,8 +210,11 @@ class _LibrarySearchScreenState extends State<LibrarySearchScreen> {
         for (final h in _hymns)
           _Hit(
             icon: Icons.queue_music_rounded,
-            title: h.number == null ? h.title : '${h.number}. ${h.title}',
-            subtitle: h.category ?? 'Hymnal',
+            title: h.title,
+            // The book as well as the number: each hymnal numbers its own.
+            subtitle: h.category == null
+                ? h.reference
+                : '${h.reference} · ${h.category}',
             onTap: () => LibraryOpen.hymn(context, h),
           ),
       ]);

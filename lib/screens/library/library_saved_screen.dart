@@ -235,8 +235,8 @@ class _LibrarySavedScreenState extends State<LibrarySavedScreen> {
           for (final h in _hymns)
             _Row(
               icon: Icons.queue_music_rounded,
-              title: h.number == null ? h.title : '${h.number}. ${h.title}',
-              subtitle: h.category ?? 'Hymnal',
+              title: h.title,
+              subtitle: h.reference,
               onTap: () => LibraryOpen.hymn(context, h),
             ),
         ],

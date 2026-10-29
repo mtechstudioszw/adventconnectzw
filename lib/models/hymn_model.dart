@@ -11,7 +11,11 @@ class HymnCollection {
   static const sdaHymnal =
       HymnCollection('sda_hymnal', 'SDA Hymnal', 'English');
 
-  static const all = [kristuMunzwiyo, sdaHymnal];
+  /// English first, then Shona (owner, 29 Oct 2026). Each hymnal keeps
+  /// its OWN numbering — Kristu MuNzwiyo 40 is not SDA Hymnal 40 — so a
+  /// number is never shown without the hymnal it belongs to (see
+  /// [Hymn.reference]).
+  static const all = [sdaHymnal, kristuMunzwiyo];
 
   static HymnCollection fromKey(String? key) =>
       all.firstWhere((c) => c.key == key, orElse: () => kristuMunzwiyo);
@@ -39,6 +43,13 @@ class Hymn {
 
   /// Which hymnal this belongs to: 'kristu_munzwiyo' | 'sda_hymnal' (patch_144).
   final String collection;
+
+  /// "SDA Hymnal 40" / "Kristu MuNzwiyo 40" — the number with its book,
+  /// because the two hymnals number independently.
+  String get reference {
+    final book = HymnCollection.fromKey(collection).label;
+    return number == null ? book : '$book $number';
+  }
 
   /// "123 · Title" when numbered, else just the title.
   String get displayTitle => number != null ? '$number · $title' : title;

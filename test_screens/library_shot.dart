@@ -6,10 +6,16 @@ import 'package:hive/hive.dart';
 
 import 'package:advent_connect_zw/models/devotion_model.dart';
 import 'package:advent_connect_zw/screens/home/home_screen.dart';
+import 'package:advent_connect_zw/data/fundamental_beliefs.dart';
+import 'package:advent_connect_zw/screens/library/beliefs_screen.dart';
 import 'package:advent_connect_zw/screens/library/devotion_screen.dart';
+import 'package:advent_connect_zw/screens/library/library_directory_screen.dart';
+import 'package:advent_connect_zw/screens/library/library_saved_screen.dart';
+import 'package:advent_connect_zw/screens/library/library_search_screen.dart';
 import 'package:advent_connect_zw/screens/library/library_hub_screen.dart';
 import 'package:advent_connect_zw/services/bible_prefs_service.dart';
 import 'package:advent_connect_zw/services/cache_service.dart';
+import 'package:flutter/material.dart' show TextField;
 import 'package:advent_connect_zw/services/sabbath_school_prefs.dart';
 
 import '../test/helpers/fake_supabase.dart';
@@ -45,6 +51,9 @@ void main() {
     // ignore: invalid_use_of_visible_for_testing_member
     await CacheService.debugUseBox(await Hive.openBox<String>('lib_shot'));
     await BiblePrefsService.setLastPosition(42, 2); // John 3
+    await BiblePrefsService.toggleBookmark('42:2:15'); // John 3:16
+    await BiblePrefsService.setHighlight('18:22:0', 0); // Psalm 23:1
+    await BiblePrefsService.setNote('0:0:0', 'Creation week study');
     await SabbathSchoolPrefs.setLastRead(
       lang: 'en',
       quarterlyId: 'q',
@@ -95,5 +104,37 @@ void main() {
     await saveShot(t, 'home_top', rounds: 12);
     await t.drag(find.byType(Scrollable).first, const Offset(0, -520));
     await saveShot(t, 'home_library_row');
+  });
+
+  testWidgets('beliefs', (t) async {
+    await pumpShot(t, const BeliefsScreen(), dark: false);
+    await saveShot(t, 'beliefs');
+  });
+
+  testWidgets('belief_detail', (t) async {
+    await pumpShot(
+      t,
+      BeliefDetailScreen(belief: kFundamentalBeliefs[19]),
+      dark: false,
+    );
+    await saveShot(t, 'belief_detail');
+  });
+
+  testWidgets('search', (t) async {
+    await pumpShot(t, const LibrarySearchScreen(), dark: false);
+    await t.enterText(find.byType(TextField), 'sabbath');
+    await t.runAsync(() => Future<void>.delayed(const Duration(seconds: 2)));
+    await saveShot(t, 'search', rounds: 16);
+  });
+
+  testWidgets('saved', (t) async {
+    await pumpShot(t, const LibrarySavedScreen(), dark: false);
+    await t.runAsync(() => Future<void>.delayed(const Duration(seconds: 2)));
+    await saveShot(t, 'saved', rounds: 12);
+  });
+
+  testWidgets('directory', (t) async {
+    await pumpShot(t, const LibraryDirectoryScreen(), dark: false);
+    await saveShot(t, 'directory');
   });
 }

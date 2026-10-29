@@ -81,7 +81,7 @@ void main() {
         'EGW',
         'Watch',
         'Quiz',
-        'Prayer',
+        '28 Beliefs',
         'More',
       ]) {
         expect(find.text(label), findsOneWidget, reason: label);

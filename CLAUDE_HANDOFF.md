@@ -30,9 +30,15 @@ earlier chat version; the FILE wins)
 3. Library information architecture & design — **PART 1 DONE 29 Oct 2026**
    (Library tab replaced Watch; Library home; Watch moved inside with every
    route kept; Home: devotion opens `DevotionScreen`, Continue row, Watch row).
-   **Part 2 next:** Library search, Saved/Downloads, the More directory, and
-   28 Beliefs (our own summaries + a link to adventist.org; the toolkit's
-   "Prayer" tile is the slot it takes).
+   **Part 2 DONE 29 Oct 2026:** Library-only search (Bible refs + verse
+   text, hymns, EGW titles, beliefs; never social), Saved & downloads
+   (Bible bookmarks/highlights/notes, favourite hymns, saved + downloaded
+   EGW books), "All resources" directory (real content only, with format,
+   source, language, offline), 28 Beliefs (`lib/data/fundamental_beliefs.dart`
+   — OUR summaries, official text linked; **needs a pastor's read before
+   wide release**). Not built, because the content isn't licensed/available
+   yet: heritage, Church Manual, Yearbook, study guides, children's
+   resources, dictionaries/concordance. Next: Batch 4 (Bible).
 4. Bible app experience
 5. Sabbath School experience & date bug
 6. Hymnal (multilingual)

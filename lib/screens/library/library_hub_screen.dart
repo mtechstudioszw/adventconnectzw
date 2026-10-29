@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:go_router/go_router.dart';
 
-import '../../config/platform_flags.dart';
 import '../../models/devotion_model.dart';
 import '../../models/youtube_video.dart';
 import '../../services/devotion_service.dart';
@@ -17,7 +16,11 @@ import '../../theme/app_tokens.dart';
 import '../../widgets/cached_image.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/screen_shell.dart';
+import 'beliefs_screen.dart';
 import 'devotion_screen.dart';
+import 'library_directory_screen.dart';
+import 'library_saved_screen.dart';
+import 'library_search_screen.dart';
 import 'library_continue.dart';
 
 /// The Library tab (owner, 29 Oct 2026 — it replaced Watch in the island).
@@ -125,12 +128,13 @@ class _LibraryHubScreenState extends State<LibraryHubScreen> {
     extra: v,
   );
 
-  void _openMore() {
+  void _push(Widget screen) {
     HapticFeedback.selectionClick();
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _MoreSheet(),
+    _refreshAfter(
+      Navigator.of(
+        context,
+        rootNavigator: true,
+      ).push<void>(MaterialPageRoute<void>(builder: (_) => screen)),
     );
   }
 
@@ -156,11 +160,17 @@ class _LibraryHubScreenState extends State<LibraryHubScreen> {
         gold: true,
       ),
       _Tool(
-        'Prayer',
-        Icons.volunteer_activism_rounded,
-        () => context.pushNamed('prayer'),
+        '28 Beliefs',
+        Icons.history_edu_rounded,
+        () => _push(const BeliefsScreen()),
       ),
-      _Tool('More', Icons.add_rounded, _openMore),
+      // Every other resource — Prayer, News, Churches, Events, Music —
+      // with format, source and offline status.
+      _Tool(
+        'More',
+        Icons.add_rounded,
+        () => _push(const LibraryDirectoryScreen()),
+      ),
     ];
   }
 
@@ -184,12 +194,23 @@ class _LibraryHubScreenState extends State<LibraryHubScreen> {
                       AppSpace.lg,
                       AppSpace.xs,
                     ),
-                    child: Text(
-                      'Library',
-                      style: AppTextStyles.headlineMedium.copyWith(
-                        color: palette.text,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Library',
+                            style: AppTextStyles.headlineMedium.copyWith(
+                              color: palette.text,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        HeaderIconButton(
+                          icon: Icons.bookmarks_rounded,
+                          tooltip: 'Saved & downloads',
+                          onTap: () => _push(const LibrarySavedScreen()),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -203,6 +224,19 @@ class _LibraryHubScreenState extends State<LibraryHubScreen> {
                       style: AppTextStyles.bodySmall.copyWith(
                         color: palette.textMuted,
                       ),
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpace.lg,
+                      AppSpace.lg,
+                      AppSpace.lg,
+                      0,
+                    ),
+                    child: _SearchBar(
+                      onTap: () => _push(const LibrarySearchScreen()),
                     ),
                   ),
                 ),
@@ -713,102 +747,46 @@ class _VideoTile extends StatelessWidget {
   }
 }
 
-/// Everything that isn't in the toolkit — real routes only.
-class _MoreSheet extends StatelessWidget {
-  const _MoreSheet();
+/// Looks like a field; opens [LibrarySearchScreen], which owns the real
+/// one (and the keyboard).
+class _SearchBar extends StatelessWidget {
+  const _SearchBar({required this.onTap});
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final rows = <(IconData, String, String, VoidCallback)>[
-      if (!kHideMusic)
-        (
-          Icons.headphones_rounded,
-          'Music',
-          'Hymns and worship music',
-          () => context.pushNamed('library', extra: 4),
-        ),
-      (
-        Icons.newspaper_rounded,
-        'News',
-        'Adventist news',
-        () => context.pushNamed('news'),
-      ),
-      (
-        Icons.church_rounded,
-        'Churches',
-        'Find a church near you',
-        () => context.pushNamed('churches'),
-      ),
-      (
-        Icons.event_rounded,
-        'Events',
-        'Camp meetings, crusades and more',
-        () => context.pushNamed('events'),
-      ),
-    ];
-    return Container(
-      decoration: BoxDecoration(
-        color: palette.sheet,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(AppRadius.sheet),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: AppSpace.sm),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: palette.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.lg,
-                AppSpace.lg,
-                AppSpace.lg,
-                AppSpace.sm,
-              ),
-              child: Align(
-                alignment: Alignment.centerLeft,
+    return Semantics(
+      button: true,
+      label: 'Search the Library',
+      excludeSemantics: true,
+      child: Pressable(
+        onTap: onTap,
+        pressedScale: 0.98,
+        child: Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.md),
+          decoration: BoxDecoration(
+            color: palette.card,
+            borderRadius: BorderRadius.circular(AppRadius.button),
+            boxShadow: AppShadows.card(context),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.search_rounded, color: palette.textMuted),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
                 child: Text(
-                  'More in the app',
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: palette.text,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-            for (final (icon, title, sub, onTap) in rows)
-              ListTile(
-                leading: _IconChip(icon: icon),
-                title: Text(
-                  title,
-                  style: AppTextStyles.labelLarge.copyWith(
-                    color: palette.text,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                subtitle: Text(
-                  sub,
-                  style: AppTextStyles.caption.copyWith(
+                  'Search verses, hymns, books, beliefs',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodyMedium.copyWith(
                     color: palette.textMuted,
                   ),
                 ),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  onTap();
-                },
               ),
-            const SizedBox(height: AppSpace.md),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../models/hymn_model.dart';
 import '../../models/library_item_model.dart';
@@ -10,6 +9,7 @@ import '../../services/library_service.dart';
 import '../../services/sabbath_school_prefs.dart';
 import 'bible_tab.dart' show BibleReaderScreen;
 import 'egw_tab.dart' show EgwPrefs;
+import 'library_open.dart';
 import 'hymnal_tab.dart' show HymnPrefs, HymnReaderScreen;
 import 'ss_lesson_screen.dart' show SsDayReaderScreen;
 
@@ -157,9 +157,7 @@ class LibraryContinue {
             icon: Icons.auto_stories_rounded,
             title: book.title,
             subtitle: book.author ?? 'Ellen G. White',
-            // The EGW shelf opens with this book as its Continue hero; the
-            // EPUB-or-PDF choice lives there, so it is not duplicated here.
-            open: (ctx) => ctx.pushNamed('library', extra: 3),
+            open: (ctx) => LibraryOpen.egwBook(ctx, egwId),
           ),
         );
       }

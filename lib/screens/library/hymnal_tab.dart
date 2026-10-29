@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../models/hymn_model.dart';
 import '../../services/cache_service.dart';
+import '../../services/hymn_link_service.dart';
 import '../../services/hymn_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
@@ -77,6 +78,9 @@ class _HymnalTabState extends State<HymnalTab>
       _loading = false;
     });
     _consumeLaunchIntent(hymns);
+    // Cross-hymnal links (patch_285): cached first, then refreshed.
+    HymnLinkService.prime();
+    unawaited(HymnLinkService.refresh());
   }
 
   /// Opens the hymn Home asked for, if it asked for one.
@@ -184,7 +188,7 @@ class _HymnalTabState extends State<HymnalTab>
         ),
         child: Row(
           children: [
-            for (final c in HymnCollection.all)
+            for (final c in _available)
               Expanded(
                 flex: 2,
                 child: GestureDetector(
@@ -257,14 +261,7 @@ class _HymnalTabState extends State<HymnalTab>
                 excludeSemantics: true,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Hymnals in other languages (Ndebele, Tonga and '
-                        'more) are not in the app yet.',
-                      ),
-                    ),
-                  ),
+                  onTap: () => _showOtherLanguages(context),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 9),
                     child: Column(
@@ -297,6 +294,66 @@ class _HymnalTabState extends State<HymnalTab>
   }
 
   int _countIn(String key) => _all.where((h) => h.collection == key).length;
+
+  /// Hymnals with hymns in them. A new language appears here as soon as
+  /// its hymns are loaded — no app update.
+  List<HymnCollection> get _available {
+    final list = HymnCollection.availableIn(_all);
+    return list.isEmpty ? HymnCollection.all : list;
+  }
+
+  void _showOtherLanguages(BuildContext context) {
+    final palette = context.palette;
+    final missing = [
+      for (final c in HymnCollection.planned)
+        if (!_available.contains(c)) c,
+    ];
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: palette.sheet,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          children: [
+            Text(
+              'Other languages',
+              style: AppTextStyles.titleMedium.copyWith(
+                color: palette.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'The 300 Christ in Song hymns (Kristu MuNzwiyo in Shona) are '
+              'sung in these languages with the same numbers. Their words '
+              'belong to the translators and the unions that publish them, '
+              'so each is added once we have permission. When one is added, '
+              'it appears here and every hymn can switch to it.',
+              style: AppTextStyles.bodySmall.copyWith(color: palette.textMuted),
+            ),
+            const SizedBox(height: 12),
+            for (final m in missing)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                leading: Icon(Icons.translate_rounded, color: palette.textMuted),
+                title: Text(
+                  '${m.label} · ${m.subtitle}',
+                  style: AppTextStyles.labelLarge.copyWith(color: palette.text),
+                ),
+                trailing: Text(
+                  'Not yet',
+                  style:
+                      AppTextStyles.caption.copyWith(color: palette.textMuted),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   // ---- Search -------------------------------------------------------------
 
@@ -817,6 +874,7 @@ class _HymnReaderScreenState extends State<HymnReaderScreen> {
             _metaPill(h.language, AppColors.successGreen),
           ],
         ),
+        _AlsoIn(hymn: h),
         const SizedBox(height: 20),
         for (final stanza in stanzas) ...[
           _stanza(stanza),
@@ -1072,5 +1130,64 @@ class HymnPrefs {
     list.insert(0, id);
     if (list.length > _recentCap) list.removeRange(_recentCap, list.length);
     await CacheService.writePref(_kRecent, jsonEncode(list));
+  }
+}
+
+/// "Also in: English · SDA Hymnal 214 · Ndebele · …" under a hymn's title.
+/// Shows only hymnals the app really has, and only links an admin entered.
+class _AlsoIn extends StatelessWidget {
+  const _AlsoIn({required this.hymn});
+  final Hymn hymn;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return ValueListenableBuilder<Map<int, int>>(
+      valueListenable: HymnLinkService.links,
+      builder: (context, _, _) {
+        final others =
+            HymnLinkService.counterparts(hymn, HymnService.cached());
+        if (others.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                'Also in',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: palette.textMuted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              for (final o in others)
+                ActionChip(
+                  avatar: Icon(Icons.swap_horiz_rounded,
+                      size: 16, color: palette.brandBlue),
+                  label: Text(
+                    '${HymnCollection.fromKey(o.collection).subtitle} · '
+                    '${o.reference}',
+                  ),
+                  labelStyle: AppTextStyles.labelSmall.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  backgroundColor: palette.card,
+                  side: BorderSide(color: palette.divider),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          HymnReaderScreen(hymns: [o], initialIndex: 0),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

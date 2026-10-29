@@ -119,16 +119,30 @@ class _SabbathHoursScreenState extends State<SabbathHoursScreen> {
               subtitle: const Text('Most accurate. Kept on this phone only.'),
               onTap: () => Navigator.pop(c, '__gps'),
             ),
-            const Divider(height: 1),
-            for (final p in SabbathService.provinces)
+            if (SabbathService.usingGps())
               ListTile(
-                title: Text(p),
-                trailing:
-                    SabbathService.province() == p && !SabbathService.usingGps()
-                    ? Icon(Icons.check_rounded, color: palette.brandBlue)
-                    : null,
-                onTap: () => Navigator.pop(c, p),
+                leading: const Icon(Icons.location_off_rounded),
+                title: Text(
+                  SabbathService.inZimbabwe
+                      ? 'Stop using my location'
+                      : 'Use my country instead',
+                ),
+                onTap: () => Navigator.pop(c, '__nogps'),
               ),
+            const Divider(height: 1),
+            // Provinces exist for Zimbabwe only; showing Harare to a
+            // member in Kenya would give them the wrong sundown.
+            if (SabbathService.inZimbabwe)
+              for (final p in SabbathService.provinces)
+                ListTile(
+                  title: Text(p),
+                  trailing:
+                      SabbathService.province() == p &&
+                          !SabbathService.usingGps()
+                      ? Icon(Icons.check_rounded, color: palette.brandBlue)
+                      : null,
+                  onTap: () => Navigator.pop(c, p),
+                ),
           ],
         ),
       ),
@@ -136,11 +150,32 @@ class _SabbathHoursScreenState extends State<SabbathHoursScreen> {
     if (choice == null) return;
     if (choice == '__gps') {
       await _useLocation();
+    } else if (choice == '__nogps') {
+      await SabbathService.clearGps();
+      await LibraryReminders.rearmSabbath();
+      if (mounted) setState(() {});
     } else {
       await SabbathService.setProvince(choice);
       await LibraryReminders.rearmSabbath();
       if (mounted) setState(() {});
     }
+  }
+
+  /// Why the times may not be exact here, or null when they are.
+  String? _placeHint() {
+    if (SabbathService.usingGps()) return null;
+    final place = SabbathService.locationLabel();
+    if (SabbathService.timeZoneMismatchHours() > 2) {
+      return "Your phone's time zone doesn't match $place. If you live "
+          'somewhere else, tap above and choose Use my location.';
+    }
+    if (SabbathService.usingProvince) return null;
+    return SabbathService.inZimbabwe
+        ? 'Choose your province, or use your location, for times closer '
+              'to you.'
+        : 'These times are for the middle of $place. In a large country '
+              'that can be many minutes out — tap above and choose Use my '
+              'location for your exact sundown.';
   }
 
   Future<void> _setReminder(int? minutes) async {
@@ -315,6 +350,29 @@ class _SabbathHoursScreenState extends State<SabbathHoursScreen> {
                   ),
                 ),
               ),
+              if (_placeHint() case final hint?)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpace.sm),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline_rounded,
+                        size: 16,
+                        color: palette.textMuted,
+                      ),
+                      const SizedBox(width: AppSpace.xs),
+                      Expanded(
+                        child: Text(
+                          hint,
+                          style: AppTextStyles.caption.copyWith(
+                            color: palette.textMuted,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               _label(context, 'COMING SABBATHS'),
               Container(
                 decoration: BoxDecoration(

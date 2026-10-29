@@ -49,6 +49,15 @@ earlier chat version; the FILE wins)
    every zonedSchedule reminder (incl. the older Watch reminders) never
    fired on Android; receivers + RECEIVE_BOOT_COMPLETED added — verify on
    a real Android build.
+   **Hymnal languages + links (29 Oct 2026):** `HymnCollection.family`
+   (`christ_in_song` = same numbering in every vernacular edition);
+   `HymnCollection.planned` lists 9 languages NOT in the app (no
+   permission yet) — a collection shows in the switcher as soon as it has
+   hymns. `hymn_links` (patch_285 — **NOT YET APPLIED**, needs the owner's
+   go-ahead) maps Christ in Song number → SDA Hymnal number; admins fill it
+   from the printed book in the hymn editor. No mapping was guessed.
+   Sabbath hours: ZW provinces only for ZW members; hint for country-centre
+   times and time-zone mismatch. Tune playback NOT built (needs melody data).
 4. Bible app experience
 5. Sabbath School experience & date bug
 6. Hymnal (multilingual)

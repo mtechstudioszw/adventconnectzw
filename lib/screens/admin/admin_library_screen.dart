@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../models/hymn_model.dart';
 import '../../models/library_item_model.dart';
+import '../../services/hymn_link_service.dart';
 import '../../services/library_admin_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_colors.dart';
@@ -117,6 +118,8 @@ class _HymnsAdminTabState extends State<_HymnsAdminTab> {
   void initState() {
     super.initState();
     _future = LibraryAdminService.fetchAllHymns();
+    // So the editor's "Same hymn in the SDA Hymnal" field opens filled in.
+    HymnLinkService.refresh();
   }
 
   void _reload() =>
@@ -251,13 +254,24 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
   late final _title = TextEditingController(text: widget.hymn?.title ?? '');
   late final _lyrics = TextEditingController(text: widget.hymn?.lyrics ?? '');
   late String _collection = HymnCollection.fromKey(widget.hymn?.collection).key;
+
+  /// Christ in Song hymns only: the same song's SDA Hymnal number
+  /// (patch_285). One link per number serves every language.
+  late final _sdaLink = TextEditingController(
+    text: widget.hymn?.number == null
+        ? ''
+        : (HymnLinkService.sdaFor(widget.hymn!.number!)?.toString() ?? ''),
+  );
   bool _saving = false;
+
+  bool get _inFamily => HymnCollection.fromKey(_collection).family != null;
 
   @override
   void dispose() {
     _number.dispose();
     _title.dispose();
     _lyrics.dispose();
+    _sdaLink.dispose();
     super.dispose();
   }
 
@@ -275,10 +289,15 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
         lyrics: _lyrics.text,
         collection: _collection,
         // Language follows the collection.
-        language: _collection == HymnCollection.kristuMunzwiyo.key
-            ? 'Shona'
-            : 'English',
+        language: HymnCollection.fromKey(_collection).subtitle,
       );
+      final number = int.tryParse(_number.text.trim());
+      if (_inFamily && number != null) {
+        final link = int.tryParse(_sdaLink.text.trim());
+        if (link != HymnLinkService.sdaFor(number)) {
+          await HymnLinkService.save(number, link);
+        }
+      }
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
@@ -314,43 +333,28 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            Row(
+            // Every known hymnal, so a new language can be loaded here
+            // without an app update; it shows in the switcher once it has
+            // hymns.
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                for (final c in HymnCollection.all) ...[
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => setState(() => _collection = c.key),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: _collection == c.key
-                              ? AppColors.primaryBlue
-                              : palette.inputFill,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _collection == c.key
-                                ? AppColors.primaryBlue
-                                : palette.divider,
-                          ),
-                        ),
-                        child: Text(
-                          '${c.label} (${c.subtitle})',
-                          style: AppTextStyles.labelMedium.copyWith(
-                            color: _collection == c.key
-                                ? AppColors.white
-                                : palette.text,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12.5,
-                          ),
-                        ),
-                      ),
+                for (final c in HymnCollection.known)
+                  ChoiceChip(
+                    label: Text('${c.label} (${c.subtitle})'),
+                    selected: _collection == c.key,
+                    showCheckmark: false,
+                    selectedColor: AppColors.primaryBlue,
+                    labelStyle: AppTextStyles.labelMedium.copyWith(
+                      color: _collection == c.key
+                          ? AppColors.white
+                          : palette.text,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12.5,
                     ),
+                    onSelected: (_) => setState(() => _collection = c.key),
                   ),
-                  if (c.key != HymnCollection.all.last.key)
-                    const SizedBox(width: 10),
-                ],
               ],
             ),
             const SizedBox(height: 12),
@@ -364,6 +368,27 @@ class _HymnEditorScreenState extends State<_HymnEditorScreen> {
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               ),
             ),
+            if (_inFamily) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: 260,
+                child: _field(
+                  context,
+                  controller: _sdaLink,
+                  label: 'Same hymn in the SDA Hymnal (number)',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'From the printed hymnal. Leave empty if this hymn is not in '
+                'the SDA Hymnal. Applies to this number in every language.',
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             _field(context, controller: _title, label: 'Title'),
             const SizedBox(height: 12),

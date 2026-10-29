@@ -139,6 +139,38 @@ class SabbathService {
 
   static Future<void> clearGps() => CacheService.deletePref(_gpsKey);
 
+  /// True when the member's profile country is Zimbabwe — the only
+  /// country with province-level places. Everyone else gets their country
+  /// centre or their exact location.
+  static bool get inZimbabwe {
+    try {
+      return _countryCode().toUpperCase() == 'ZW';
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// A Zimbabwe province is set and is what sundown uses.
+  static bool get usingProvince {
+    if (usingGps() || !inZimbabwe) return false;
+    try {
+      return _provinceCoords.containsKey(province());
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Hours between the phone's time zone and the one the sundown place
+  /// implies (its longitude / 15). Over ~2 means the times are for
+  /// somewhere else — e.g. a Zimbabwean profile on a phone in London.
+  static double timeZoneMismatchHours({Duration? deviceOffset}) {
+    final c = _coords();
+    final expected = c.lon / 15.0;
+    final actual =
+        (deviceOffset ?? DateTime.now().timeZoneOffset).inMinutes / 60.0;
+    return (actual - expected).abs();
+  }
+
   /// Where sundown is being computed for, in words.
   static String locationLabel() {
     if (usingGps()) return 'Your location';

@@ -12,6 +12,7 @@ import 'cache_service.dart';
 import 'connectivity_service.dart';
 import 'secure_storage_service.dart';
 import 'session_reset.dart';
+import 'content_filter_error.dart';
 
 class AuthResult {
   AuthResult.success(this.user) : errorMessage = null, isSuccess = true;
@@ -1029,7 +1030,11 @@ class AuthService {
               })
               .eq('id', user.id);
         } on PostgrestException catch (e) {
-          return AuthResult.failure(e.message);
+          return AuthResult.failure(
+            ContentFilterError.matches(e)
+                ? ContentFilterError.message
+                : e.message,
+          );
         }
       }
 
@@ -1046,7 +1051,11 @@ class AuthService {
               .update({'date_of_birth': dobIso})
               .eq('id', user.id);
         } on PostgrestException catch (e) {
-          return AuthResult.failure(e.message);
+          return AuthResult.failure(
+            ContentFilterError.matches(e)
+                ? ContentFilterError.message
+                : e.message,
+          );
         }
       }
 
@@ -1067,7 +1076,11 @@ class AuthService {
               .update({'country': country})
               .eq('id', user.id);
         } on PostgrestException catch (e) {
-          return AuthResult.failure(e.message);
+          return AuthResult.failure(
+            ContentFilterError.matches(e)
+                ? ContentFilterError.message
+                : e.message,
+          );
         }
       }
 
@@ -1145,7 +1158,11 @@ class AuthService {
 
       return AuthResult.success(response.user);
     } on AuthException catch (e) {
-      return AuthResult.failure(e.message);
+      return AuthResult.failure(
+            ContentFilterError.matches(e)
+                ? ContentFilterError.message
+                : e.message,
+          );
     } on PostgrestException catch (e) {
       // SURFACE the database's own message instead of a generic one.
       //

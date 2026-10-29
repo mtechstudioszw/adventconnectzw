@@ -13,6 +13,7 @@ import '../char_counter.dart';
 import '../expandable_text.dart';
 import '../verified_tick.dart';
 import 'report_sheet.dart';
+import '../../services/content_filter_error.dart';
 
 /// Bottom sheet that opens when the user taps "Comment" on a feed post.
 /// Loads comments lazily and lets the viewer post a new one, reply to
@@ -123,10 +124,14 @@ class _CommentsSheetState extends State<_CommentsSheet> {
         _sending = false;
       });
       widget.onCommentCountChanged(newFlat.length);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _sending = false);
-      _toast('Could not post comment. Try again.');
+      _toast(
+        ContentFilterError.matches(e)
+            ? ContentFilterError.message
+            : 'Could not post comment. Try again.',
+      );
     }
   }
 

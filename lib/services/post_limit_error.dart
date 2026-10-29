@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'connectivity_service.dart';
+import 'content_filter_error.dart';
 
 /// Maps the server-side `enforce_daily_post_limit` trigger raise into
 /// a user-friendly error and a per-section label so screens can show
@@ -59,6 +60,7 @@ class PostLimitError {
   /// something that could not succeed until tomorrow.
   static String messageFor(Object error, {required String fallback}) {
     if (error is _PostLimitException) return error.message;
+    if (ContentFilterError.matches(error)) return ContentFilterError.message;
     if (!ConnectivityService.isOnline) {
       return "You're offline. Try again when you have a connection.";
     }

@@ -43,7 +43,13 @@ class PrivacyScreen extends StatelessWidget {
           body:
               'We do not sell your personal information — ever. We share data only with the trusted infrastructure providers we need to run the app:',
           bullets: [
-            'Supabase (Africa, Cape Town region) hosts our database and authentication.',
+            // Region verified against the live project, 29 Oct 2026:
+            // eu-central-1 (Frankfurt). It used to say Cape Town.
+            'Supabase (Frankfurt, Germany — EU region) hosts our database and authentication.',
+            // Apple Guideline 5.1.2(i): disclose data shared with a
+            // third-party AI. The app also asks before the first message.
+            'Google (Gemini), only if you use Advent AI and agree first: the messages you type to Advent AI are sent to Google to generate its answers. Don\'t include personal or sensitive details in them.',
+            'Google Firebase delivers push notifications to your device.',
             'Crash and analytics tools that receive anonymised diagnostic data.',
             'Authorities, only when required by law and with proper legal process.',
           ],
@@ -84,7 +90,7 @@ class PrivacyScreen extends StatelessWidget {
               'You are in control of your data. From Settings you can:',
           bullets: [
             'Edit or update your profile information at any time.',
-            'Request a copy of your data by emailing privacy@adventconnect.zw.',
+            'Request a copy of your data by emailing adventconnectzw@gmail.com.',
             'Delete your account, which removes your profile and posts.',
             'Adjust or revoke notification preferences at any time.',
           ],
@@ -112,7 +118,7 @@ class PrivacyScreen extends StatelessWidget {
         LegalSection(
           title: 'Contact Us',
           body:
-              'For privacy questions or to exercise your rights, email privacy@adventconnect.zw. We aim to respond within seven working days.',
+              'For privacy questions or to exercise your rights, email adventconnectzw@gmail.com. We aim to respond within seven working days.',
         ),
       ],
     );

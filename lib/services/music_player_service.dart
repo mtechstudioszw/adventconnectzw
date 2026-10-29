@@ -6,6 +6,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
 
+import '../config/platform_flags.dart';
 import '../models/library_item_model.dart';
 import 'connectivity_service.dart';
 import 'mini_player_service.dart';
@@ -124,7 +125,9 @@ class MusicPlayerService {
   static Future<void> _boot() async {
     // Web and desktop have no audio_service implementation; calling init
     // there throws a MissingPluginException we can't usefully recover from.
-    if (!kIsWeb) await _bootMediaSession();
+    // No media session on iOS: music is hidden there (kHideMusic), and the
+    // app no longer declares background audio.
+    if (!kIsWeb && !kHideMusic) await _bootMediaSession();
     ready.value = true;
   }
 

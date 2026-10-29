@@ -937,6 +937,9 @@ class _ChatScreenState extends State<ChatScreen>
     // Opening the chat clears its tray notification (WhatsApp parity) — the
     // user is now reading it, so the heads-up shouldn't linger.
     PushService.cancelConversationNotification(widget.conversationId);
+    // While this chat is on screen, its own pushes don't pop a banner —
+    // you're already reading them (how WhatsApp behaves).
+    PushService.openConversationId = widget.conversationId;
     // Continuous voice playback — when one note finishes, the shared
     // player rolls on to the next voice note in this thread.
     VoicePlayerService.instance.nextResolver = _voiceQueueResolver;
@@ -1467,6 +1470,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   @override
   void dispose() {
+    if (PushService.openConversationId == widget.conversationId) {
+      PushService.openConversationId = null;
+    }
     // Persist whatever is in the composer before the screen goes. Editing an
     // existing message is NOT a draft — that text belongs to a sent message
     // and restoring it into a fresh composer would be baffling.

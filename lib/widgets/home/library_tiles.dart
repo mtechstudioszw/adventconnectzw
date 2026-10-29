@@ -8,6 +8,7 @@ import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../motion/pressable.dart';
 import '../motion/staggered_reveal.dart';
+import '../../config/platform_flags.dart';
 
 /// The Library launcher on Home.
 ///
@@ -52,13 +53,14 @@ class LibraryTiles extends StatelessWidget {
   // (label, icon, library tab index, isHero). Tab indexes map 1:1 onto
   // LibraryScreen's TabBar order — keep the two in sync.
   // Quiz uses index -1 because it routes to `/quiz`, not the Library.
-  static const _items = <(String, IconData, int, bool)>[
+  static List<(String, IconData, int, bool)> get _items => [
     ('Bible', Icons.menu_book_rounded, 0, false),
     ('Quiz', Icons.emoji_events_rounded, -1, true),
     ('EGW', Icons.auto_stories_rounded, 3, false),
     ('Sabbath', Icons.school_rounded, 1, false),
     ('Hymnal', Icons.queue_music_rounded, 2, false),
-    ('Music', Icons.headphones_rounded, 4, false),
+    // Hidden on iOS — see kHideMusic.
+    if (!kHideMusic) ('Music', Icons.headphones_rounded, 4, false),
   ];
 
   @override

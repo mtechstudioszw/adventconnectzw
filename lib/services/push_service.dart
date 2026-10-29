@@ -253,6 +253,11 @@ Future<void> _renderIncomingChat(
 class PushService {
   PushService._();
 
+  /// The chat currently on screen, if any. Its own pushes get no in-app
+  /// banner — you're already looking at the message (WhatsApp does the
+  /// same). Every other push still shows while the app is open.
+  static String? openConversationId;
+
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   static final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
@@ -516,6 +521,7 @@ class PushService {
     final isConversation =
         referenceType == 'conversation' && referenceId.isNotEmpty;
     if (message.notification == null && !isConversation) return;
+    if (isConversation && referenceId == openConversationId) return;
     await _renderIncomingChat(message, _local);
   }
 

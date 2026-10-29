@@ -13,6 +13,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/country_picker_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../widgets/motion/brand_spinner.dart';
+import '../../services/content_filter_error.dart';
 
 /// Post-approval edit screen. Pre-filled from the existing sellers row.
 /// Category is shown but not editable — switching category requires
@@ -356,7 +357,11 @@ class _EditStoreScreenState extends State<EditStoreScreen>
       context.pop();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      setState(
+        () => _error = ContentFilterError.matches(e)
+            ? ContentFilterError.message
+            : e.toString().replaceFirst('Exception: ', ''),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }

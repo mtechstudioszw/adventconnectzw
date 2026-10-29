@@ -12,6 +12,7 @@ import '../../theme/app_tokens.dart';
 import '../../widgets/advent_ai_mark.dart';
 import '../../widgets/screen_shell.dart';
 import 'ai_gate_copy.dart';
+import 'widgets/ai_consent_sheet.dart';
 import 'widgets/ai_markdown.dart';
 import 'widgets/ai_gate_sheet.dart';
 
@@ -108,6 +109,9 @@ class _AdventAiScreenState extends State<AdventAiScreen> {
   Future<void> _send() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _sending) return;
+
+    // Nothing reaches Google until the member has agreed (once).
+    if (!await ensureAiConsent(context) || !mounted) return;
 
     final balance = AiBalanceService.current;
     if (!balance.canUse) {

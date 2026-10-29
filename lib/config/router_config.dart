@@ -63,6 +63,7 @@ import '../models/church_model.dart';
 import '../screens/churches/church_details_screen.dart';
 import '../screens/churches/churches_screen.dart';
 import '../screens/donate/donate_screen.dart';
+import 'platform_flags.dart';
 import '../screens/donate/iphone_fundraiser_screen.dart';
 import '../models/advent_news_model.dart';
 import '../models/event_model.dart';
@@ -203,6 +204,17 @@ void attachUsageTracking() {
 /// before. A shared link is the app's main growth path — it must never be
 /// one platform-default away from opening an error page.
 String? _shareLinkRedirect(GoRouterState state) {
+  // iOS has no In-App Purchase, so no screen that asks for money may open
+  // there (Guideline 3.1.1) — not even through a typed or shared link. No
+  // button leads to these on iOS (kHidePayments); this closes the door.
+  if (kHidePayments) {
+    final path = state.uri.path;
+    if (path == '/donate' ||
+        path == '/premium' ||
+        path == '/iphone-fundraiser') {
+      return '/home';
+    }
+  }
   if (state.uri.scheme != 'io.supabase.adventconnect') return null;
   // Owned by supabase_flutter — swallow it rather than erroring on it.
   if (state.uri.host == 'login-callback') return '/splash';

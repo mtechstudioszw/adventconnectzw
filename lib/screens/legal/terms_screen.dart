@@ -94,7 +94,7 @@ class TermsScreen extends StatelessWidget {
         LegalSection(
           title: 'Contact',
           body:
-              'Questions about these terms? Reach our team at hello@adventconnect.zw and we\'ll get back to you as soon as we can.',
+              'Questions about these terms? Reach our team at adventconnectzw@gmail.com and we\'ll get back to you as soon as we can.',
         ),
       ],
     );

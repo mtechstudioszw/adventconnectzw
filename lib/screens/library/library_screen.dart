@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/platform_flags.dart';
 
 import '../../services/hymn_service.dart';
 import '../../services/music_player_service.dart';
@@ -30,7 +31,8 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen>
     with SingleTickerProviderStateMixin {
-  static const _tabCount = 5;
+  /// Music is the fifth tab, hidden on iOS ([kHideMusic]).
+  static int get _tabCount => kHideMusic ? 4 : 5;
 
   late final TabController _tabs;
 
@@ -56,7 +58,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     HymnService.warmUp();
     // Bring back the previous session's queue so the mini player reappears
     // where the user left it. Loads paused — never auto-plays on open.
-    MusicPlayerService.instance.restoreLastQueue();
+    if (!kHideMusic) MusicPlayerService.instance.restoreLastQueue();
   }
 
   void _trackTab() {
@@ -113,15 +115,28 @@ class _LibraryScreenState extends State<LibraryScreen>
           labelStyle: AppTextStyles.labelMedium.copyWith(
             fontWeight: FontWeight.w700,
           ),
-          tabs: const [
-            Tab(icon: Icon(Icons.menu_book_rounded, size: 19), text: 'Bible'),
-            Tab(
+          tabs: [
+            const Tab(
+              icon: Icon(Icons.menu_book_rounded, size: 19),
+              text: 'Bible',
+            ),
+            const Tab(
               icon: Icon(Icons.school_rounded, size: 19),
               text: 'Sabbath School',
             ),
-            Tab(icon: Icon(Icons.queue_music_rounded, size: 19), text: 'Hymnal'),
-            Tab(icon: Icon(Icons.auto_stories_rounded, size: 19), text: 'EGW'),
-            Tab(icon: Icon(Icons.headphones_rounded, size: 19), text: 'Music'),
+            const Tab(
+              icon: Icon(Icons.queue_music_rounded, size: 19),
+              text: 'Hymnal',
+            ),
+            const Tab(
+              icon: Icon(Icons.auto_stories_rounded, size: 19),
+              text: 'EGW',
+            ),
+            if (!kHideMusic)
+              const Tab(
+                icon: Icon(Icons.headphones_rounded, size: 19),
+                text: 'Music',
+              ),
           ],
         ),
       ),
@@ -132,16 +147,16 @@ class _LibraryScreenState extends State<LibraryScreen>
             Expanded(
               child: TabBarView(
                 controller: _tabs,
-                children: const [
+                children: [
                   // Audio Bible lives as a button INSIDE the Bible tab, not
                   // its own tab (founder preference).
-                  BibleTab(),
-                  SabbathSchoolTab(),
+                  const BibleTab(),
+                  const SabbathSchoolTab(),
                   // Hymnal = structured, searchable hymns (number/title/
                   // lyrics), bundled as an asset. NOT PDFs.
-                  HymnalTab(),
-                  EgwTab(),
-                  MusicTab(),
+                  const HymnalTab(),
+                  const EgwTab(),
+                  if (!kHideMusic) const MusicTab(),
                 ],
               ),
             ),

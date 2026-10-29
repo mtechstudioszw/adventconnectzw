@@ -10,6 +10,7 @@ import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
+import '../../config/platform_flags.dart';
 import 'library_screen.dart';
 
 /// Entry sequence for the Library.
@@ -46,11 +47,12 @@ class _LibraryBootScreenState extends State<LibraryBootScreen> {
     (Icons.school_rounded, 'Sabbath School', () async {}),
     (Icons.queue_music_rounded, 'Hymnal', () => HymnService.warmUp()),
     (Icons.auto_stories_rounded, 'EGW', () async {}),
-    (
-      Icons.headphones_rounded,
-      'Music',
-      () => MusicPlayerService.instance.restoreLastQueue(),
-    ),
+    if (!kHideMusic)
+      (
+        Icons.headphones_rounded,
+        'Music',
+        () => MusicPlayerService.instance.restoreLastQueue(),
+      ),
   ];
 
   final Set<int> _ready = {};

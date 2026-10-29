@@ -13,6 +13,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/country_picker_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../services/content_filter_error.dart';
 
 /// The "Open a store" form. Self-serve as of patch_022 — anyone
 /// authenticated can publish a storefront after accepting the
@@ -248,7 +249,11 @@ class _SetupStoreScreenState extends State<SetupStoreScreen>
       context.go('/seller');
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      setState(
+        () => _error = ContentFilterError.matches(e)
+            ? ContentFilterError.message
+            : e.toString().replaceFirst('Exception: ', ''),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }

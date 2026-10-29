@@ -20,6 +20,7 @@ import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/motion/pressable.dart';
 import 'widgets/translation_picker.dart';
 import '../../widgets/verse_share_card.dart';
+import '../../config/platform_flags.dart';
 
 /// Library → Bible tab. Bundled offline KJV with a full modern reader:
 /// verse-of-the-day, reading streak, fast book/chapter picking, swipe between
@@ -305,8 +306,10 @@ class _BibleTabState extends State<BibleTab>
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
+          // Audio Bible plays through the music player — hidden on iOS
+          // (kHideMusic).
+          if (!kHideMusic) const SizedBox(width: 10),
+          if (!kHideMusic) Expanded(
             child: _ToolButton(
               icon: Icons.headset_rounded,
               label: 'Audio',
@@ -1781,7 +1784,7 @@ class _ChapterPageState extends State<_ChapterPage> {
                 ),
               ),
             ),
-            if (_remote?.hasAudio ?? false) ...[
+            if (!kHideMusic && (_remote?.hasAudio ?? false)) ...[
               const SizedBox(width: 8),
               _listenButton(),
             ],

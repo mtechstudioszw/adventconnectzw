@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -14,6 +15,18 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // Notifications while the app is OPEN. iOS hands a notification that
+    // arrives in the foreground to the notification centre's delegate and
+    // shows nothing unless that delegate says so. With no delegate set,
+    // neither firebase_messaging (which turns the push into onMessage)
+    // nor flutter_local_notifications (which draws the in-app banner)
+    // ever hears about it — so pushes appeared only when the app was
+    // closed. FlutterAppDelegate forwards these callbacks to every
+    // plugin; this line is the setup flutter_local_notifications documents
+    // for iOS, and it must run before plugins register (implicit engine).
+    UNUserNotificationCenter.current().delegate =
+      self as? UNUserNotificationCenterDelegate
+
     // Ask iOS for an APNs token at launch (needs no permission).
     application.registerForRemoteNotifications()
     return super.application(

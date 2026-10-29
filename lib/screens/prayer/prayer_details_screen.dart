@@ -12,6 +12,7 @@ import '../../widgets/prayer_card.dart';
 import '../../widgets/verified_tick.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/home/report_sheet.dart';
+import '../../services/content_filter_error.dart';
 
 class PrayerDetailsScreen extends StatefulWidget {
   const PrayerDetailsScreen({
@@ -155,12 +156,14 @@ class _PrayerDetailsScreenState extends State<PrayerDetailsScreen>
           _prayer = _prayer!.copyWith(commentCount: _prayer!.commentCount + 1);
         }
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Could not post comment.',
+            ContentFilterError.matches(e)
+                ? ContentFilterError.message
+                : 'Could not post comment.',
             style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
           ),
         ),

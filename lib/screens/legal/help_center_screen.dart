@@ -216,8 +216,7 @@ class HelpCenterScreen extends StatelessWidget {
           body: 'If something here did not answer your question:',
           bullets: [
             'In-app — the report option on any post, profile or message',
-            'Email — hello@adventconnect.zw',
-            'Safety concerns — safety@adventconnect.zw',
+            'Email, including safety concerns — adventconnectzw@gmail.com',
           ],
         ),
       ],

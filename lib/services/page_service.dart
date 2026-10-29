@@ -6,6 +6,7 @@ import '../models/post_model.dart';
 import '../utils/postgrest_filter.dart';
 import '../utils/require_changed.dart';
 import 'feed_service.dart';
+import 'content_filter_error.dart';
 
 /// Organization Pages (patch_275): directory, create/edit, follow, admins,
 /// and posting as a Page.
@@ -232,6 +233,7 @@ class PageService {
   /// A friendly sentence for a server refusal, or null to use the caller's.
   static String? messageFor(Object e) {
     final s = e.toString();
+    if (ContentFilterError.matches(e)) return ContentFilterError.message;
     if (s.contains('PAGE_LIMIT')) return 'You can create up to 3 Pages.';
     if (s.contains('NO_SUCH_USER')) return 'No member has that username.';
     if (s.contains('LAST_OWNER')) {

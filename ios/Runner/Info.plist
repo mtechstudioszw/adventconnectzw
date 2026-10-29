@@ -4,11 +4,14 @@
 <dict>
 	<key>GIDClientID</key>
 	<string>13892017929-dg9g51c203gldfk9qb05mv80ps7t997m.apps.googleusercontent.com</string>
-	<!-- Background audio is used by just_audio_background for Library music,
-	     including lock-screen and Control Centre playback controls. -->
+	<!-- `audio` was removed 29 Oct 2026 (App Review, Guideline 2.5.4).
+	     Music is hidden on iOS (kHideMusic in lib/config/platform_flags.dart),
+	     so nothing plays in the background. To restore it, put `audio` back
+	     here, flip kHideMusic, and send Apple a screen recording.
+	     `remote-notification` stays: it lets push notifications wake the
+	     app (chat delivered-ticks). -->
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>audio</string>
 		<string>remote-notification</string>
 	</array>
 
@@ -31,6 +34,13 @@
 	<string>Adventist Super App saves post images you tap "Save to gallery" on into your Photos library.</string>
 
 	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Adventist Super App uses your location to find SDA churches near you.</string>
+
+	<!-- The app only ever asks for "while using" (LocationService calls
+	     Geolocator.requestPermission). This key is here because the
+	     geolocator binary references the Always API, and App Store Connect
+	     warns (ITMS-90683) when its description is missing. -->
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Adventist Super App uses your location to find SDA churches near you.</string>
 
 	<key>NSFaceIDUsageDescription</key>

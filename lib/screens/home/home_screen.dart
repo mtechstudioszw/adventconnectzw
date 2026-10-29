@@ -2270,7 +2270,10 @@ class _HomeScreenState extends State<HomeScreen>
         children.add(YoutubeVideoCard(video: v, onTap: () => _openVideo(v)));
       }
       // One track at a time, same treatment as the videos.
-      if ((i + 1) % _musicEveryNPosts == 0 && musicIdx < _music.length) {
+      // No music cards on iOS — see kHideMusic.
+      if (!kHideMusic &&
+          (i + 1) % _musicEveryNPosts == 0 &&
+          musicIdx < _music.length) {
         children.add(HomeMusicCard(item: _music[musicIdx++]));
       }
       // Sponsored card after every _adEveryNPosts posts, capped at

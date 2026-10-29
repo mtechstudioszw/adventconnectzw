@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -44,7 +45,16 @@ class OnboardingFlowScreen extends StatefulWidget {
 
 class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
     with TickerProviderStateMixin {
-  static const _stepCount = 6;
+  /// The permissions step (notifications, photos, camera with "Allow"
+  /// buttons and a Skip) is left out on iOS. App Review can reject a custom
+  /// screen shown before the system prompts that lets people skip past them
+  /// (Guideline 5.1.1(iv)). iOS asks for each permission at the moment it
+  /// is needed instead: notifications at launch (PushService), photos and
+  /// camera when a picture is chosen. Android keeps the step.
+  static bool get _showPermissionsStep =>
+      kIsWeb || defaultTargetPlatform != TargetPlatform.iOS;
+
+  static int get _stepCount => _showPermissionsStep ? 6 : 5;
 
   final PageController _page = PageController();
   int _index = 0;
@@ -422,12 +432,13 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
           }
         }),
       ),
-      _PermissionsPage(
-        notif: _permNotif,
-        photos: _permPhotos,
-        camera: _permCamera,
-        onRequest: _requestPermission,
-      ),
+      if (_showPermissionsStep)
+        _PermissionsPage(
+          notif: _permNotif,
+          photos: _permPhotos,
+          camera: _permCamera,
+          onRequest: _requestPermission,
+        ),
       _SuccessPage(onEnter: _finish),
     ];
     return Scaffold(

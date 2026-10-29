@@ -2690,7 +2690,7 @@ class _JumpGrid extends StatelessWidget {
       (Icons.work_outline_rounded, 'Jobs', () => context.pushNamed('jobs')),
       (Icons.event_outlined, 'Events', () => context.pushNamed('events')),
       (Icons.play_circle_outline, 'Videos', () => context.pushNamed('watch')),
-      (Icons.menu_book_outlined, 'Library', () => context.pushNamed('library')),
+      (Icons.menu_book_outlined, 'Library', () => context.goNamed('library_hub')),
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),

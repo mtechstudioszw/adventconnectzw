@@ -781,6 +781,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final result = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
+      // Scroll-controlled and scrollable: the menu has outgrown a short
+      // phone (29 Oct 2026, "bottom overflowed by 35 pixels").
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
       builder: (ctx) => SafeArea(
         top: false,
         child: Container(
@@ -789,7 +795,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           padding: const EdgeInsets.fromLTRB(8, 12, 8, 24),
-          child: Column(
+          child: SingleChildScrollView(
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
@@ -876,6 +883,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onTap: () => Navigator.pop(ctx, 'sign_out'),
               ),
             ],
+          ),
           ),
         ),
       ),

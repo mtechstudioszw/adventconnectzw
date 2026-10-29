@@ -631,6 +631,17 @@ class _HomeScreenState extends State<HomeScreen>
     await _refresh();
   }
 
+  /// [f], or [fallback] if it fails — logged, never thrown. Home is many
+  /// small requests; only the feed itself should be able to fail a load.
+  static Future<T> _soft<T>(String label, Future<T> f, T fallback) async {
+    try {
+      return await f;
+    } catch (e) {
+      debugPrint('Home: $label failed: $e');
+      return fallback;
+    }
+  }
+
   Future<void> _bootstrap() async {
     // Pulling to refresh with no signal used to do nothing visible: the
     // cached feed stayed put, the spinner retracted, and the member was left
@@ -675,12 +686,17 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       // Tier 0: the two small queries the ranking needs. Cheap, and the
       // cache is already on screen while they run.
+      // Each one fails SOFT: these only tune the ranking, and one dead
+      // query used to throw the whole refresh away (29 Oct 2026: "when I
+      // swipe down, the posts are not refreshing").
       final social = await Future.wait<Object?>([
-        FeedService.fetchMyFriendships(),
-        ChurchService.fetchUserFollowedChurchIds(),
-        PageService.myFollowedPageIds(),
+        _soft('friendships', FeedService.fetchMyFriendships(),
+            const <Friendship>[]),
+        _soft('followed churches',
+            ChurchService.fetchUserFollowedChurchIds(), <String>{}),
+        _soft('followed pages', PageService.myFollowedPageIds(), <String>{}),
         // Fills FollowService.followingIds; fails soft.
-        FollowService.loadMyFollowing(),
+        _soft<void>('following', FollowService.loadMyFollowing(), null),
       ]);
       if (!mounted) return;
       final friendships = social[0] as List<Friendship>;
@@ -698,7 +714,7 @@ class _HomeScreenState extends State<HomeScreen>
 
       // Seen history has to land BEFORE the feed request, because the
       // ranking reads it synchronously while sorting.
-      await FeedService.fetchSeenPostIds();
+      await _soft<void>('seen posts', FeedService.fetchSeenPostIds(), null);
       if (!mounted) return;
 
       // Tier 1: what the user actually came for.
@@ -719,10 +735,15 @@ class _HomeScreenState extends State<HomeScreen>
           // but an American member still sees Zimbabwe's feed.
           viewerCountry: _country,
         ),
-        FeedService.fetchStories(),
-        FeedService.fetchMyViewedStoryIds(),
-        NotificationService.unreadCount(),
-        UrgentBannerService.fetchActive(),
+        // Only the feed itself may fail the refresh. Stories, the badge
+        // and the urgent banner fall back on their own.
+        _soft('stories', FeedService.fetchStories(), _stories),
+        _soft('viewed stories', FeedService.fetchMyViewedStoryIds(),
+            _viewedStoryIds),
+        _soft('unread', NotificationService.unreadCount(),
+            _unreadNotifications),
+        _soft<UrgentBanner?>('banner', UrgentBannerService.fetchActive(),
+            _banner),
       ]);
       if (!mounted) return;
       // The viewer's own posts are part of their Home feed (owner's
@@ -744,8 +765,13 @@ class _HomeScreenState extends State<HomeScreen>
         _loading = false;
         _feedFailed = false;
       });
+      // Save the fresh posts NOW. This used to wait for the end of tier 2,
+      // where any one of eleven decorative requests failing skipped the
+      // write — so the cache was often empty and offline showed nothing.
+      unawaited(_writeCache(_events, _churches, _posts));
       _cacheBadges();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Home: feed load failed: $e');
       if (!mounted) return;
       // Network failed. If we haven't hydrated from cache yet (e.g.
       // because we were online when _bootstrap started), try now.
@@ -764,29 +790,33 @@ class _HomeScreenState extends State<HomeScreen>
   /// only costs its own rail.
   Future<void> _loadSecondary(String? viewerId) async {
     try {
-      final results = await Future.wait([
-        EventService.fetchEvents(upcomingOnly: true),
-        // A discovery rail, not the directory: it shuffles this pool and
-        // shows a handful. Scoped and capped so the OrgMast import cannot
-        // turn Home's second-tier load into a 185,000-row download.
-        ChurchService.fetchChurches(country: _country, limit: 60),
-        EventService.fetchUserRsvpedEventIds(),
-        // 18, not 8: the feed shows TWO people rails now (#13) and they draw
-        // from disjoint slices of this pool. Eight would have left the
-        // second rail with two people in it, which is a worse signal than
-        // showing no second rail.
+      // Each request falls back on its own (patch 29 Oct 2026): one dead
+      // endpoint now costs only its own rail, not every rail and the cache.
+      final results = await Future.wait<Object?>([
+        _soft('events', EventService.fetchEvents(upcomingOnly: true),
+            _events),
+        // A discovery rail, not the directory: scoped and capped so the
+        // OrgMast import cannot turn this into a 185,000-row download.
+        _soft('churches',
+            ChurchService.fetchChurches(country: _country, limit: 60),
+            _churches),
+        _soft('rsvps', EventService.fetchUserRsvpedEventIds(),
+            _rsvpedEventIds),
         // Everyone discoverable (685 on 29 Oct 2026): the endless feed
         // shows them group after group instead of two rails and done.
-        DirectoryService.fetchSuggestedMembers(limit: 1000, poolSize: 1000),
-        FeedService.pendingRequestCount(),
-        MessagingService.fetchConversations(),
-        // Every recent story, one card each through the feed — not three
-        // squeezed into a single carousel.
-        AdventNewsService.fetchNews(limit: 60),
-        PrayerService.fetchPrayers(),
-        MarketplaceService.fetchProducts(),
-        JobService.fetchJobs(),
-        LibraryService.fetchItems('music'),
+        _soft('people',
+            DirectoryService.fetchSuggestedMembers(limit: 1000, poolSize: 1000),
+            _suggestedMembers),
+        _soft('friend requests', FeedService.pendingRequestCount(),
+            _pendingFriendRequests),
+        _soft('conversations', MessagingService.fetchConversations(),
+            const <Conversation>[]),
+        // Every recent story, one card each through the feed.
+        _soft('news', AdventNewsService.fetchNews(limit: 60), _topNews),
+        _soft('prayers', PrayerService.fetchPrayers(), _prayers),
+        _soft('products', MarketplaceService.fetchProducts(), _products),
+        _soft('jobs', JobService.fetchJobs(), _jobs),
+        _soft('music', LibraryService.fetchItems('music'), _music),
       ]);
       if (!mounted) return;
       // Drop events whose start time is more than a few hours in the
@@ -1088,7 +1118,9 @@ class _HomeScreenState extends State<HomeScreen>
 
   void _hydrateFromCache() {
     try {
-      final raw = CacheService.readString('home_feed');
+      // Stale is fine: offline, last week's posts beat a blank screen.
+      // (readString drops anything over 24h old — and deleted it.)
+      final raw = CacheService.readStringStale('home_feed');
       if (raw == null) return;
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
       final events = ((decoded['events'] as List?) ?? const [])

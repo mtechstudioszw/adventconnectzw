@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import '../../config/platform_flags.dart';
 
 import '../../services/hymn_service.dart';
 import '../../services/music_player_service.dart';
 import '../../services/usage_analytics.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/app_text_styles.dart';
 import 'bible_tab.dart';
 import 'egw_tab.dart';
@@ -13,12 +11,16 @@ import 'hymnal_tab.dart';
 import 'music_tab.dart';
 import 'sabbath_school_tab.dart';
 
-/// The in-app Library: Bible (bundled offline KJV), Sabbath School (Adventech
-/// lessons in ~90 languages, Shona by default), Hymnal (bundled, fully
-/// offline), EGW Books (uploaded PDFs) and Music (background audio player).
+/// One Library section, on its own: Bible, Sabbath School, Hymnal, EGW or
+/// Music — whichever [initialTab] names.
 ///
-/// Reached from the "Bible · Hymnal · EGW · Music" launcher under the devotion
-/// card on Home.
+/// This used to be a five-tab screen with a "Library" title and a tab bar.
+/// The Library tab's hub (library_hub_screen.dart) replaced that as the
+/// way to move between sections, so the tab bar became a second, older
+/// Library inside the new one (owner, 29 Oct 2026: "when you type Bible,
+/// you should just open Bible … not that old library, that old ugly one").
+/// Every caller already says which section it wants, so each opens straight
+/// into it, titled with its own name, and Back returns to where you were.
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key, this.initialTab = 0});
 
@@ -29,145 +31,61 @@ class LibraryScreen extends StatefulWidget {
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen>
-    with SingleTickerProviderStateMixin {
-  /// Music is the fifth tab, hidden on iOS ([kHideMusic]).
-  static int get _tabCount => kHideMusic ? 4 : 5;
+class _LibraryScreenState extends State<LibraryScreen> {
+  /// Music doesn't exist on iOS ([kHideMusic]); a stray link to it opens
+  /// the Bible rather than a section that isn't there.
+  int get _section {
+    final i = widget.initialTab.clamp(0, 4);
+    return (kHideMusic && i == 4) ? 0 : i;
+  }
 
-  late final TabController _tabs;
+  static const _titles = [
+    'Bible',
+    'Sabbath School',
+    'Hymnal',
+    'Ellen G. White',
+    'Music',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(
-      length: _tabCount,
-      vsync: this,
-      initialIndex: widget.initialTab.clamp(0, _tabCount - 1),
-    );
-    // The five library sections are TABS, not routes, so the router's
-    // usage tracking cannot see which one is open — without this, Bible,
-    // Sabbath School, Hymnal, EGW and Music would all read as "nobody
-    // uses this" on the admin dashboard. Reported here instead.
-    _trackTab();
-    _tabs.addListener(() {
-      // Fires twice per swipe (start + settle); only count the landing.
-      if (!_tabs.indexIsChanging) _trackTab();
-    });
-    // Parse the bundled hymnal off the critical path so swiping to the Hymnal
-    // tab is instant rather than showing a first-open spinner.
-    HymnService.warmUp();
-    // Bring back the previous session's queue so the mini player reappears
-    // where the user left it. Loads paused — never auto-plays on open.
-    if (!kHideMusic) MusicPlayerService.instance.restoreLastQueue();
-  }
-
-  void _trackTab() {
-    final feature = Feature.fromLibraryTab(_tabs.index);
+    // Sections are not separate routes, so the router's usage tracking
+    // can't see which one is open — reported here instead.
+    final feature = Feature.fromLibraryTab(_section);
     if (feature != null) {
       UsageAnalytics.open(feature, screen: '/library/$feature');
     }
+    if (_section == 2) HymnService.warmUp();
+    // Bring back the previous session's queue so the mini player reappears
+    // where the user left it. Loads paused — never auto-plays on open.
+    if (_section == 4 && !kHideMusic) {
+      MusicPlayerService.instance.restoreLastQueue();
+    }
   }
 
-  @override
-  void dispose() {
-    _tabs.dispose();
-    super.dispose();
-  }
+  Widget get _body => switch (_section) {
+    // Audio Bible lives as a button INSIDE the Bible section.
+    0 => const BibleTab(),
+    1 => const SabbathSchoolTab(),
+    // Structured, searchable hymns bundled as an asset — not PDFs.
+    2 => const HymnalTab(),
+    3 => const EgwTab(),
+    _ => const MusicTab(),
+  };
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      // No ads anywhere in the Library. It's devotional content — Bible,
-      // Sabbath School, hymns, EGW writings and worship music — so it stays
-      // ad-free like the prayer screens (the tester reported the bottom
-      // banner was covering the catalog). Revenue stays on the home feed,
-      // stories and detail pages.
+      // No ads anywhere in the Library: devotional content stays ad-free.
       appBar: AppBar(
         title: Text(
-          'Library',
+          _titles[_section],
           style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 19),
         ),
-        // Quiz lives here as an ACTION, not a sixth tab (founder, Aug: "when
-        // enter library put option to access the quiz game"). A tab would
-        // shift every index after it, and `Feature.fromLibraryTab(_tabs.index)`
-        // maps those indexes to analytics features — adding one silently
-        // re-labels every Library tab's usage data. It is also not a reading
-        // surface like the other five; it opens a game.
-        actions: [
-          IconButton(
-            tooltip: 'Bible quiz',
-            icon: const Icon(Icons.extension_rounded),
-            color: AppColors.primaryBlue,
-            onPressed: () => context.pushNamed('quiz'),
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabs,
-          dividerColor: Colors.transparent,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          indicatorColor: AppColors.primaryBlue,
-          indicatorWeight: 3,
-          indicatorSize: TabBarIndicatorSize.label,
-          labelColor: AppColors.primaryBlue,
-          unselectedLabelColor: const Color(0xFF7C8698),
-          labelStyle: AppTextStyles.labelMedium.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-          tabs: [
-            const Tab(
-              icon: Icon(Icons.menu_book_rounded, size: 19),
-              text: 'Bible',
-            ),
-            const Tab(
-              icon: Icon(Icons.school_rounded, size: 19),
-              text: 'Sabbath School',
-            ),
-            const Tab(
-              icon: Icon(Icons.queue_music_rounded, size: 19),
-              text: 'Hymnal',
-            ),
-            const Tab(
-              icon: Icon(Icons.auto_stories_rounded, size: 19),
-              text: 'EGW',
-            ),
-            if (!kHideMusic)
-              const Tab(
-                icon: Icon(Icons.headphones_rounded, size: 19),
-                text: 'Music',
-              ),
-          ],
-        ),
       ),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            Expanded(
-              child: TabBarView(
-                controller: _tabs,
-                children: [
-                  // Audio Bible lives as a button INSIDE the Bible tab, not
-                  // its own tab (founder preference).
-                  const BibleTab(),
-                  const SabbathSchoolTab(),
-                  // Hymnal = structured, searchable hymns (number/title/
-                  // lyrics), bundled as an asset. NOT PDFs.
-                  const HymnalTab(),
-                  const EgwTab(),
-                  if (!kHideMusic) const MusicTab(),
-                ],
-              ),
-            ),
-            // The shell-level mini player was removed: the founder wants the
-            // now-playing card confined to the Music tab (which mounts its
-            // own). Everywhere else — other Library tabs, Home, and outside
-            // the app entirely — playback is controlled from the Android
-            // media notification and the iOS lock screen / Control Centre.
-          ],
-        ),
-      ),
+      body: SafeArea(top: false, child: _body),
     );
   }
 }

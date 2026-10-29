@@ -100,7 +100,10 @@ class CacheService {
         final Duration limit;
         if (_isLibraryContent(key)) {
           limit = _libraryMaxAge;
-        } else if (key == 'inbox' || key.startsWith('chat:')) {
+        } else if (key == 'inbox' ||
+            key.startsWith('chat:') ||
+            // The Home feed opens from this offline (29 Oct 2026).
+            key == 'home_feed') {
           limit = _chatMaxAge;
         } else {
           limit = _maxAge;

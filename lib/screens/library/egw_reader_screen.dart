@@ -428,18 +428,23 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
                 _savePosition(i);
               },
               itemBuilder: (context, i) {
-                final child = i == _pages.length
-                    ? _endOfChapter(palette)
-                    : _renderPage(_pages[i], palette, scale, columnWidth);
-                // The turn animates a transform over this subtree every
-                // frame. Without a boundary the whole page — thousands of
-                // laid-out glyphs — is re-rasterised on each of them.
-                return _turn(
-                  i,
-                  constraints.maxWidth,
-                  RepaintBoundary(child: child),
-                  palette,
+                // Every page paints its own ground. Without it, any frame
+                // where two pages share the screen shows both texts at once
+                // — the "glitch" of the old turn.
+                final child = ColoredBox(
+                  color: palette.page,
+                  child: i == _pages.length
+                      ? _endOfChapter(palette)
+                      : _renderPage(_pages[i], palette, scale, columnWidth),
                 );
+                // A transform animates over this subtree every frame. Without
+                // a boundary the whole page — thousands of laid-out glyphs —
+                // is re-rasterised on each of them.
+                final page = RepaintBoundary(child: child);
+                if (EgwReaderPrefs.pageTurn() == EgwPageTurn.slide) {
+                  return page;
+                }
+                return _turn(i, constraints.maxWidth, page);
               },
             ),
           ),
@@ -448,32 +453,22 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
     );
   }
 
-  /// The page-turn itself (founder, 17 Aug: "like an actual book").
+  /// The "Turn" page change (29 Oct 2026 rewrite).
   ///
-  /// `PageView` slides both pages sideways, which reads as a carousel, not
-  /// a book. So the translation is CANCELLED for every page — each one
-  /// stays exactly where it is — and the outgoing page instead rotates
-  /// about its left edge, lifting off the one beneath. That is the motion a
-  /// paper page actually makes.
+  /// A `PageView` paints its pages in index order, so the LATER page is
+  /// always on top. The old turn fought that: it rotated the earlier page
+  /// as if it were lifting off, but that page was underneath, and with no
+  /// page ground both texts showed through each other mid-swipe — the
+  /// glitch members reported (and why toning the angle down never fixed
+  /// it).
   ///
-  /// Deliberately driven by the drag rather than played as a fixed
-  /// animation: the page is under the finger the whole way, so the motion
-  /// costs no time. It is the real act, not a celebration of it.
-  ///
-  /// **Toned down 18 Aug 2026** — founder: *"the swipe animation is too much
-  /// fix tt one or remove it"*. The lift was ~99° of rotation with heavy
-  /// perspective, so mid-turn the outgoing page went nearly edge-on and the
-  /// text on it sheared into an unreadable wedge every single turn. What
-  /// makes it read as paper is the hinge at the left edge and the shading,
-  /// not the depth of the angle — so the angle is now shallow and the
-  /// shading light. The metaphor survives ("like an actual book", his own
-  /// request the day before); the theatre does not.
-  Widget _turn(
-    int index,
-    double width,
-    Widget child,
-    EgwReadingPalette palette,
-  ) {
+  /// This works with the paint order instead. The later page keeps the
+  /// `PageView`'s own slide, so it glides over the current one like the
+  /// next sheet in a stack, with a soft shadow on its leading edge; the
+  /// earlier page is pinned in place and dims a little as it is covered.
+  /// Paging back plays the same motion in reverse. Both pages are opaque,
+  /// so nothing ever shows through.
+  Widget _turn(int index, double width, Widget child) {
     return AnimatedBuilder(
       animation: _pager,
       child: child,
@@ -485,60 +480,41 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
         final delta = index - page;
 
         // Only the two pages either side of the fold are on stage.
-        if (delta.abs() > 1.01) return const SizedBox.shrink();
+        if (delta.abs() >= 1.0) return inner!;
 
-        // Undo PageView's own sliding so the page sits still.
-        final pinned = Transform.translate(
-          offset: Offset(-delta * width, 0),
-          child: inner,
-        );
-
-        if (delta > 0) {
-          // The page underneath, revealed as the one above lifts. A touch
-          // of shade sells the depth without a visible seam.
-          final reveal = (1 - delta).clamp(0.0, 1.0);
-          return Stack(
-            children: [
-              pinned,
-              Positioned.fill(
-                child: IgnorePointer(
+        if (delta <= 0) {
+          // The page being covered: hold it still (cancel the PageView's
+          // slide) and dim it as the next sheet arrives over it.
+          final t = (-delta).clamp(0.0, 1.0);
+          return Transform.translate(
+            offset: Offset(-delta * width, 0),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                inner!,
+                IgnorePointer(
                   child: ColoredBox(
-                    color: Colors.black.withValues(alpha: 0.10 * (1 - reveal)),
+                    color: Colors.black.withValues(alpha: 0.18 * t),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           );
         }
 
-        final t = (-delta).clamp(0.0, 1.0);
-        return Transform(
-          alignment: Alignment.centerLeft,
-          transform: Matrix4.identity()
-            // Perspective — without it the rotation reads as a horizontal
-            // squash rather than a page lifting toward you. Shallower than
-            // it was, in step with the smaller angle: the two together are
-            // what decide how much the text on the moving page distorts.
-            ..setEntry(3, 2, 0.0007)
-            // ~29°, down from ~99°. At the old angle the outgoing page went
-            // close to edge-on and its text sheared into an unreadable
-            // wedge on every turn — that is the "too much".
-            ..rotateY(-t * math.pi * 0.16),
-          child: Stack(
-            children: [
-              pinned,
-              // The turning page darkens as it lifts, which is what makes it
-              // read as paper catching the light. Halved with the angle;
-              // the shading is now doing most of the work of selling it.
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: ColoredBox(
-                    color: Colors.black.withValues(alpha: 0.12 * t),
-                  ),
-                ),
+        // The page arriving on top: the PageView's own slide, plus a shadow
+        // along its leading edge so it reads as a sheet laid over the other.
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.22 * (1 - delta)),
+                blurRadius: 18,
+                offset: const Offset(-6, 0),
               ),
             ],
           ),
+          child: inner,
         );
       },
     );
@@ -1471,6 +1447,49 @@ class _ReaderSettingsSheet extends StatelessWidget {
                       ),
                     ),
                 ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'PAGE TURN',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: palette.muted,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(height: 10),
+              SegmentedButton<EgwPageTurn>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: EgwPageTurn.slide,
+                    label: Text('Slide'),
+                    icon: Icon(Icons.swap_horiz_rounded),
+                  ),
+                  ButtonSegment(
+                    value: EgwPageTurn.turn,
+                    label: Text('Turn'),
+                    icon: Icon(Icons.auto_stories_outlined),
+                  ),
+                ],
+                selected: {EgwReaderPrefs.pageTurn()},
+                onSelectionChanged: (v) => EgwReaderPrefs.setPageTurn(v.first),
+                style: ButtonStyle(
+                  foregroundColor: WidgetStateProperty.resolveWith(
+                    (states) => states.contains(WidgetState.selected)
+                        ? palette.page
+                        : palette.text,
+                  ),
+                  backgroundColor: WidgetStateProperty.resolveWith(
+                    (states) => states.contains(WidgetState.selected)
+                        ? palette.accent
+                        : Colors.transparent,
+                  ),
+                  side: WidgetStatePropertyAll(
+                    BorderSide(color: palette.rule),
+                  ),
+                ),
               ),
             ],
           ),

@@ -12,6 +12,22 @@ import 'cache_service.dart';
 /// pages are rendered images, so the best it could do was invert them.
 enum EgwReadingTheme { day, sepia, night }
 
+/// How a page change looks (29 Oct 2026).
+///
+/// The old "book" turn rotated the outgoing page inside a `PageView` while
+/// the incoming page was pinned in the same spot. The pages had no ground
+/// of their own, so both pages' text showed at once mid-swipe, and the
+/// outgoing page was painted UNDER the incoming one (a PageView paints in
+/// index order), so the "lifting" page was hidden behind the new one. That
+/// overlap is the glitch members reported.
+///
+/// * [slide] — the default: pages slide side by side, like most readers.
+/// * [turn] — the next page glides OVER the current one with a shadow on
+///   its edge, and the page beneath dims slightly. It respects the
+///   PageView's paint order (the later page is always on top), so it can't
+///   overlap the way the old turn did.
+enum EgwPageTurn { slide, turn }
+
 /// Palette for one reading ground. Deliberately its own thing rather than
 /// `AppPalette`: a reader's page is not the app's scaffold, and sepia has
 /// no equivalent anywhere else in the app.
@@ -88,6 +104,7 @@ class EgwReaderPrefs {
 
   static const _kTheme = 'pref:egw_reader_theme';
   static const _kScale = 'pref:egw_reader_scale';
+  static const _kTurn = 'pref:egw_reader_turn';
 
   /// Rebuilds open readers when the settings sheet changes something.
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
@@ -108,11 +125,13 @@ class EgwReaderPrefs {
   /// record of the choice rather than a gate on it.
   static EgwReadingTheme? _theme;
   static double? _scale;
+  static EgwPageTurn? _turn;
 
   @visibleForTesting
   static void resetForTest() {
     _theme = null;
     _scale = null;
+    _turn = null;
     revision.value = 0;
   }
 
@@ -165,6 +184,23 @@ class EgwReaderPrefs {
     _scale = v;
     revision.value++;
     _persist(_kScale, v.toStringAsFixed(2));
+  }
+
+  /// Slide unless the member chose otherwise.
+  static EgwPageTurn pageTurn() {
+    final chosen = _turn;
+    if (chosen != null) return chosen;
+    final raw = CacheService.readPref(_kTurn);
+    return EgwPageTurn.values.firstWhere(
+      (t) => t.name == raw,
+      orElse: () => EgwPageTurn.slide,
+    );
+  }
+
+  static void setPageTurn(EgwPageTurn turn) {
+    _turn = turn;
+    revision.value++;
+    _persist(_kTurn, turn.name);
   }
 
   /// Resolves the reading ground for a book opened right now.

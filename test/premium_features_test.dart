@@ -111,12 +111,14 @@ void main() {
   group('iPhone shows no paid features', () {
     tearDown(() => debugDefaultTargetPlatformOverride = null);
 
-    test('no ads and only App Store links on iPhone', () {
+    test('no ads, no Advent AI and only App Store links on iPhone', () {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       expect(kHideAds, isTrue);
+      expect(kHideAdventAi, isTrue);
       expect(appDownloadUrl, 'https://apps.apple.com/app/id6819068736');
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       expect(kHideAds, isFalse);
+      expect(kHideAdventAi, isFalse);
       expect(appDownloadUrl, contains('play.google.com'));
     });
 

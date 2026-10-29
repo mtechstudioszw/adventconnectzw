@@ -37,3 +37,19 @@ bool get kHideMusic =>
 /// iOS, add the ATT string and SKAdNetwork list, update the App Privacy
 /// answers, then return false here.
 bool get kHideAds => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+/// True on iOS builds. Advent AI is hidden on iPhone for now (owner,
+/// 29 Oct 2026).
+///
+/// Google denied the Gemini project on 26 Sep 2026 (403 "Your project has
+/// been denied access"), so the server switched the service off and every
+/// question shows "paused". A reviewer finding a feature that doesn't work
+/// is a Guideline 2.1 rejection, so iPhone hides it — the Chat inbox
+/// button, the onboarding film's Advent AI scene and the /advent-ai route.
+/// Android keeps it (it says "paused" there until the key is replaced).
+///
+/// To bring it back on iOS: replace GEMINI_API_KEY, set
+/// app_config.ai_service_state = 'live', confirm it answers, then return
+/// false here.
+bool get kHideAdventAi =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;

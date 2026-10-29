@@ -17,6 +17,9 @@ These are settings in App Store Connect, not code. The last rejection
    info (email, name), User content (photos, messages, posts), Identifiers
    (user ID), and Diagnostics. **No tracking, and no advertising data on
    iOS** — the iPhone build starts no ad SDK.
+4b. **Description, keywords and screenshots must not mention Advent AI,
+   ads or Premium** — none of them are in the iPhone build (Guideline
+   2.3.1). Remove any screenshot that shows the AI chat.
 5. **Privacy Policy URL.** Opens the published policy. Update the
    published page with `docs/privacy.html` (changed today: storage region
    Frankfurt, Advent AI/Gemini, ads Android-only, verification, purchases).
@@ -50,8 +53,6 @@ These are settings in App Store Connect, not code. The last rejection
 >   users can block other users, objectionable words are filtered
 >   automatically, and we review reports within 48 hours and remove
 >   content or ban accounts that break the rules.
-> - Advent AI (optional) sends the user's questions to Google Gemini. The
->   app asks for the user's permission before the first message is sent.
 > - Users can delete their account in the app: Settings → Delete account.
 > - Location is used only when the user asks for it (churches near you,
 >   Sabbath sunset times). Notifications use push and local reminders.
@@ -78,6 +79,10 @@ These are settings in App Store Connect, not code. The last rejection
 - All new Premium features (gold tick ID check, Business, boosts) are
   hidden on iPhone: `kHidePayments` on every entry point, and the
   `/premium`, `/get-verified` routes redirect to Home on iOS.
+- **Advent AI is hidden on iPhone** (`kHideAdventAi`): the Chat inbox
+  button, the onboarding film's AI scene and the `/advent-ai` route. Google
+  denied the Gemini project on 26 Sep 2026, so it can't answer; a reviewer
+  finding a broken feature is a 2.1 rejection.
 - Earlier fixes still in place: `audio` removed from UIBackgroundModes and
   music hidden on iOS (`kHideMusic`), iOS 15.0 target, location usage
   strings, Sign in with Apple, AI consent sheet.

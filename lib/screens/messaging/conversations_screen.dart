@@ -1,3 +1,4 @@
+import '../../config/platform_flags.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -940,8 +941,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                const _AdventAiFab(),
-                const SizedBox(height: AppSpace.md),
+                // Hidden on iPhone for now — see kHideAdventAi.
+                if (!kHideAdventAi) ...[
+                  const _AdventAiFab(),
+                  const SizedBox(height: AppSpace.md),
+                ],
                 _ComposeFab(onTap: _openNewChatSheet),
               ],
             ),

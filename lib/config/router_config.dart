@@ -221,6 +221,8 @@ String? _shareLinkRedirect(GoRouterState state) {
       return '/home';
     }
   }
+  // Advent AI is hidden on iPhone for now (kHideAdventAi).
+  if (kHideAdventAi && state.uri.path == '/advent-ai') return '/home';
   if (state.uri.scheme != 'io.supabase.adventconnect') return null;
   // Owned by supabase_flutter — swallow it rather than erroring on it.
   if (state.uri.host == 'login-callback') return '/splash';

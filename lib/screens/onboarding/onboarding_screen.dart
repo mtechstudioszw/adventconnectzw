@@ -1,3 +1,4 @@
+import '../../config/platform_flags.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -107,6 +108,16 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   void _onFilmTick() {
+    // iPhone has no Advent AI for now (kHideAdventAi): jump over its
+    // scene straight to the Sabbath finale rather than showing a feature
+    // the reviewer can't find in the app.
+    if (kHideAdventAi &&
+        _film.value > FilmTimeline.s8.$2 - 0.01 &&
+        _film.value < FilmTimeline.s10.$1 - 0.002) {
+      _film.value = FilmTimeline.s10.$1 - 0.002;
+      if (!_holdPaused && !_reducedMotion) _film.forward();
+      return;
+    }
     // A soft tick as each scene hands off to the next.
     final index = FilmTimeline.sceneIndex(_film.value);
     if (index != _lastSceneIndex) {
@@ -261,7 +272,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           if (live(FilmTimeline.s6)) SceneLibrary(t: t),
           if (live(FilmTimeline.s7)) SceneFeed(t: t),
           if (live(FilmTimeline.s8)) SceneQuiz(t: t),
-          if (live(FilmTimeline.s9)) SceneAdventAi(t: t),
+          if (live(FilmTimeline.s9) && !kHideAdventAi) SceneAdventAi(t: t),
           if (t > FilmTimeline.s10.$1 - 0.01) SceneSabbathFinale(t: t),
         ],
       ),

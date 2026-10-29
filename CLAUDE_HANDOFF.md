@@ -112,6 +112,10 @@ earlier chat version; the FILE wins)
 - patch_289 also fixes: Business falling to the FREE call cap, and every
   paid level getting 500 AI questions (Plus now 100, as the paywall says).
 - iOS: `kHidePayments` on every entry; `kHideAds` — no ad SDK on iPhone.
+- **Advent AI is SUSPENDED** (app_config.ai_service_state = 'suspended'
+  since 26 Sep 2026: Gemini 403 "project has been denied access"). Hidden
+  on iPhone (`kHideAdventAi`). Fix: new GEMINI_API_KEY from a Google
+  project in good standing, set ai_service_state = 'live', then unhide.
   Store links on iPhone → App Store (`appDownloadUrl`).
 - Page safety (patch_290): protected official names, 14-day account +
   confirmed email, 1 Page/week, 10 admins max.

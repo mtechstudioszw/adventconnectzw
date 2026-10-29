@@ -858,6 +858,17 @@ class _SettingsScreenState extends State<SettingsScreen>
                             ),
                           ),
                           const _Divider(),
+                          // patch_283. Per-person/Page mutes live on their
+                          // profile; this is the switch for all of them.
+                          _ToggleRow(
+                            icon: Icons.person_add_alt_outlined,
+                            label: 'Posts from people & Pages you follow',
+                            value: _categoryPrefs.following,
+                            onChanged: (v) => _setCategory(
+                              _categoryPrefs.copyWith(following: v),
+                            ),
+                          ),
+                          const _Divider(),
                           _ToggleRow(
                             icon: Icons.storefront_outlined,
                             label: 'Marketplace alerts',

@@ -28,6 +28,14 @@
 --     webhook; the daily post limit (trg_post_limit_posts, 3/day) caps the
 --     fan-out per author.
 --
+--  A member can switch all of these off in Settings › Notifications
+--  ("Posts from people & Pages you follow" → notif_categories.following);
+--  the trigger then creates no row at all, so no push either.
+--
+--  Fan-out: each row fires the existing push webhook. At 684 members and
+--  0 follows (29 Oct 2026) that is trivial. Revisit with batched sending
+--  if any account passes ~5,000 followers.
+--
 --  Notification types: 'followed_post' (reference_type 'user', reference_id
 --  = author) and 'followed_page_post' (reference_type 'page', reference_id
 --  = page). Both open screens the app already routes to.
@@ -83,6 +91,20 @@ REVOKE ALL ON public.follow_alert_mutes FROM anon;
 GRANT SELECT, INSERT, DELETE ON public.follow_alert_mutes TO authenticated;
 
 -- 3. Alerts -----------------------------------------------------------------
+-- Settings › Notifications › "Posts from people & Pages you follow"
+-- (profiles.notif_categories.following). Off = no row and so no push.
+-- A missing key means on: every existing member keeps the default.
+CREATE OR REPLACE FUNCTION public.wants_follow_alerts(p_user uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+  SELECT COALESCE(
+    (SELECT (p.notif_categories ->> 'following') IS DISTINCT FROM 'false'
+       FROM public.profiles p WHERE p.id = p_user),
+    true);
+$function$;
+
+REVOKE ALL ON FUNCTION public.wants_follow_alerts(uuid) FROM PUBLIC, anon, authenticated;
+
 CREATE OR REPLACE FUNCTION public.notify_followers_of_post()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
 AS $function$
@@ -112,6 +134,7 @@ BEGIN
       FROM public.page_follows pf
      WHERE pf.page_id = NEW.page_id
        AND pf.user_id <> NEW.author_id
+       AND public.wants_follow_alerts(pf.user_id)
        AND NOT EXISTS (SELECT 1 FROM public.follow_alert_mutes m
                         WHERE m.user_id = pf.user_id
                           AND m.target_type = 'page'
@@ -140,6 +163,7 @@ BEGIN
     FROM public.follows f
    WHERE f.followee_id = NEW.author_id
      AND f.status = 'active'
+     AND public.wants_follow_alerts(f.follower_id)
      AND NOT EXISTS (SELECT 1 FROM public.follow_alert_mutes m
                       WHERE m.user_id = f.follower_id
                         AND m.target_type = 'user'

@@ -99,6 +99,7 @@ class NotificationCategoryPrefs {
     this.social = true,
     this.watch = true,
     this.quiz = true,
+    this.following = true,
   });
 
   final bool events;
@@ -125,6 +126,11 @@ class NotificationCategoryPrefs {
   /// silently swallow it.
   final bool quiz;
 
+  /// "Posts from people & Pages you follow" (patch_283). Read by the
+  /// database trigger itself, so switching it off stops the alert being
+  /// created at all, not just the push.
+  final bool following;
+
   static const defaults = NotificationCategoryPrefs();
 
   factory NotificationCategoryPrefs.fromJson(Map<String, dynamic> json) {
@@ -149,6 +155,7 @@ class NotificationCategoryPrefs {
       social: read('social', true),
       watch: read('watch', true),
       quiz: read('quiz', true),
+      following: read('following', true),
     );
   }
 
@@ -162,6 +169,7 @@ class NotificationCategoryPrefs {
     'social': social,
     'watch': watch,
     'quiz': quiz,
+    'following': following,
   };
 
   NotificationCategoryPrefs copyWith({
@@ -174,6 +182,7 @@ class NotificationCategoryPrefs {
     bool? social,
     bool? watch,
     bool? quiz,
+    bool? following,
   }) {
     return NotificationCategoryPrefs(
       events: events ?? this.events,
@@ -185,6 +194,7 @@ class NotificationCategoryPrefs {
       social: social ?? this.social,
       watch: watch ?? this.watch,
       quiz: quiz ?? this.quiz,
+      following: following ?? this.following,
     );
   }
 }

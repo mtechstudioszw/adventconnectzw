@@ -73,6 +73,11 @@ class DirectoryService {
   /// returns an empty list on error.
   static Future<List<MemberDirectoryEntry>> fetchSuggestedMembers({
     int limit = 8,
+
+    /// How many discoverable members to draw from. Home's endless feed
+    /// passes enough for everyone (685 on 29 Oct 2026) so its people
+    /// groups never run out after two rails.
+    int poolSize = 200,
   }) async {
     try {
       final user = _client.auth.currentUser;
@@ -114,7 +119,7 @@ class DirectoryService {
       }
       final profilesResponse = await profilesQuery
           .order('created_at', ascending: false)
-          .limit(200);
+          .limit(poolSize);
       final pool = (profilesResponse as List)
           .map((row) => row as Map<String, dynamic>)
           .map((row) {
@@ -165,8 +170,15 @@ class DirectoryService {
           tiers[3].add(e);
         }
       }
+      // Within a tier: shuffled, then people with a photo first — a face
+      // is what makes a suggestion card worth stopping for.
       for (final t in tiers) {
         t.shuffle();
+        t.sort((a, b) {
+          final pa = (a.profilePhotoUrl ?? '').isNotEmpty ? 0 : 1;
+          final pb = (b.profilePhotoUrl ?? '').isNotEmpty ? 0 : 1;
+          return pa.compareTo(pb);
+        });
       }
       return [for (final t in tiers) ...t].take(limit).toList();
     } catch (_) {

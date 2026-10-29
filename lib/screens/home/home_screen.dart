@@ -2,9 +2,18 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/rendering.dart' show FloatingHeaderSnapConfiguration;
 import 'package:flutter/scheduler.dart' show SchedulerBinding, SchedulerPhase;
 import 'package:go_router/go_router.dart';
+import '../../data/feed_verses.dart';
+import '../../data/fundamental_beliefs.dart';
+import '../../models/hymn_model.dart';
+import '../../models/quiz_question_model.dart';
+import '../../services/feed_mixer.dart';
+import '../../services/hymn_service.dart';
+import '../../services/quiz_service.dart';
+import '../../widgets/home/feed_moments.dart';
 import '../../config/platform_flags.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -139,6 +148,33 @@ class _HomeScreenState extends State<HomeScreen>
   // videos interleaved into the feed as individual cards.
   List<YoutubeVideo> _liveVideos = const [];
   List<YoutubeVideo> _homeVideos = const [];
+
+  // ---- Endless feed pools (29 Oct 2026) --------------------------------
+  // Each recurring module draws its next item from its own pool, so the
+  // feed keeps bringing NEW people, stories, sermons and Scripture instead
+  // of ending after one of each. See FeedMixer.
+  List<Church> _churchPool = const [];
+  List<QuizQuestion> _quizPool = const [];
+  List<Hymn> _hymnPool = const [];
+  late final List<String> _versePool = _seeded(kFeedVerses);
+  late final List<FundamentalBelief> _beliefPool = _seeded(kFundamentalBeliefs);
+
+  /// Blocks shown after the last post; raised as the member nears the end.
+  int _extraModules = 8;
+  int _videoOffset = 0;
+  bool _loadingMoreVideos = false;
+
+  /// People per group in the endless feed's people rails.
+  static const _peoplePerGroup = 8;
+
+  /// A per-viewer, per-day shuffle: varied day to day, stable while
+  /// scrolling (a rebuild must never reshuffle what is on screen).
+  List<T> _seeded<T>(List<T> source) {
+    final now = DateTime.now();
+    final seed = '${AuthService.currentUser?.id}-${now.year}-${now.month}-${now.day}'
+        .hashCode;
+    return List<T>.of(source)..shuffle(Random(seed));
+  }
   // userId -> friendship row (if any) so the suggestion cards know
   // whether to show "Add friend" / "Pending" / "Friends".
   Map<String, Friendship> _friendshipsByUser = <String, Friendship>{};
@@ -569,6 +605,7 @@ class _HomeScreenState extends State<HomeScreen>
     // paging from the old cursor into content the new sort already returned.
     _pagesLoaded = 0;
     _endOfFeed = false;
+    _extraModules = 8;
     _loadMoreFailed = false;
 
     final viewerId = AuthService.currentUser?.id;
@@ -682,10 +719,14 @@ class _HomeScreenState extends State<HomeScreen>
         // from disjoint slices of this pool. Eight would have left the
         // second rail with two people in it, which is a worse signal than
         // showing no second rail.
-        DirectoryService.fetchSuggestedMembers(limit: 18),
+        // Everyone discoverable (685 on 29 Oct 2026): the endless feed
+        // shows them group after group instead of two rails and done.
+        DirectoryService.fetchSuggestedMembers(limit: 1000, poolSize: 1000),
         FeedService.pendingRequestCount(),
         MessagingService.fetchConversations(),
-        AdventNewsService.fetchTopNews(limit: 3),
+        // Every recent story, one card each through the feed — not three
+        // squeezed into a single carousel.
+        AdventNewsService.fetchNews(limit: 60),
         PrayerService.fetchPrayers(),
         MarketplaceService.fetchProducts(),
         JobService.fetchJobs(),
@@ -753,9 +794,22 @@ class _HomeScreenState extends State<HomeScreen>
       for (final c in results[5] as List<Conversation>) {
         unreadMessages += c.unreadCount;
       }
+      final churchPool = myCities.isEmpty
+          ? allChurches
+          : [
+              ...allChurches.where(
+                (c) => myCities.contains(c.city.trim().toLowerCase()),
+              ),
+              ...allChurches.where(
+                (c) => !myCities.contains(c.city.trim().toLowerCase()),
+              ),
+            ];
       setState(() {
         _events = events;
         _churches = churches;
+        _churchPool = churchPool
+            .where((c) => !_followedChurchIds.contains(c.id))
+            .toList();
         _rsvpedEventIds = results[2] as Set<String>;
         _suggestedMembers = results[3] as List<MemberDirectoryEntry>;
         _pendingFriendRequests = results[4] as int;
@@ -773,9 +827,56 @@ class _HomeScreenState extends State<HomeScreen>
       });
       // Best-effort cache write — failures here must never surface.
       unawaited(_writeCache(events, churches, _posts));
+      unawaited(_loadMomentPools());
       _cacheBadges();
     } catch (_) {
       // Decorative content — the feed is already on screen.
+    }
+  }
+
+  /// Quiz questions and hymns for the feed's moments. Both come from
+  /// caches/assets the Library already keeps, so this is cheap.
+  Future<void> _loadMomentPools() async {
+    try {
+      final results = await Future.wait<Object>([
+        QuizService.all(),
+        HymnService.all(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _quizPool = _seeded(
+          (results[0] as List<QuizQuestion>)
+              .where((q) => q.options.length >= 2 && q.options.length <= 4)
+              .toList(),
+        );
+        _hymnPool = _seeded(results[1] as List<Hymn>);
+      });
+    } catch (_) {
+      // Decorative — the feed carries on without these moments.
+    }
+  }
+
+  /// The next page of sermons, once the feed has used most of what it has.
+  Future<void> _loadMoreVideos() async {
+    if (_loadingMoreVideos) return;
+    _loadingMoreVideos = true;
+    try {
+      _videoOffset += 30;
+      final more = await YoutubeService.fetchFeed(
+        limit: 30,
+        offset: _videoOffset,
+      );
+      if (!mounted || more.isEmpty) return;
+      final have = {for (final v in _homeVideos) v.videoId};
+      setState(() {
+        _homeVideos = [
+          ..._homeVideos,
+          ...more.where((v) => !have.contains(v.videoId) && !v.isLive),
+        ];
+      });
+    } catch (_) {
+    } finally {
+      _loadingMoreVideos = false;
     }
   }
 
@@ -843,12 +944,25 @@ class _HomeScreenState extends State<HomeScreen>
 
   /// Auto-paging trigger. Honours the cellular allowance.
   void _maybeAutoLoadMore() {
-    if (_needsManualLoad || _loadingMore || _endOfFeed || _loadMoreFailed) {
-      return;
-    }
     if (!_scroll.hasClients) return;
     final pos = _scroll.position;
-    if (pos.pixels >= pos.maxScrollExtent - 900) _loadMore();
+    final nearEnd = pos.pixels >= pos.maxScrollExtent - 900;
+    if (!nearEnd) return;
+    if (_endOfFeed) {
+      // Posts are done: keep the feed going with more blocks, as long as
+      // any source still has something new.
+      if (FeedMixer.hasMore(
+        posts: _visiblePosts.length,
+        discovery: _discoveryCount,
+        available: _feedAvailable,
+        extraModules: _extraModules,
+      )) {
+        setState(() => _extraModules += 8);
+      }
+      return;
+    }
+    if (_needsManualLoad || _loadingMore || _loadMoreFailed) return;
+    _loadMore();
   }
 
   /// Records a post as seen and schedules a batched write.
@@ -1360,7 +1474,10 @@ class _HomeScreenState extends State<HomeScreen>
     pool.shuffle();
     setState(() {
       _liveVideos = results[0] as List<YoutubeVideo>;
-      _homeVideos = pool.take(8).toList();
+      // The whole first page, shuffled: the endless feed keeps drawing
+      // from it (and fetches more as it runs low).
+      _homeVideos = pool.where((v) => !v.isLive).toList();
+      _videoOffset = 0;
     });
   }
 
@@ -1616,27 +1733,6 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  /// Splits [_openSuggestions] between the two "people to meet" rails (#13).
-  ///
-  /// `DirectoryService.fetchSuggestedMembers` already returns the pool
-  /// tiered by real overlap — same church, then same city, then same
-  /// province, then everyone else — so taking the head and the tail is
-  /// exactly the split we want: the first rail is the people the viewer
-  /// plausibly knows of, the second is the wider community.
-  ///
-  /// The second rail needs at least three people to be worth its heading. A
-  /// rail of one is a lonelier signal than no rail at all, especially on a
-  /// network this size, so below that everyone stays in the first rail.
-  List<MemberDirectoryEntry> _suggestionsForRail({required bool first}) {
-    final all = _openSuggestions;
-    if (all.length < _firstRailSize + 3) {
-      return first ? all : const [];
-    }
-    return first
-        ? all.take(_firstRailSize).toList()
-        : all.skip(_firstRailSize).toList();
-  }
-
   String? _profilePhotoUrl() {
     final user = AuthService.currentUser;
     final meta = user?.userMetadata ?? const {};
@@ -1850,58 +1946,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildChurchGrid() {
-    return ContentReveal(
-      loading: _loading && _churches.isEmpty,
-      skeleton: SizedBox(height: 160, child: ShimmerLoaders.cardList(count: 2)),
-      child: _buildChurchGridContent(),
-    );
-  }
-
-  Widget _buildChurchGridContent() {
-    if (_churches.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: _EmptyTile(
-          icon: Icons.church_outlined,
-          title: 'No churches yet',
-          subtitle: 'Once churches are added they\'ll show here.',
-        ),
-      );
-    }
-    // Horizontal scroller — matches the Events row's pattern and cuts
-    // the section's vertical footprint roughly in half versus the
-    // previous 2-column grid. User can flick through more churches
-    // without taking over the home screen.
-    return SizedBox(
-      height: 160,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: _churches.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 12),
-        itemBuilder: (context, i) {
-          final c = _churches[i];
-          return SizedBox(
-            width: 150,
-            child: _HomeChurchTile(
-              church: c,
-              isFollowed: _followedChurchIds.contains(c.id),
-              onTap: () async {
-                await context.pushNamed(
-                  'church_details',
-                  pathParameters: {'id': c.id},
-                  extra: c,
-                );
-                if (mounted) _bootstrap();
-              },
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   /// The feed, as a lazy sliver.
   ///
   /// `SliverChildBuilderDelegate` only creates elements and render objects
@@ -2040,6 +2084,26 @@ class _HomeScreenState extends State<HomeScreen>
       // into the shape it will occupy, so nothing jumps when it lands.
       return ShimmerLoaders.postColumn(count: 1);
     }
+    if (_endOfFeed &&
+        FeedMixer.hasMore(
+          posts: _visiblePosts.length,
+          discovery: _discoveryCount,
+          available: _feedAvailable,
+          extraModules: _extraModules,
+        )) {
+      // The endless part is still going: more blocks arrive as the member
+      // nears this point (see _maybeAutoLoadMore).
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpace.xl),
+        child: Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+        ),
+      );
+    }
     if (_endOfFeed) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpace.xl),
@@ -2060,7 +2124,7 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             const SizedBox(height: AppSpace.md),
             Text(
-              "You're all caught up",
+              "That's everything for now",
               style: AppTextStyles.titleSmall.copyWith(
                 color: palette.text,
                 fontWeight: FontWeight.w700,
@@ -2068,7 +2132,7 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             const SizedBox(height: 2),
             Text(
-              "You've seen everything new.",
+              "You've seen every post, story, sermon and verse we have.",
               style: AppTextStyles.caption.copyWith(color: palette.textMuted),
             ),
             const SizedBox(height: AppSpace.lg),
@@ -2226,103 +2290,176 @@ class _HomeScreenState extends State<HomeScreen>
     // module lands between two posts on any feed length, and a long feed
     // still gets the original 5-post rhythm because of the cap.
     final posts = _visiblePosts;
-    final discoverySpacing = discoveryCards.isEmpty || posts.isEmpty
-        ? _discoveryEveryNPosts
-        : (posts.length ~/ (discoveryCards.length + 1))
-            .clamp(2, _discoveryEveryNPosts);
+    _discoveryCount = discoveryCards.length;
+    final blocks = FeedMixer.mix(
+      posts: posts.length,
+      discovery: discoveryCards.length,
+      available: _feedAvailable,
+      postsExhausted: _endOfFeed,
+      extraModules: _extraModules,
+      adAfterPost: posts.length >= _adEveryNPosts ? _adEveryNPosts : null,
+    );
+    // Keep sermons topped up while the feed is still drawing from them.
+    final videosUsed =
+        blocks.where((b) => b.kind == FeedBlockKind.video).length;
+    if (videosUsed >= _homeVideos.length - 3) unawaited(_loadMoreVideos());
 
-    var cardIdx = 0;
-    var adsInserted = 0;
-    var videoIdx = 0;
-    var musicIdx = 0;
-    for (var i = 0; i < posts.length; i++) {
-      final post = posts[i];
-      children.add(
-        // Fades in and rises as it scrolls into view. In a lazy sliver the
-        // card's ELEMENT is created just before it becomes visible, so a
-        // mount-triggered reveal IS a scroll-triggered one — and that same
-        // moment is when _SeenReporter records the view.
-        _SeenReporter(
-          key: ValueKey('seen_${post.id}'),
-          postId: post.id,
-          onSeen: _noteSeen,
-          child: StaggeredReveal(
-          rise: 16,
-          child: RepaintBoundary(
-            child: PostCard(
-              post: post,
-              viewerId: viewerId,
-              onLikeToggled: () => _toggleLike(post),
-              onReactionSelected: (r) => _setReaction(post, r),
-              onCommentsTapped: () => _openComments(post),
-              onImageTapped: (index) => _openImageViewer(post, index),
-              onEdit: () => _editPost(post),
-              onDelete: () => _confirmDeletePost(post),
-              onToggleVisibility: () => _togglePostVisibility(post),
-              onReport: () => _reportPost(post),
-              onAdminModerate:
-                  _isSuperAdmin ? () => _adminModeratePost(post) : null,
-              onAuthorTapped: () => _openAuthorProfile(post),
-              onAuthorAvatarTapped: () => _previewAuthor(post),
-              hasStory: _authorHasStory(post.authorId),
-              storyViewed: _authorStoryViewed(post.authorId),
-              onStoryRingTapped: () => _onAuthorStoryRing(post),
-              onSaveImage: () => _savePostImage(post),
-            ),
-          ),
-          ),
-        ),
-      );
-      if ((i + 1) % discoverySpacing == 0 && cardIdx < discoveryCards.length) {
-        children.add(discoveryCards[cardIdx++]);
-      }
-      // Individual YouTube video cards from Watch, interleaved into the
-      // feed (one at a time, paced) — tap opens the in-app player.
-      if ((i + 1) % _videoEveryNPosts == 0 && videoIdx < _homeVideos.length) {
-        final v = _homeVideos[videoIdx++];
-        children.add(YoutubeVideoCard(video: v, onTap: () => _openVideo(v)));
-      }
-      // One track at a time, same treatment as the videos.
-      // No music cards on iOS — see kHideMusic.
-      if (!kHideMusic &&
-          (i + 1) % _musicEveryNPosts == 0 &&
-          musicIdx < _music.length) {
-        children.add(HomeMusicCard(item: _music[musicIdx++]));
-      }
-      // Sponsored card after every _adEveryNPosts posts, capped at
-      // _maxFeedAds per render. The card self-hides until/unless an ad is
-      // actually available, so a miss leaves no gap in the feed.
-      if ((i + 1) % _adEveryNPosts == 0 && adsInserted < _maxFeedAds) {
-        children.add(const FeedAdCard());
-        adsInserted++;
-      }
-    }
-    while (cardIdx < discoveryCards.length) {
-      children.add(discoveryCards[cardIdx++]);
-    }
-    // Append any remaining videos so they still surface when the post
-    // backlog is short.
-    while (videoIdx < _homeVideos.length) {
-      final v = _homeVideos[videoIdx++];
-      children.add(YoutubeVideoCard(video: v, onTap: () => _openVideo(v)));
+    for (final block in blocks) {
+      final w = _feedBlockWidget(block, posts, discoveryCards, viewerId);
+      if (w != null) children.add(w);
     }
     return children;
   }
 
-  // Interruption cadence for the mixed feed. These were 3 / 4 / 6 with a cap
-  // of 4, which meant twelve posts carried NINE interruptions — four
-  // discovery cards, three videos and two ads. Relaxed so the scroll reads
-  // as a feed with breaks rather than breaks with a feed.
-  //
-  // Smaller = more interruption; larger = posts feel more continuous.
-  static const _discoveryEveryNPosts = 5;
+  /// How many one-off discovery modules the last build had.
+  int _discoveryCount = 0;
 
-  // Cadence for individual YouTube video cards interleaved into the feed.
-  static const _videoEveryNPosts = 8;
+  /// People groups for the endless feed: [_peoplePerGroup] at a time, and a
+  /// last group only if it still has three people (a rail of one reads as
+  /// emptier than no rail).
+  List<List<MemberDirectoryEntry>> get _peopleGroups {
+    final open = _openSuggestions;
+    final groups = <List<MemberDirectoryEntry>>[];
+    for (var i = 0; i < open.length; i += _peoplePerGroup) {
+      final g = open.sublist(i, min(i + _peoplePerGroup, open.length));
+      if (g.length >= 3 || groups.isEmpty) groups.add(g);
+    }
+    return groups;
+  }
 
-  // Individual music tracks, offset from the video cadence so a track and a
-  // video never land back to back.
-  static const _musicEveryNPosts = 6;
+  /// How many items each recurring module can still give.
+  Map<FeedBlockKind, int> get _feedAvailable => {
+        FeedBlockKind.people: _peopleGroups.length,
+        FeedBlockKind.news: _topNews.length,
+        FeedBlockKind.video: _homeVideos.length,
+        FeedBlockKind.verse: _versePool.length,
+        FeedBlockKind.quiz: _quizPool.length,
+        FeedBlockKind.hymn: _hymnPool.length,
+        FeedBlockKind.belief: _beliefPool.length,
+        FeedBlockKind.church: _churchPool.length,
+        FeedBlockKind.music: kHideMusic ? 0 : _music.length,
+      };
+
+  /// Headings for successive people groups — true to who is in them.
+  String _peopleTitle(int index, List<MemberDirectoryEntry> group) {
+    final reason = group.first.suggestionReason ?? '';
+    if (index == 0 && reason.startsWith('Goes to your church')) {
+      return 'From your church';
+    }
+    if (index == 0 && reason.startsWith('Also in')) return 'People near you';
+    const titles = [
+      'People you may know',
+      'More of the community',
+      'Members you haven\'t met yet',
+      'Say hello to someone new',
+    ];
+    return titles[index % titles.length];
+  }
+
+  Widget _postWidget(Post post, String? viewerId) {
+    // Fades in and rises as it scrolls into view. In a lazy sliver the
+    // card's ELEMENT is created just before it becomes visible, so a
+    // mount-triggered reveal IS a scroll-triggered one — and that same
+    // moment is when _SeenReporter records the view.
+    return _SeenReporter(
+      key: ValueKey('seen_${post.id}'),
+      postId: post.id,
+      onSeen: _noteSeen,
+      child: StaggeredReveal(
+        rise: 16,
+        child: RepaintBoundary(
+          child: PostCard(
+            post: post,
+            viewerId: viewerId,
+            onLikeToggled: () => _toggleLike(post),
+            onReactionSelected: (r) => _setReaction(post, r),
+            onCommentsTapped: () => _openComments(post),
+            onImageTapped: (index) => _openImageViewer(post, index),
+            onEdit: () => _editPost(post),
+            onDelete: () => _confirmDeletePost(post),
+            onToggleVisibility: () => _togglePostVisibility(post),
+            onReport: () => _reportPost(post),
+            onAdminModerate:
+                _isSuperAdmin ? () => _adminModeratePost(post) : null,
+            onAuthorTapped: () => _openAuthorProfile(post),
+            onAuthorAvatarTapped: () => _previewAuthor(post),
+            hasStory: _authorHasStory(post.authorId),
+            storyViewed: _authorStoryViewed(post.authorId),
+            onStoryRingTapped: () => _onAuthorStoryRing(post),
+            onSaveImage: () => _savePostImage(post),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// One feed position → its widget (see FeedMixer).
+  Widget? _feedBlockWidget(
+    FeedBlock block,
+    List<Post> posts,
+    List<Widget> discoveryCards,
+    String? viewerId,
+  ) {
+    final i = block.index;
+    Widget reveal(Widget child) =>
+        StaggeredReveal(rise: 14, child: RepaintBoundary(child: child));
+    switch (block.kind) {
+      case FeedBlockKind.post:
+        return _postWidget(posts[i], viewerId);
+      case FeedBlockKind.discovery:
+        return discoveryCards[i];
+      case FeedBlockKind.people:
+        final groups = _peopleGroups;
+        if (i >= groups.length) return null;
+        return reveal(_discoverySection(
+          title: _peopleTitle(i, groups[i]),
+          action: i == 0 ? 'See all' : null,
+          onAction:
+              i == 0 ? () => context.pushNamed('new_chat', extra: true) : null,
+          child: _buildSuggestedMembersRow(groups[i]),
+        ));
+      case FeedBlockKind.news:
+        return reveal(NewsFeedCard(news: _topNews[i]));
+      case FeedBlockKind.video:
+        final v = _homeVideos[i];
+        return reveal(YoutubeVideoCard(video: v, onTap: () => _openVideo(v)));
+      case FeedBlockKind.verse:
+        return reveal(VerseMomentCard(reference: _versePool[i]));
+      case FeedBlockKind.quiz:
+        return reveal(QuizMomentCard(question: _quizPool[i]));
+      case FeedBlockKind.hymn:
+        return reveal(HymnMomentCard(hymn: _hymnPool[i]));
+      case FeedBlockKind.belief:
+        return reveal(BeliefMomentCard(belief: _beliefPool[i]));
+      case FeedBlockKind.church:
+        final c = _churchPool[i];
+        return reveal(ChurchFollowCard(
+          church: c,
+          following: _followedChurchIds.contains(c.id),
+          onFollow: () async {
+            HapticFeedback.selectionClick();
+            setState(() => _followedChurchIds = {..._followedChurchIds, c.id});
+            try {
+              await ChurchService.follow(c.id);
+            } catch (_) {
+              if (mounted) {
+                setState(() => _followedChurchIds = {..._followedChurchIds}
+                  ..remove(c.id));
+              }
+            }
+          },
+        ));
+      case FeedBlockKind.music:
+        return HomeMusicCard(item: _music[i]);
+      case FeedBlockKind.ad:
+        return const FeedAdCard();
+      case FeedBlockKind.caughtUp:
+        return const FeedCaughtUpDivider();
+    }
+  }
+
+  // Module cadence now lives in FeedMixer (one module every
+  // `postsBetween` posts, rotating through the recurring kinds).
 
   // Sponsored-card cadence.
   //
@@ -2332,7 +2469,6 @@ class _HomeScreenState extends State<HomeScreen>
   // from the first and leaves it blank. Three cards would have meant one
   // ad and two empty gaps. See AdViewSlot.
   static const _adEveryNPosts = 8;
-  static const _maxFeedAds = 1;
 
   /// Maps an onboarding-interest label (the user-facing strings from
   /// _PersonalizationPage._interestOptions) to the discovery slot
@@ -2366,68 +2502,9 @@ class _HomeScreenState extends State<HomeScreen>
     final discoverable = <_DiscoverySlot>[];
     // Advent News + Music live in the shuffled pool so their position
     // varies per user (no longer pinned to a fixed spot up top).
-    if (_topNews.isNotEmpty) {
-      discoverable.add(
-        _DiscoverySlot(
-          key: 'news',
-          widget: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: _AdventNewsHero(items: _topNews),
-          ),
-        ),
-      );
-    }
-    // Music is NO LONGER a discovery rail. Ten tracks crowded into one
-    // horizontal strip scrolled past as a blur; each track now gets its own
-    // card interleaved into the feed (see _musicEveryNPosts).
-    // #13 — two rows of people, surfaced at different depths.
-    //
-    // One rail was doing two jobs badly. The people worth meeting first are
-    // the ones the viewer overlaps with — same congregation, same city —
-    // and those are exactly the ones buried at the far end of a horizontal
-    // scroll nobody finishes. Splitting the pool means the near tier gets a
-    // rail of its own near the top, and the wider community gets a second
-    // one further down where "who else is on here" is the question the
-    // viewer is actually asking.
-    //
-    // The two rails draw from DISJOINT slices, so the second is never a
-    // repeat of the first. If there aren't enough people to fill both, the
-    // second simply doesn't build — better one honest rail than the same
-    // faces twice under two different headings.
-    final nearby = _suggestionsForRail(first: true);
-    final wider = _suggestionsForRail(first: false);
-    if (nearby.isNotEmpty) {
-      discoverable.add(
-        _DiscoverySlot(
-          key: 'people',
-          depth: _SlotDepth.early,
-          widget: _discoverySection(
-            title: 'People you may meet',
-            child: _buildSuggestedMembersRow(nearby),
-          ),
-        ),
-      );
-    }
-    if (wider.isNotEmpty) {
-      discoverable.add(
-        _DiscoverySlot(
-          key: 'people_more',
-          depth: _SlotDepth.late,
-          widget: _discoverySection(
-            title: 'More of the community',
-            action: 'See all',
-            // NOT member_directory — same reason as the end-of-feed card
-            // above: that screen predates these and does not work, so "See
-            // all" was a dead end. This one was missed when the other was
-            // fixed. `extra: true` opens New chat already switched to
-            // "Find people", which is the screen that actually answers
-            // "who else is on here?".
-            onAction: () => context.pushNamed('new_chat', extra: true),
-            child: _buildSuggestedMembersRow(wider),
-          ),
-        ),
-      );
-    }
+    // News, people and churches are no longer one-off rails here: the
+    // endless feed brings them back again and again with new items (see
+    // FeedMixer and _buildFeedChildren).
     if (_events.isNotEmpty) {
       discoverable.add(
         _DiscoverySlot(
@@ -2473,19 +2550,6 @@ class _HomeScreenState extends State<HomeScreen>
                 extra: _products.first,
               ),
             ),
-          ),
-        ),
-      );
-    }
-    if (_churches.isNotEmpty) {
-      discoverable.add(
-        _DiscoverySlot(
-          key: 'churches',
-          widget: _discoverySection(
-            title: 'Discover churches',
-            action: 'See all',
-            onAction: () => context.pushNamed('churches'),
-            child: _buildChurchGrid(),
           ),
         ),
       );
@@ -2544,10 +2608,6 @@ class _HomeScreenState extends State<HomeScreen>
         ..._interestToSlotKeys((i ?? '').toString()),
     };
     discoverable.sort((a, b) {
-      // Depth outranks everything: a module that asked to be early or late
-      // asked for a reason, and interest weighting must not drag the second
-      // people rail up next to the first one.
-      if (a.depth != b.depth) return a.depth.index.compareTo(b.depth.index);
       final aWanted = interestKeys.contains(a.key) ? 0 : 1;
       final bWanted = interestKeys.contains(b.key) ? 0 : 1;
       if (aWanted != bWanted) return aWanted.compareTo(bWanted);
@@ -3652,156 +3712,6 @@ class _HomeEventCard extends StatelessWidget {
   }
 }
 
-class _HomeChurchTile extends StatelessWidget {
-  const _HomeChurchTile({
-    required this.church,
-    required this.isFollowed,
-    required this.onTap,
-  });
-
-  final Church church;
-  final bool isFollowed;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressEffect(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              boxShadow: AppShadows.card(context),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _CoverImage(
-                    url: church.coverPhotoUrl,
-                    fallbackIcon: Icons.church,
-                  ),
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.black.withValues(alpha: 0.7),
-                            ],
-                            stops: const [0.45, 1.0],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (church.isVerified)
-                    Positioned(
-                      top: 10,
-                      right: 10,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: AppColors.darkNavy.withValues(alpha: 0.55),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.verified,
-                          size: 14,
-                          color: AppColors.goldAccent,
-                        ),
-                      ),
-                    ),
-                  if (isFollowed)
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.successGreen,
-                          borderRadius: BorderRadius.circular(AppRadius.sm),
-                        ),
-                        child: Text(
-                          'FOLLOWING',
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: AppColors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.1,
-                          ),
-                        ),
-                      ),
-                    ),
-                  Positioned(
-                    left: 12,
-                    right: 12,
-                    bottom: 12,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          church.name,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.titleMedium.copyWith(
-                            color: AppColors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            height: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.place_outlined,
-                              size: 11,
-                              color: Color.fromRGBO(255, 255, 255, 0.85),
-                            ),
-                            const SizedBox(width: 3),
-                            Flexible(
-                              child: Text(
-                                church.city.isEmpty ? 'Location not set' : church.city,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: const Color.fromRGBO(
-                                    255,
-                                    255,
-                                    255,
-                                    0.85,
-                                  ),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _CoverImage extends StatelessWidget {
   const _CoverImage({this.url, required this.fallbackIcon});
@@ -4171,28 +4081,13 @@ class _EmptyTile extends StatelessWidget {
 /// shows two of them and they must not land next to each other, or they read
 /// as one long list that got wrapped rather than as two separate invitations
 /// to look.
-enum _SlotDepth {
-  /// Near the top, where a new member is still deciding whether this app
-  /// has anyone on it.
-  early,
-
-  /// No opinion — ordered by interest weighting and the per-viewer seed.
-  any,
-
-  /// Deliberately further down, for a second look at something the viewer
-  /// has already been offered once.
-  late,
-}
-
+///
+/// (29 Oct 2026: the people rails that needed early/late moved to the
+/// endless feed's recurring people groups, so every slot is `any` now.)
 class _DiscoverySlot {
-  const _DiscoverySlot({
-    required this.key,
-    required this.widget,
-    this.depth = _SlotDepth.any,
-  });
+  const _DiscoverySlot({required this.key, required this.widget});
   final String key;
   final Widget widget;
-  final _SlotDepth depth;
 }
 
 /// Magazine-style hero for the editorial Advent News feed. Renders
@@ -4384,215 +4279,6 @@ class _FeaturedProductCard extends StatelessWidget {
   }
 }
 
-class _AdventNewsHero extends StatefulWidget {
-  const _AdventNewsHero({required this.items});
-
-  final List<AdventNews> items;
-
-  @override
-  State<_AdventNewsHero> createState() => _AdventNewsHeroState();
-}
-
-class _AdventNewsHeroState extends State<_AdventNewsHero> {
-  final PageController _pc = PageController();
-  int _page = 0;
-
-  @override
-  void dispose() {
-    _pc.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final items = widget.items.take(5).toList();
-    if (items.isEmpty) return const SizedBox.shrink();
-    return Material(
-      color: context.palette.card,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      clipBehavior: Clip.antiAlias,
-      elevation: 0,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AspectRatio(
-            aspectRatio: 16 / 8.5,
-            child: PageView.builder(
-              controller: _pc,
-              itemCount: items.length,
-              onPageChanged: (i) => setState(() => _page = i),
-              itemBuilder: (context, i) => _card(context, items[i]),
-            ),
-          ),
-          _footer(context, items.length),
-        ],
-      ),
-    );
-  }
-
-  Widget _card(BuildContext context, AdventNews item) {
-    final hasCover = (item.coverPhotoUrl ?? '').isNotEmpty;
-    return InkWell(
-      onTap: () => context.pushNamed(
-        'news_details',
-        pathParameters: {'id': item.id},
-        extra: item,
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (hasCover)
-            CachedImage(item.coverPhotoUrl!, fit: BoxFit.cover)
-          else
-            const DecoratedBox(
-              decoration: BoxDecoration(gradient: AppColors.appBarGradient),
-              child: Center(
-                child: Icon(Icons.newspaper, color: AppColors.white, size: 48),
-              ),
-            ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.15),
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.65),
-                    ],
-                    stops: const [0.0, 0.45, 1.0],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 12,
-            left: 12,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.goldAccent,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.bolt, color: AppColors.darkNavy, size: 12),
-                  const SizedBox(width: 4),
-                  Text(
-                    'ADVENT NEWS',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.darkNavy,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            top: 12,
-            right: 12,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-              ),
-              child: Text(
-                item.category.label.toUpperCase(),
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 14,
-            right: 14,
-            bottom: 14,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  item.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.headlineSmall.copyWith(
-                    color: AppColors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 17,
-                    height: 1.25,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  item.summary,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.white.withValues(alpha: 0.88),
-                    height: 1.35,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _footer(BuildContext context, int count) {
-    return InkWell(
-      onTap: () => context.pushNamed('news'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
-          children: [
-            for (int i = 0; count > 1 && i < count; i++)
-              Container(
-                width: i == _page ? 16 : 6,
-                height: 6,
-                margin: const EdgeInsets.only(right: 3),
-                decoration: BoxDecoration(
-                  color: i == _page
-                      ? AppColors.primaryBlue
-                      : context.palette.divider,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            const Spacer(),
-            Text(
-              'See all',
-              style: AppTextStyles.labelMedium.copyWith(
-                color: AppColors.primaryBlue,
-                fontWeight: FontWeight.w800,
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(width: 2),
-            const Icon(
-              Icons.chevron_right,
-              size: 18,
-              color: AppColors.primaryBlue,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 /// Invitation shown where the jobs row would be when the board is empty.
 ///

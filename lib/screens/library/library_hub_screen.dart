@@ -7,7 +7,9 @@ import 'package:go_router/go_router.dart';
 import '../../models/devotion_model.dart';
 import '../../models/youtube_video.dart';
 import '../../services/devotion_service.dart';
+import '../../services/memory_verse_service.dart';
 import '../../services/quiz_progress_service.dart';
+import '../../services/reading_plan_service.dart';
 import '../../services/youtube_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -21,6 +23,7 @@ import 'devotion_screen.dart';
 import 'library_directory_screen.dart';
 import 'library_saved_screen.dart';
 import 'library_search_screen.dart';
+import 'sabbath_hours_screen.dart';
 import 'library_continue.dart';
 
 /// The Library tab (owner, 29 Oct 2026 — it replaced Watch in the island).
@@ -280,12 +283,15 @@ class _LibraryHubScreenState extends State<LibraryHubScreen> {
                     ]),
                   ),
                 ),
-                if (_devotion != null) ...[
-                  const _Heading('TODAY'),
+                const _Heading('TODAY'),
+                if (_devotion != null)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpace.lg,
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpace.lg,
+                        0,
+                        AppSpace.lg,
+                        AppSpace.sm,
                       ),
                       child: _DevotionCard(
                         devotion: _devotion!,
@@ -293,7 +299,17 @@ class _LibraryHubScreenState extends State<LibraryHubScreen> {
                       ),
                     ),
                   ),
-                ],
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpace.lg,
+                    ),
+                    child: _DailyTools(
+                      showSabbath: widget.autoLoad,
+                      open: (name) => _refreshAfter(context.pushNamed(name)),
+                    ),
+                  ),
+                ),
                 if (_live.isNotEmpty || _latest.isNotEmpty) ...[
                   _Heading(
                     'WATCH',
@@ -785,6 +801,147 @@ class _SearchBar extends StatelessWidget {
                   ),
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Reading plan, memory verses and Sabbath hours — the daily tools, each
+/// showing where the member stands today.
+class _DailyTools extends StatelessWidget {
+  const _DailyTools({required this.open, required this.showSabbath});
+
+  final void Function(String routeName) open;
+
+  /// False in widget tests, where there is no auth to read a country from.
+  final bool showSabbath;
+
+  static String _hhmm(BuildContext context, DateTime utc) =>
+      TimeOfDay.fromDateTime(utc.toLocal()).format(context);
+
+  static String _span(Duration d) {
+    if (d.inHours >= 48) return '${d.inDays} days';
+    if (d.inHours >= 1) return '${d.inHours}h ${d.inMinutes % 60}m';
+    return '${d.inMinutes.clamp(1, 59)} min';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        ReadingPlanService.revision,
+        MemoryVerseService.revision,
+      ]),
+      builder: (context, _) {
+        final active = ReadingPlanService.active();
+        final String planText;
+        if (active.isEmpty) {
+          planText = 'Start a Bible reading plan';
+        } else {
+          final (plan, p) = active.first;
+          planText =
+              'Day ${p.nextDay(plan.days) + 1} of ${plan.days} · '
+              '${plan.title}';
+        }
+        final verses = MemoryVerseService.all();
+        final due = MemoryVerseService.due().length;
+        final memoryText = verses.isEmpty
+            ? 'Learn a verse by heart'
+            : due == 0
+            ? 'All caught up · ${verses.length} learning'
+            : '$due to practise today';
+
+        String? sabbathText;
+        if (showSabbath) {
+          final now = DateTime.now();
+          final w = SabbathHoursScreen.window(now);
+          sabbathText = now.toUtc().isBefore(w.start)
+              ? 'Begins ${_hhmm(context, w.start)} Friday · in '
+                    '${_span(w.start.difference(now.toUtc()))}'
+              : 'Happy Sabbath · ends ${_hhmm(context, w.end)}';
+        }
+
+        return Column(
+          children: [
+            _ToolRow(
+              icon: Icons.event_note_rounded,
+              title: 'Reading plan',
+              subtitle: planText,
+              onTap: () => open('reading_plans'),
+            ),
+            _ToolRow(
+              icon: Icons.psychology_alt_rounded,
+              title: 'Memory verses',
+              subtitle: memoryText,
+              onTap: () => open('memory_verses'),
+            ),
+            if (sabbathText != null)
+              _ToolRow(
+                icon: Icons.wb_twilight_rounded,
+                title: 'Sabbath hours',
+                subtitle: sabbathText,
+                onTap: () => open('sabbath_hours'),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ToolRow extends StatelessWidget {
+  const _ToolRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpace.sm),
+      child: Pressable(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpace.md),
+          decoration: _cardDecoration(context),
+          child: Row(
+            children: [
+              _IconChip(icon: icon),
+              const SizedBox(width: AppSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: palette.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.caption.copyWith(
+                        color: palette.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: palette.textMuted),
             ],
           ),
         ),

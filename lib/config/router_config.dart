@@ -29,6 +29,9 @@ import '../screens/home/post_notice_screen.dart';
 import '../screens/home/search_screen.dart';
 import '../screens/library/library_boot_screen.dart';
 import '../screens/library/library_hub_screen.dart';
+import '../screens/library/memory_verses_screen.dart';
+import '../screens/library/reading_plans_screen.dart';
+import '../screens/library/sabbath_hours_screen.dart';
 import '../screens/watch/watch_screen.dart';
 import '../screens/watch/saved_videos_screen.dart';
 import '../screens/watch/channels_screen.dart';
@@ -917,6 +920,23 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => LibraryBootScreen(
         initialTab: state.extra is int ? state.extra as int : 0,
       ),
+    ),
+    // Library tools (29 Oct 2026). Top level so the reminders they schedule
+    // can open them from a notification tap (main.dart).
+    GoRoute(
+      path: '/library-plans',
+      name: 'reading_plans',
+      builder: (context, state) => const ReadingPlansScreen(),
+    ),
+    GoRoute(
+      path: '/library-memory',
+      name: 'memory_verses',
+      builder: (context, state) => const MemoryVersesScreen(),
+    ),
+    GoRoute(
+      path: '/library-sabbath',
+      name: 'sabbath_hours',
+      builder: (context, state) => const SabbathHoursScreen(),
     ),
     // Watch: no longer a tab (29 Oct 2026) — a full-screen page reached
     // from the Library, Home's live banner, search, notifications and

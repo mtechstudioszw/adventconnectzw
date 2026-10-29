@@ -39,6 +39,16 @@ earlier chat version; the FILE wins)
    wide release**). Not built, because the content isn't licensed/available
    yet: heritage, Church Manual, Yearbook, study guides, children's
    resources, dictionaries/concordance. Next: Batch 4 (Bible).
+   **Library tools DONE 29 Oct 2026:** reading plans
+   (`reading_plan_service.dart`, verse-balanced, 5 plans), memory verses
+   (`memory_verse_service.dart`, spaced practice, "Memorise" in the Bible
+   reader's selection bar), Sabbath hours (`sabbath_hours_screen.dart`;
+   SabbathService gained opt-in GPS + `sunsetOn`). Reminders are
+   `LibraryReminders` — absolute instants re-armed on every app start.
+   **AndroidManifest had NO flutter_local_notifications receivers**, so
+   every zonedSchedule reminder (incl. the older Watch reminders) never
+   fired on Android; receivers + RECEIVE_BOOT_COMPLETED added — verify on
+   a real Android build.
 4. Bible app experience
 5. Sabbath School experience & date bug
 6. Hymnal (multilingual)

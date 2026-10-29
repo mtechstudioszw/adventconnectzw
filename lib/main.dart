@@ -28,6 +28,7 @@ import 'services/e2ee/e2ee_service.dart';
 import 'services/presence_service.dart';
 import 'services/typing_signal.dart';
 import 'services/session_reset.dart';
+import 'services/library_reminders.dart';
 import 'services/sabbath_service.dart';
 import 'services/push_service.dart';
 import 'services/theme_service.dart';
@@ -257,6 +258,9 @@ Future<void> _initBackgroundServices() async {
           // computes sundown — so it has to be refreshed whenever the
           // app comes up, which is when a window can newly be open.
           unawaited(SabbathService.syncSabbathQuietWindow());
+          // Reading and Friday-sundown reminders are scheduled a week or
+          // two ahead; top them up on every start.
+          unawaited(LibraryReminders.rearm());
         }
         break;
       case AuthChangeEvent.signedOut:
@@ -398,6 +402,13 @@ Future<void> _initBackgroundServices() async {
             break;
           case 'church_admin':
             appRouter.pushNamed('admin_login');
+            break;
+          // On-phone reminders from LibraryReminders.
+          case 'reading_plan':
+            appRouter.pushNamed('reading_plans');
+            break;
+          case 'sabbath':
+            appRouter.pushNamed('sabbath_hours');
             break;
           case 'video':
             // YouTube live / new-upload push → open the in-app player.

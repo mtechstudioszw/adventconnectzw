@@ -19,6 +19,9 @@
     <!-- Biometrics & Notifications -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Re-schedule on-phone reminders (Watch, Bible reading, Friday
+         sundown) after a reboot: Android drops pending alarms on restart. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
 
     <!-- Background Media Playback (just_audio_background) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
@@ -113,6 +116,24 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON"/>
+            </intent-filter>
+        </receiver>
+
+        <!-- flutter_local_notifications: zonedSchedule() fires through these.
+             Without them every scheduled reminder (Watch live-service
+             reminders, reading plan, Sabbath) is accepted and silently never
+             shown on Android. Added 29 Oct 2026. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
 

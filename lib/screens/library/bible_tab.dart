@@ -9,6 +9,7 @@ import '../../models/devotion_model.dart';
 import '../../models/library_item_model.dart';
 import '../../services/bible_prefs_service.dart';
 import '../../services/bible_service.dart';
+import '../../services/memory_verse_service.dart';
 import '../../services/bible_translation_service.dart';
 import '../../services/devotion_service.dart';
 import '../../services/music_player_service.dart';
@@ -1290,6 +1291,8 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
                   );
                   setState(_selected.clear);
                 }),
+                _barAction(context, Icons.psychology_alt_rounded, 'Memorise',
+                    () => _applyMemorise(book, ref)),
                 _barAction(context, Icons.edit_note_rounded, 'Note',
                     () => _openNoteEditor(book, ref, sorted, reference)),
                 _barAction(context, Icons.ios_share_rounded, 'Share', () {
@@ -1326,6 +1329,9 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
               const SizedBox(height: 3),
               Text(
                 label,
+                // Six actions since Memorise joined; never wrap at 320dp.
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.labelSmall.copyWith(
                   color: context.palette.textMuted,
                   fontSize: 10.5,
@@ -1361,6 +1367,33 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
       );
     }
     HapticFeedback.selectionClick();
+    setState(_selected.clear);
+  }
+
+  /// Adds the selection to Memory verses — one entry per run of
+  /// consecutive verses, in the translation being read.
+  void _applyMemorise(BibleBook book, _ChapterRef ref) {
+    var added = 0;
+    for (final (from, to) in MemoryVerseService.runs(_selected)) {
+      if (MemoryVerseService.add(
+        book: book.index,
+        chapter: ref.chapter,
+        from: from,
+        to: to,
+      )) {
+        added++;
+      }
+    }
+    HapticFeedback.lightImpact();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          added == 0
+              ? 'Already in your memory verses.'
+              : 'Added to memory verses.',
+        ),
+      ),
+    );
     setState(_selected.clear);
   }
 

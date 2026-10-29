@@ -31,6 +31,9 @@ class SabbathService {
   static String? province() => CacheService.readPref(_provinceKey);
 
   static Future<void> setProvince(String name) async {
+    // Picking a province is an explicit choice of place, so it replaces
+    // a GPS fix rather than sitting silently underneath it.
+    await CacheService.deletePref(_gpsKey);
     await CacheService.writePref(_provinceKey, name);
     // The server's quiet window is derived from the province, so a
     // province change has to re-stamp it or notifications would keep
@@ -102,6 +105,59 @@ class SabbathService {
 
   static List<String> get provinces => _provinceCoords.keys.toList();
 
+  // -- Exact location (Sabbath hours screen, 29 Oct 2026) -----------------
+  // Opt-in: the member taps "Use my location" once and the fix is kept on
+  // the phone (never sent anywhere). It beats a province centroid, which
+  // can be ~1-2 minutes out across a large province.
+  static const _gpsKey = 'pref:sabbath_gps';
+
+  static ({double lat, double lon})? _gps() {
+    try {
+      final raw = CacheService.readPref(_gpsKey);
+      if (raw == null) return null;
+      final parts = raw.split(',');
+      if (parts.length != 2) return null;
+      final lat = double.tryParse(parts[0]);
+      final lon = double.tryParse(parts[1]);
+      if (lat == null || lon == null) return null;
+      return (lat: lat, lon: lon);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static bool usingGps() => _gps() != null;
+
+  /// Rounded to ~1 km: plenty for sundown, and not a precise home address.
+  static Future<void> setGps(double lat, double lon) async {
+    await CacheService.writePref(
+      _gpsKey,
+      '${lat.toStringAsFixed(2)},${lon.toStringAsFixed(2)}',
+    );
+    if (sabbathModeEnabled()) await syncSabbathQuietWindow();
+  }
+
+  static Future<void> clearGps() => CacheService.deletePref(_gpsKey);
+
+  /// Where sundown is being computed for, in words.
+  static String locationLabel() {
+    if (usingGps()) return 'Your location';
+    String? p;
+    try {
+      p = province();
+    } catch (_) {}
+    if (p != null && _provinceCoords.containsKey(p)) return '$p province';
+    final country = Countries.byCode(_countryCode());
+    return country?.name ?? 'Harare';
+  }
+
+  /// Sundown on [localDate] (a date on the phone's calendar) for the
+  /// member's place, as a UTC instant.
+  static DateTime sunsetOn(DateTime localDate) {
+    final c = _coords();
+    return _sunsetUtc(date: localDate, latDeg: c.lat, lonDeg: c.lon);
+  }
+
   /// The member's country, read straight from auth metadata so it is always
   /// whatever `AuthService.updateProfile` last wrote. Falls back to ZW,
   /// which is what patch_213 backfilled every pre-rebrand profile to.
@@ -124,6 +180,10 @@ class SabbathService {
     String? overrideProvince,
     String? overrideCountry,
   }) {
+    if (overrideProvince == null && overrideCountry == null) {
+      final gps = _gps();
+      if (gps != null) return gps;
+    }
     String? p = overrideProvince;
     if (p == null) {
       try {

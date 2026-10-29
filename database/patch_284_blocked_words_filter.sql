@@ -1,6 +1,6 @@
 -- ============================================================================
 --  patch_284 — filter objectionable words before they are posted
---  STATUS: DRAFT — rehearse, then apply.
+--  STATUS: APPLIED to the live database 29 Oct 2026 (rehearsed first: 15 checks).
 -- ============================================================================
 --
 --  Apple Guideline 1.2 (user-generated content) asks for four things:

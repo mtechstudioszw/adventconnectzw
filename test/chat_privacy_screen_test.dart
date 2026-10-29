@@ -154,6 +154,11 @@ void main() {
         _inCard(card, find.textContaining('never lets them message')),
         findsOneWidget,
       );
+      // It must never read as if you can't follow someone back.
+      expect(
+        _inCard(card, find.textContaining('can follow back')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('who can follow me: three choices, Everyone is default', (

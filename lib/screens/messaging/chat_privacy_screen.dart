@@ -446,7 +446,9 @@ class _FriendsVsFollowers extends StatelessWidget {
           ]),
           const SizedBox(width: 12),
           column(Icons.person_add_alt_outlined, 'Followers', const [
-            'One-way — you don\'t have to follow back',
+            // Said plainly (owner, 29 Oct 2026): "don't have to follow
+            // back" read as "can't follow back". You can — it's one tap.
+            'One-way — you can follow back, but it\'s your choice',
             'See your public posts only',
             'Following never lets them message you',
           ]),

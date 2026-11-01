@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
@@ -61,17 +63,31 @@ class FullImageViewer extends StatelessWidget {
                 // full-width and offered 4x zoom on. Hence "the Google
                 // picture is far away and won't zoom": there was no detail
                 // there to magnify. Non-Google URLs are returned unchanged.
-                child: CachedImage(
-                  photoUrlAtSize(imageUrl, 1024),
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Center(
-                    child: Icon(
-                      Icons.broken_image_outlined,
-                      color: AppColors.white,
-                      size: 56,
-                    ),
-                  ),
-                ),
+                child: imageUrl.startsWith('/')
+                    ? Image.file(
+                        File(imageUrl),
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Center(
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                color: AppColors.white,
+                                size: 56,
+                              ),
+                            ),
+                      )
+                    : CachedImage(
+                        photoUrlAtSize(imageUrl, 1024),
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Center(
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                color: AppColors.white,
+                                size: 56,
+                              ),
+                            ),
+                      ),
               ),
             ),
             Positioned(

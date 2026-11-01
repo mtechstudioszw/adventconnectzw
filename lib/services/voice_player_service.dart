@@ -5,6 +5,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'e2ee/media_crypto.dart';
 import 'messaging_service.dart';
 
 /// A voice note to play — identified by its message id, with the private
@@ -15,6 +16,7 @@ class VoiceNote {
     required this.storagePath,
     this.durationSeconds,
     this.conversationId,
+    this.mediaKey,
   });
 
   final String messageId;
@@ -23,6 +25,9 @@ class VoiceNote {
   // The chat this note belongs to — lets the global mini-bar hide itself
   // while the user is actually viewing that chat (the bubble is enough).
   final String? conversationId;
+  // Set for an end-to-end encrypted note: the file in storage is sealed
+  // and is opened with this before it is written to the local cache.
+  final MediaKey? mediaKey;
 }
 
 /// Given the currently-finished note's id, return the next one to play
@@ -178,7 +183,10 @@ class VoicePlayerService {
       note.storagePath,
       (p) => downloadProgress.value = p,
     );
-    await file.writeAsBytes(bytes, flush: true);
+    await file.writeAsBytes(
+      MessagingService.openMedia(bytes, note.mediaKey),
+      flush: true,
+    );
     _localCache[note.messageId] = file.path;
     return file.path;
   }

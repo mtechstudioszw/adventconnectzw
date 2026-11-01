@@ -55,6 +55,17 @@ class GalleryService {
   static Future<bool> saveImageFromUrl(String imageUrl) async {
     if (imageUrl.trim().isEmpty) return false;
     if (!await _ensureAccess()) return false;
+    // A local file (a decrypted encrypted chat photo, or one still
+    // waiting to send) — no download needed.
+    if (imageUrl.startsWith('/')) {
+      try {
+        await Gal.putImage(imageUrl, album: 'Adventist Super App');
+        return true;
+      } catch (e) {
+        debugPrint('GalleryService.saveImageFromUrl(local) failed: $e');
+        return false;
+      }
+    }
     HttpClient? client;
     try {
       final uri = Uri.parse(imageUrl);

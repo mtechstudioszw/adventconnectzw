@@ -70,6 +70,15 @@ class E2eeService {
   /// change that older clients genuinely cannot read.
   static const int wireVersion = 1;
 
+  /// Version stamped on an encrypted photo or voice note (1 Nov 2026).
+  /// Its body is a key envelope, not text; a build that only knows v1
+  /// would decrypt it and print the JSON. Stamping 2 makes those builds
+  /// show the placeholder instead. Text stays on [wireVersion].
+  static const int mediaWireVersion = 2;
+
+  /// The newest version this build can open.
+  static const int maxReadableVersion = mediaWireVersion;
+
   static E2eeStore? _store;
   static int? _deviceId;
 

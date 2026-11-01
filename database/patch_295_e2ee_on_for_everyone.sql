@@ -1,0 +1,38 @@
+-- =====================================================================
+--  PATCH 295 — switch end-to-end encryption ON for everyone
+--  STATUS: not yet applied.  RUN ONLY AFTER patch_294 AND a phone test.
+--
+--  Today e2ee_enabled holds ONE account id (the test allowlist). This
+--  makes every NEW text, photo and voice note in a 1:1 or group chat
+--  encrypted, for members on a build with media encryption (Nov 2026+).
+--  Church channels stay unencrypted on purpose (broadcast, like
+--  WhatsApp Channels). Old messages are untouched.
+--
+--  The honest trade-offs — read before running:
+--   1. NO KEY BACKUP YET. Reinstalling the app, or a new phone, means
+--      that phone cannot read messages from before; they show "Waiting
+--      for this message". WhatsApp solves this with encrypted backups;
+--      we have not built that.
+--   2. Members on an OLD app build receive "Waiting for this message"
+--      for encrypted photos/voice notes until they update. Text sent to
+--      them is only encrypted if their build published keys.
+--   3. Reports: the reporter's app sends its decrypted copy
+--      (report_message p_text_copy) — moderators can still act.
+--   4. Server-side message search cannot see encrypted text.
+--
+--  The phone test (10 minutes, two phones, both on the new build):
+--   a) A sends B text, a photo with a caption, a voice note → B opens all.
+--   b) B replies; A sees it. Restart both apps — everything still opens.
+--   c) Same in a group with three people.
+--   d) Turn A's data off, send a photo, turn it on — it arrives and opens.
+--  If any step shows "Waiting for this message", DON'T run this; tell
+--  Claude what you saw.
+--
+--  Undo at any time: set the value back to 'false'. Messages already
+--  encrypted stay readable — decryption is never switched off.
+-- =====================================================================
+
+UPDATE public.app_config SET value = 'true' WHERE key = 'e2ee_enabled';
+
+-- Check: expect 'true'
+-- SELECT value FROM public.app_config WHERE key = 'e2ee_enabled';

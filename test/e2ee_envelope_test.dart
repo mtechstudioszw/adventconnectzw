@@ -74,7 +74,7 @@ void main() {
   group('unreadable rows become the placeholder, never base64', () {
     test('a NEWER wire version than this build knows', () async {
       expect(
-        await contentOf(row(version: E2eeService.wireVersion + 1)),
+        await contentOf(row(version: E2eeService.maxReadableVersion + 1)),
         E2eeEnvelope.placeholder,
       );
     });
@@ -153,7 +153,7 @@ void main() {
     test('a future version is not', () {
       expect(
         E2eeEnvelope.isReadableVersion(
-          row(version: E2eeService.wireVersion + 1),
+          row(version: E2eeService.maxReadableVersion + 1),
         ),
         isFalse,
       );

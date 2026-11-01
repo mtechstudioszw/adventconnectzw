@@ -65,6 +65,9 @@ dependencies:
   google_sign_in: ^6.2.2
   sign_in_with_apple: ^6.1.4
   crypto: ^3.0.3
+  # AES-256-GCM for encrypted chat photos and voice notes. Already in the
+  # lock as a transitive dependency; pinned to that exact version.
+  pointycastle: 4.0.0
   local_auth: ^2.3.0
   geolocator: ^13.0.2
 

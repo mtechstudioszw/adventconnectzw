@@ -13,6 +13,7 @@ import 'chat_sync_service.dart';
 import 'connectivity_service.dart';
 import 'e2ee/e2ee_envelope.dart';
 import 'e2ee/e2ee_service.dart';
+import 'e2ee/media_crypto.dart';
 
 /// One-shot handoff for opening a chat with a pre-filled draft and an
 /// optional product preview (tester bug #17: "message a seller from a
@@ -152,6 +153,12 @@ class MessagingService {
     }
     // Queued reactions/pins/stars belong to this account too.
     await ChatSync.clear();
+    // Decrypted copies of encrypted photos are this account's to see.
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final plain = Directory('${dir.path}/chat_media_plain');
+      if (plain.existsSync()) await plain.delete(recursive: true);
+    } catch (_) {}
     try {
       await CacheService.deletePrefsWithPrefix('pref:draft:');
     } catch (e) {
@@ -2379,6 +2386,30 @@ class MessagingService {
     return _client.storage.from(_voiceBucket).download(storagePath);
   }
 
+  /// Opens an encrypted photo/voice note downloaded from storage. Plain
+  /// (legacy / unencrypted) files pass through untouched.
+  static Uint8List openMedia(Uint8List bytes, MediaKey? key) =>
+      key == null ? bytes : MediaCrypto.decrypt(bytes, key);
+
+  /// Downloads and decrypts an encrypted chat photo into the app's cache,
+  /// returning a local file path the bubble, viewer and "save to gallery"
+  /// all use. Cached per storage path, so it decrypts once.
+  static Future<String> decryptedChatImagePath(
+    String storagePath,
+    MediaKey key,
+  ) async {
+    final dir = await getApplicationSupportDirectory();
+    final cacheDir = Directory('${dir.path}/chat_media_plain');
+    if (!cacheDir.existsSync()) cacheDir.createSync(recursive: true);
+    final safe = storagePath.replaceAll(RegExp(r'[^A-Za-z0-9_.-]'), '_');
+    final file = File('${cacheDir.path}/$safe');
+    if (file.existsSync() && file.lengthSync() > 0) return file.path;
+    final cipher =
+        await _client.storage.from(_chatMediaBucket).download(storagePath);
+    await file.writeAsBytes(MediaCrypto.decrypt(cipher, key), flush: true);
+    return file.path;
+  }
+
   /// Streams a voice note over its signed URL, reporting download progress
   /// (0.0–1.0, or null when the server doesn't send a content-length) via
   /// [onProgress] — so the bubble can show a WhatsApp-style download ring.
@@ -2536,6 +2567,7 @@ class MessagingService {
     String? caption,
     int? durationSeconds,
     String? replyToId,
+    bool forwarded = false,
     void Function(double progress)? onProgress,
   }) async {
     final user = _client.auth.currentUser;
@@ -2543,14 +2575,37 @@ class MessagingService {
     final isVoice = kind == 'voice';
     final ts = DateTime.now().millisecondsSinceEpoch;
     final storagePath = '$conversationId/${user.id}/$ts.$ext';
+    final text = (caption ?? '').trim();
+
+    // E2EE for media (1 Nov 2026). The file is sealed with its own random
+    // AES-256-GCM key and the bucket stores only that ciphertext; the key
+    // and the caption ride inside the Signal-encrypted message body. The
+    // body is encrypted BEFORE the upload so a peer with no keys (older
+    // build) gets the ordinary unencrypted photo, never undecryptable
+    // noise. Same off-switch and same exclusions as text.
+    ({Uint8List bytes, MediaKey key})? sealed;
+    EncryptedPayload? encrypted;
+    String? envelope;
+    if (E2eeService.isEncryptionOn) {
+      sealed = MediaCrypto.encrypt(bytes);
+      envelope = sealed.key.envelope(kind: kind, caption: text);
+      encrypted = await _encryptBodyIfPossible(
+        conversationId: conversationId,
+        body: envelope,
+        messageType: 'text',
+      );
+      if (encrypted == null) sealed = null;
+    }
+
     await _uploadWithProgress(
       bucket: isVoice ? _voiceBucket : _chatMediaBucket,
       storagePath: storagePath,
-      bytes: bytes,
-      contentType: isVoice ? 'audio/aac' : _imageMime(ext),
+      bytes: sealed?.bytes ?? bytes,
+      contentType: sealed != null
+          ? 'application/octet-stream'
+          : (isVoice ? 'audio/aac' : _imageMime(ext)),
       onProgress: onProgress ?? (_) {},
     );
-    final text = (caption ?? '').trim();
     final content = isVoice
         ? '🎙️ Voice note'
         : (text.isEmpty ? '📷 Photo' : text);
@@ -2559,21 +2614,38 @@ class MessagingService {
         .insert({
           'conversation_id': conversationId,
           'sender_id': user.id,
-          'content': content,
+          'content': encrypted?.ciphertext ?? content,
+          if (encrypted != null) ...{
+            'e2ee_version': E2eeService.mediaWireVersion,
+            'sender_device_id': encrypted.senderDeviceId,
+            'ciphertext_type': encrypted.type,
+          },
           'message_type': kind,
           'media_url': storagePath,
           'media_duration_seconds': ?durationSeconds,
           'client_id': clientId,
           'sent_at': sentAt,
           if (replyToId != null) 'reply_to_id': int.tryParse(replyToId),
+          if (forwarded) 'forwarded': true,
         })
         .select()
         .single();
-    final message = Message.fromJson(response);
+    var message = Message.fromJson(response);
+    final preview = isVoice
+        ? '🎙️ Voice note'
+        : (text.isEmpty ? '📷 Photo' : '📷 $text');
+    if (encrypted != null && envelope != null) {
+      // Our own copy of the key — the ratchet can't reopen what it sealed.
+      await E2eeService.cachePlaintext(message.id, envelope);
+      await E2eeService.cachePreview(conversationId, preview);
+      message = Message.fromJson(E2eeEnvelope.withPlaintext(
+        Map<String, dynamic>.from(response),
+        envelope,
+      ));
+    }
     await _client.from(_conversationsTable).update({
-      'last_message': isVoice
-          ? '🎙️ Voice note'
-          : (text.isEmpty ? '📷 Photo' : '📷 $text'),
+      'last_message':
+          encrypted != null ? E2eeEnvelope.previewSentinel : preview,
       'last_sender_id': user.id,
       'last_message_at': message.sentAt.toIso8601String(),
     }).eq('id', conversationId);
@@ -2678,6 +2750,33 @@ class MessagingService {
     }
     final type = original.messageType;
     final src = original.mediaUrl ?? '';
+    final sealedKey = MediaKey.fromMeta(original.meta);
+    if ((type == 'image' || type == 'voice') &&
+        src.isNotEmpty &&
+        sealedKey != null) {
+      // An encrypted file can't just be copied: the key that opens it
+      // belongs to the old chat. Open it here and send it fresh, which
+      // re-encrypts it for the new chat (or sends it plain if that chat
+      // isn't encrypted).
+      final bucket = type == 'image' ? _chatMediaBucket : _voiceBucket;
+      final plain = MediaCrypto.decrypt(
+        await _client.storage.from(bucket).download(src),
+        sealedKey,
+      );
+      await _uploadAndInsertMedia(
+        kind: type,
+        conversationId: targetConversationId,
+        bytes: plain,
+        ext: src.contains('.')
+            ? src.split('.').last
+            : (type == 'image' ? 'jpg' : 'm4a'),
+        clientId: 'f-${DateTime.now().microsecondsSinceEpoch}-${user.id}',
+        sentAt: DateTime.now().toUtc().toIso8601String(),
+        durationSeconds: original.mediaDurationSeconds,
+        forwarded: true,
+      );
+      return;
+    }
     if ((type == 'image' || type == 'voice') && src.isNotEmpty) {
       final bucket = type == 'image' ? _chatMediaBucket : _voiceBucket;
       final ext = src.contains('.')

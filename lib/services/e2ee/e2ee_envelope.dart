@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'e2ee_service.dart';
+import 'media_crypto.dart';
 
 /// The encrypted-message wire format, in one place.
 ///
@@ -67,7 +68,7 @@ class E2eeEnvelope {
   /// build, and the only correct response is the placeholder.
   static bool isReadableVersion(Map<String, dynamic> row) {
     final version = row['e2ee_version'];
-    return version is num && version.toInt() <= E2eeService.wireVersion;
+    return version is num && version.toInt() <= E2eeService.maxReadableVersion;
   }
 
   /// Decrypts one row's `content` in place, returning a new map.
@@ -97,7 +98,7 @@ class E2eeEnvelope {
     // moments later. See the note in E2eeStore.
     if (messageId.isNotEmpty) {
       final known = E2eeService.cachedPlaintext(messageId);
-      if (known != null) return {...row, 'content': known};
+      if (known != null) return withPlaintext(row, known);
     }
 
     // Our own outgoing rows. The ratchet cannot decrypt what it
@@ -137,7 +138,25 @@ class E2eeEnvelope {
     if (plaintext != null && messageId.isNotEmpty) {
       await E2eeService.cachePlaintext(messageId, plaintext);
     }
-    return {...row, 'content': plaintext ?? placeholder};
+    if (plaintext == null) return {...row, 'content': placeholder};
+    return withPlaintext(row, plaintext);
+  }
+
+  /// Puts decrypted text back on [row]. For an encrypted photo or voice
+  /// note the text is a small JSON envelope holding the file's key: the
+  /// bubble gets the caption (or "📷 Photo"), and the key goes into
+  /// `meta` on THIS phone only, where the image and voice loaders find it.
+  static Map<String, dynamic> withPlaintext(
+    Map<String, dynamic> row,
+    String plaintext,
+  ) {
+    final media = MediaEnvelope.tryParse(plaintext);
+    if (media == null) return {...row, 'content': plaintext};
+    final meta = row['meta'] is Map
+        ? Map<String, dynamic>.from(row['meta'] as Map)
+        : <String, dynamic>{};
+    meta[MediaCrypto.metaKey] = media.key.toMeta();
+    return {...row, 'content': media.label, 'meta': meta};
   }
 
   /// Decrypts a whole page of rows, oldest first.

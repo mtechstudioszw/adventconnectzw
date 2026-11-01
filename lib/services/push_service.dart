@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/app_bootstrap.dart';
 import 'e2ee/e2ee_envelope.dart';
 import 'e2ee/e2ee_service.dart';
+import 'e2ee/media_crypto.dart';
 import 'messaging_service.dart';
 import 'notification_service.dart';
 
@@ -177,7 +178,10 @@ Future<void> _renderIncomingChat(
     final local = messageId.isEmpty
         ? null
         : E2eeService.cachedPlaintext(messageId);
-    body = local ?? E2eeEnvelope.previewPlaceholder;
+    // A photo/voice note decrypts to its key envelope — show its label,
+    // never the JSON.
+    final media = local == null ? null : MediaEnvelope.tryParse(local);
+    body = media?.label ?? local ?? E2eeEnvelope.previewPlaceholder;
   }
   final largeIcon = isConversation
       ? await _largeIconFromUrl('${data['sender_photo'] ?? ''}')

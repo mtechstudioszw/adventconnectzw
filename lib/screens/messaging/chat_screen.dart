@@ -17,6 +17,7 @@ import '../../models/friendship_model.dart';
 import '../../models/message_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/e2ee/e2ee_service.dart';
+import '../../services/e2ee/media_crypto.dart';
 import '../../services/feed_service.dart';
 import '../../services/marketplace_service.dart';
 import '../../services/gallery_service.dart';
@@ -975,6 +976,7 @@ class _ChatScreenState extends State<ChatScreen>
           messageId: m.id,
           storagePath: m.mediaUrl!,
           durationSeconds: m.mediaDurationSeconds,
+          mediaKey: MediaKey.fromMeta(m.meta),
         );
       }
     }
@@ -1236,9 +1238,12 @@ class _ChatScreenState extends State<ChatScreen>
     if (media.isEmpty) return;
     try {
       // Remote images live in the private bucket — resolve a signed URL.
+      final key = MediaKey.fromMeta(m.meta);
       final url = media.startsWith('/')
           ? media
-          : await MessagingService.signedChatMediaUrl(media);
+          : key != null
+              ? await MessagingService.decryptedChatImagePath(media, key)
+              : await MessagingService.signedChatMediaUrl(media);
       final ok = await GalleryService.saveImageFromUrl(url);
       if (!mounted) return;
       _toast(ok ? 'Saved to gallery.' : 'Could not save the image.');
@@ -5224,6 +5229,7 @@ class _VoiceBubble extends StatelessWidget {
           storagePath: message.mediaUrl!,
           durationSeconds: message.mediaDurationSeconds,
           conversationId: message.conversationId,
+          mediaKey: MediaKey.fromMeta(message.meta),
         ),
       );
     } catch (_) {
@@ -6080,17 +6086,37 @@ class _ImageBubbleState extends State<_ImageBubble> {
     }
   }
 
+  bool _failed = false;
+
   Future<void> _resolve(String path) async {
     try {
+      // End-to-end encrypted photo: download the sealed file, open it with
+      // the key from the message body, and show the decrypted local copy.
+      final key = MediaKey.fromMeta(widget.message.meta);
+      if (key != null) {
+        final local =
+            await MessagingService.decryptedChatImagePath(path, key);
+        if (mounted) {
+          setState(() {
+            _isLocal = true;
+            _localPath = local;
+          });
+        }
+        return;
+      }
       final url = await MessagingService.signedChatMediaUrl(path);
       if (mounted) setState(() => _signedUrl = url);
     } catch (_) {
-      // leave as a placeholder
+      if (mounted) setState(() => _failed = true);
     }
   }
 
   void _open() {
-    if (_signedUrl != null) FullImageViewer.show(context, _signedUrl);
+    if (_isLocal && _localPath != null) {
+      FullImageViewer.show(context, _localPath);
+    } else if (_signedUrl != null) {
+      FullImageViewer.show(context, _signedUrl);
+    }
   }
 
   @override
@@ -6214,7 +6240,7 @@ class _ImageBubbleState extends State<_ImageBubble> {
         errorBuilder: (_, _, _) => _placeholder(),
       );
     }
-    return _placeholder(loading: true);
+    return _placeholder(loading: !_failed);
   }
 
   Widget _placeholder({bool loading = false}) {

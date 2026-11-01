@@ -53,7 +53,7 @@ import flutter_callkit_incoming
   // "flutter." prefix = the key shared_preferences reads on iOS.
   override func application(
     _ application: UIApplication,
-    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Foundation.Data
   ) {
     UserDefaults.standard.set("ok len=\(deviceToken.count)", forKey: "flutter.apns_native")
     super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)

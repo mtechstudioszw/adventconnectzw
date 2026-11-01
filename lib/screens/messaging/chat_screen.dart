@@ -3527,6 +3527,18 @@ class _ChatScreenState extends State<ChatScreen>
         // WhatsApp-style day separator: shown above the first message
         // of each calendar day (Today / Yesterday / "Mon 8 Jun").
         final prev = i > 0 ? _messages[i - 1] : null;
+        final next = i + 1 < _messages.length ? _messages[i + 1] : null;
+        // Runs: the same person, within 3 minutes, same day. A run sits
+        // tighter, only its LAST bubble gets the tail corner, and a group
+        // names the sender once (1 Nov 2026 chat redesign, part 2).
+        bool sameRun(Message? a, Message b) =>
+            a != null &&
+            a.messageType != 'system' &&
+            a.senderId == b.senderId &&
+            _sameLocalDay(a.sentAt, b.sentAt) &&
+            b.sentAt.difference(a.sentAt).inMinutes.abs() < 3;
+        final runsOnFromPrev = sameRun(prev, m);
+        final runsOnToNext = next != null && sameRun(m, next);
         final showDateSeparator =
             prev == null || !_sameLocalDay(prev.sentAt, m.sentAt);
         // Fresh arrivals (sent or just received) rise+fade in;
@@ -3542,7 +3554,7 @@ class _ChatScreenState extends State<ChatScreen>
           selected: _selectedMsgIds.contains(m.id),
           onToggle: () => _toggleSelect(m),
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 6),
+            padding: EdgeInsets.only(bottom: runsOnToNext ? 1 : 6),
             child: Column(
               crossAxisAlignment: isMine
                   ? CrossAxisAlignment.end
@@ -3550,7 +3562,8 @@ class _ChatScreenState extends State<ChatScreen>
               children: [
                 if (showDateSeparator)
                   _DateSeparator(label: _dayLabel(m.sentAt)),
-                if (_isGroup && !isMine) _groupSenderLabel(m),
+                if (_isGroup && !isMine && !runsOnFromPrev)
+                  _groupSenderLabel(m),
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   padding: _highlightedMessageId == m.id
@@ -3595,6 +3608,7 @@ class _ChatScreenState extends State<ChatScreen>
                           _MessageBubble(
                             message: m,
                             isMine: isMine,
+                            tail: !runsOnToNext,
                             uploadProgress: _uploadProgress[m.id],
                           ),
                         ],
@@ -5123,11 +5137,16 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
     required this.isMine,
+    this.tail = true,
     this.uploadProgress,
   });
   final Message message;
   final bool isMine;
   final double? uploadProgress;
+
+  /// Last bubble of a run: gets the small "tail" corner. Earlier bubbles
+  /// in the run are fully rounded so the run reads as one block.
+  final bool tail;
 
   @override
   Widget build(BuildContext context) {
@@ -5200,8 +5219,8 @@ class _MessageBubble extends StatelessWidget {
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(20),
             topRight: const Radius.circular(20),
-            bottomLeft: Radius.circular(isMine ? 20 : 5),
-            bottomRight: Radius.circular(isMine ? 5 : 20),
+            bottomLeft: Radius.circular(isMine || !tail ? 20 : 5),
+            bottomRight: Radius.circular(isMine && tail ? 5 : 20),
           ),
           // Light mode: a hairline so white holds its edge on light grey.
           // Dark mode: the lifted fill is the edge — an outline over a fill

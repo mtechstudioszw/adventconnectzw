@@ -1938,6 +1938,14 @@ class _ChatScreenState extends State<ChatScreen>
       if (mounted) {
         setState(() => _replacePendingWithCanonical(tempId, canonical));
       }
+    } on OutboxQueuedException {
+      // Kept in the outbox (its own copy of the file) — the queued bubble
+      // replaces this one and sends when the connection is back.
+      if (mounted) {
+        setState(() => _pending.removeWhere((m) => m.id == tempId));
+        _loadOutbox();
+        _toast("No connection. Your voice note will send when you're back online.");
+      }
     } on PostgrestException catch (e) {
       // Silent block parity for voice notes too — RLS rejection keeps
       // the optimistic bubble in place, no toast.
@@ -3928,6 +3936,15 @@ class _ChatScreenState extends State<ChatScreen>
           _uploadProgress.remove(tempId);
           _replacePendingWithCanonical(tempId, canonical);
         });
+      }
+    } on OutboxQueuedException {
+      if (mounted) {
+        setState(() {
+          _uploadProgress.remove(tempId);
+          _pending.removeWhere((m) => m.id == tempId);
+        });
+        _loadOutbox();
+        _toast("No connection. Your photo will send when you're back online.");
       }
     } catch (_) {
       if (mounted) {

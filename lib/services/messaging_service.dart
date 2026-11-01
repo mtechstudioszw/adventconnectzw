@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/message_model.dart';
 import 'analytics_service.dart';
@@ -176,6 +177,15 @@ class MessagingService {
         String? plain;
         try {
           final decoded = jsonDecode(raw) as Map<String, dynamic>;
+          // A queued photo or voice note (1 Nov 2026).
+          if (decoded['media'] is Map) {
+            final media = Map<String, dynamic>.from(decoded['media'] as Map);
+            final result = await _flushMediaEntry(media);
+            if (result == _MediaFlush.retryLater) break;
+            await box.delete(key);
+            if (result == _MediaFlush.sent) flushed += 1;
+            continue;
+          }
           // New shape (1 Nov 2026): {payload, plain} so an encrypted queued
           // message can still be shown as text while it waits. Old entries
           // are the bare payload.
@@ -294,6 +304,36 @@ class MessagingService {
       if (raw == null) continue;
       try {
         final decoded = jsonDecode(raw) as Map<String, dynamic>;
+        if (decoded['media'] is Map) {
+          final m = Map<String, dynamic>.from(decoded['media'] as Map);
+          if (m['conversation_id']?.toString() != conversationId ||
+              m['sender_id'] != me) {
+            continue;
+          }
+          final at = DateTime.tryParse('${m['sent_at']}')?.toLocal() ??
+              DateTime.now();
+          final isVoice = m['kind'] == 'voice';
+          final caption = (m['caption'] as String?) ?? '';
+          out.add(
+            Message(
+              id: 'outbox-$key',
+              conversationId: conversationId,
+              senderId: me,
+              senderName: 'You',
+              content: isVoice
+                  ? '🎙️ Voice note'
+                  : (caption.isEmpty ? '📷 Photo' : caption),
+              createdAt: at,
+              sentAt: at,
+              messageType: m['kind'] as String,
+              // A local file: the bubble draws it straight from disk.
+              mediaUrl: m['local_path'] as String?,
+              mediaDurationSeconds: (m['duration'] as num?)?.toInt(),
+              clientId: m['client_id'] as String?,
+            ),
+          );
+          continue;
+        }
         final payload = decoded['payload'] is Map
             ? Map<String, dynamic>.from(decoded['payload'] as Map)
             : decoded;
@@ -2276,38 +2316,48 @@ class MessagingService {
     if (!await file.exists()) {
       throw const StorageException('Recording not found on disk.');
     }
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    final storagePath = '$conversationId/${user.id}/$ts.m4a';
+    final clientId =
+        'v-${DateTime.now().microsecondsSinceEpoch}-${user.id}';
+    final sentAt = DateTime.now().toUtc().toIso8601String();
     final bytes = await file.readAsBytes();
-    await _uploadWithProgress(
-      bucket: _voiceBucket,
-      storagePath: storagePath,
-      bytes: bytes,
-      contentType: 'audio/aac',
-      onProgress: onProgress ?? (_) {},
-    );
+    Future<Never> queue() async {
+      await _enqueueMedia(
+        kind: 'voice',
+        conversationId: conversationId,
+        bytes: bytes,
+        ext: 'm4a',
+        clientId: clientId,
+        sentAt: sentAt,
+        durationSeconds: durationSeconds,
+        replyToId: replyToId,
+      );
+      throw const OutboxQueuedException();
+    }
 
-    final response = await _client
-        .from(_messagesTable)
-        .insert({
-          'conversation_id': conversationId,
-          'sender_id': user.id,
-          'content': '🎙️ Voice note',
-          'message_type': 'voice',
-          'media_url': storagePath,
-          'media_duration_seconds': durationSeconds,
-          if (replyToId != null) 'reply_to_id': int.tryParse(replyToId),
-        })
-        .select()
-        .single();
-    final message = Message.fromJson(response);
-    await _client.from(_conversationsTable).update({
-      'last_message': '🎙️ Voice note',
-      'last_sender_id': user.id,
-      'last_message_at': message.sentAt.toIso8601String(),
-    }).eq('id', conversationId);
-    AnalyticsService.messageSent(source: 'voice');
-    return message;
+    if (!ConnectivityService.isOnline) await queue();
+    try {
+      return await _uploadAndInsertMedia(
+        kind: 'voice',
+        conversationId: conversationId,
+        bytes: bytes,
+        ext: 'm4a',
+        clientId: clientId,
+        sentAt: sentAt,
+        durationSeconds: durationSeconds,
+        replyToId: replyToId,
+        onProgress: onProgress,
+      );
+    } on PostgrestException {
+      rethrow;
+    } on StorageException catch (e) {
+      // A storage 4xx is a real refusal (too big, not allowed); anything
+      // else is the connection.
+      final code = int.tryParse(e.statusCode ?? '') ?? 0;
+      if (code >= 400 && code < 500) rethrow;
+      return queue();
+    } catch (_) {
+      return queue();
+    }
   }
 
   /// Returns a signed playback URL for a voice-note storage path
@@ -2433,35 +2483,185 @@ class MessagingService {
     if (user == null) {
       throw const AuthException('Sign in to send photos.');
     }
+    final text = (caption ?? '').trim();
+    final clientId =
+        'i-${DateTime.now().microsecondsSinceEpoch}-${user.id}';
+    final sentAt = DateTime.now().toUtc().toIso8601String();
+    Future<Never> queue() async {
+      await _enqueueMedia(
+        kind: 'image',
+        conversationId: conversationId,
+        bytes: bytes,
+        ext: ext,
+        clientId: clientId,
+        sentAt: sentAt,
+        caption: text,
+      );
+      throw const OutboxQueuedException();
+    }
+
+    if (!ConnectivityService.isOnline) await queue();
+    try {
+      return await _uploadAndInsertMedia(
+        kind: 'image',
+        conversationId: conversationId,
+        bytes: bytes,
+        ext: ext,
+        clientId: clientId,
+        sentAt: sentAt,
+        caption: text,
+        onProgress: onProgress,
+      );
+    } on PostgrestException {
+      rethrow;
+    } on StorageException catch (e) {
+      final code = int.tryParse(e.statusCode ?? '') ?? 0;
+      if (code >= 400 && code < 500) rethrow;
+      return queue();
+    } catch (_) {
+      return queue();
+    }
+  }
+
+  /// Upload a photo or voice note, then insert its message. Shared by the
+  /// live send and the media outbox, so a queued photo lands exactly as a
+  /// live one would — with the time it was taken, not the time it flushed.
+  static Future<Message> _uploadAndInsertMedia({
+    required String kind,
+    required String conversationId,
+    required Uint8List bytes,
+    required String ext,
+    required String clientId,
+    required String sentAt,
+    String? caption,
+    int? durationSeconds,
+    String? replyToId,
+    void Function(double progress)? onProgress,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw const AuthException('Sign in to send.');
+    final isVoice = kind == 'voice';
     final ts = DateTime.now().millisecondsSinceEpoch;
     final storagePath = '$conversationId/${user.id}/$ts.$ext';
     await _uploadWithProgress(
-      bucket: _chatMediaBucket,
+      bucket: isVoice ? _voiceBucket : _chatMediaBucket,
       storagePath: storagePath,
       bytes: bytes,
-      contentType: _imageMime(ext),
+      contentType: isVoice ? 'audio/aac' : _imageMime(ext),
       onProgress: onProgress ?? (_) {},
     );
     final text = (caption ?? '').trim();
+    final content = isVoice
+        ? '🎙️ Voice note'
+        : (text.isEmpty ? '📷 Photo' : text);
     final response = await _client
         .from(_messagesTable)
         .insert({
           'conversation_id': conversationId,
           'sender_id': user.id,
-          'content': text.isEmpty ? '📷 Photo' : text,
-          'message_type': 'image',
+          'content': content,
+          'message_type': kind,
           'media_url': storagePath,
+          'media_duration_seconds': ?durationSeconds,
+          'client_id': clientId,
+          'sent_at': sentAt,
+          if (replyToId != null) 'reply_to_id': int.tryParse(replyToId),
         })
         .select()
         .single();
     final message = Message.fromJson(response);
     await _client.from(_conversationsTable).update({
-      'last_message': text.isEmpty ? '📷 Photo' : '📷 $text',
+      'last_message': isVoice
+          ? '🎙️ Voice note'
+          : (text.isEmpty ? '📷 Photo' : '📷 $text'),
       'last_sender_id': user.id,
       'last_message_at': message.sentAt.toIso8601String(),
     }).eq('id', conversationId);
-    AnalyticsService.messageSent(source: 'image');
+    AnalyticsService.messageSent(source: kind);
     return message;
+  }
+
+  /// Send one queued photo/voice note. Never throws.
+  static Future<_MediaFlush> _flushMediaEntry(Map<String, dynamic> m) async {
+    final me = _client.auth.currentUser?.id;
+    final file = File((m['local_path'] ?? '').toString());
+    // Another account's, or its file is gone: it can never send.
+    if (me == null || m['sender_id'] != me || !await file.exists()) {
+      return _MediaFlush.dropped;
+    }
+    try {
+      await _uploadAndInsertMedia(
+        kind: m['kind'] as String,
+        conversationId: m['conversation_id'] as String,
+        bytes: await file.readAsBytes(),
+        ext: m['ext'] as String,
+        clientId: m['client_id'] as String,
+        sentAt: m['sent_at'] as String,
+        caption: m['caption'] as String?,
+        durationSeconds: (m['duration'] as num?)?.toInt(),
+        replyToId: m['reply_to_id'] as String?,
+      );
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') {
+        // Already sent — the reply was lost the first time.
+      } else if (ChatSync.isPermanentRefusal(e)) {
+        try {
+          await file.delete();
+        } catch (_) {}
+        return _MediaFlush.dropped;
+      } else {
+        return _MediaFlush.retryLater;
+      }
+    } catch (_) {
+      return _MediaFlush.retryLater;
+    }
+    try {
+      await file.delete();
+    } catch (_) {}
+    return _MediaFlush.sent;
+  }
+
+  /// Keep a photo/voice note to send later: the bytes go to a file in the
+  /// app's own storage (temp files can be cleaned by the OS before the
+  /// phone reconnects), and the outbox holds the rest.
+  static Future<void> _enqueueMedia({
+    required String kind,
+    required String conversationId,
+    required Uint8List bytes,
+    required String ext,
+    required String clientId,
+    required String sentAt,
+    String? caption,
+    int? durationSeconds,
+    String? replyToId,
+  }) async {
+    final box = _outbox;
+    final me = _client.auth.currentUser?.id;
+    if (box == null || me == null) return;
+    try {
+      final base = await getApplicationSupportDirectory();
+      final dir = Directory('${base.path}/chat_outbox');
+      await dir.create(recursive: true);
+      final file = File('${dir.path}/$clientId.$ext');
+      await file.writeAsBytes(bytes, flush: true);
+      await box.add(jsonEncode({
+        'media': {
+          'kind': kind,
+          'conversation_id': conversationId,
+          'sender_id': me,
+          'local_path': file.path,
+          'ext': ext,
+          'client_id': clientId,
+          'sent_at': sentAt,
+          'caption': ?caption,
+          'duration': ?durationSeconds,
+          'reply_to_id': ?replyToId,
+        },
+      }));
+      outboxRevision.value++;
+    } catch (e, st) {
+      debugPrint('MessagingService: media enqueue failed: $e\n$st');
+    }
   }
 
   /// Forward a message to another conversation. Text re-sends the
@@ -2566,3 +2766,6 @@ class OutboxQueuedException implements Exception {
   @override
   String toString() => 'Message queued — will send when you reconnect.';
 }
+
+/// What happened to one queued photo/voice note on a flush.
+enum _MediaFlush { sent, dropped, retryLater }

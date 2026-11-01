@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/e2ee/e2ee_service.dart';
 import 'widgets/legal_layout.dart';
 
 /// Community Guidelines, in-app.
@@ -37,7 +38,7 @@ class GuidelinesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const LegalLayout(
+    return LegalLayout(
       kicker: 'COMMUNITY',
       title: 'Community Guidelines',
       subtitle: 'How we look out for one another in this space.',
@@ -121,11 +122,15 @@ class GuidelinesScreen extends StatelessWidget {
         ),
         LegalSection(
           title: 'A note on messaging',
-          body:
-              'Chats are not end-to-end encrypted and may be reviewed by '
-              'administrators when a report is made or for safety/legal '
-              'reasons. Please keep conversations consistent with these '
-              'Guidelines.',
+          body: E2eeService.isEncryptionOn
+              ? 'Private and group chats are end-to-end encrypted. If you '
+                    'report a message, your app sends a readable copy of it '
+                    'so administrators can review it. Please keep '
+                    'conversations consistent with these Guidelines.'
+              : 'Chats are not end-to-end encrypted and may be reviewed by '
+                    'administrators when a report is made or for safety/legal '
+                    'reasons. Please keep conversations consistent with these '
+                    'Guidelines.',
         ),
       ],
     );

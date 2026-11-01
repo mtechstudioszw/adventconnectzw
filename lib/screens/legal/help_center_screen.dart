@@ -1,5 +1,6 @@
 import '../../config/platform_flags.dart';
 import 'package:flutter/material.dart';
+import '../../services/e2ee/e2ee_service.dart';
 import 'widgets/legal_layout.dart';
 
 /// Settings → Help center.
@@ -96,10 +97,16 @@ class HelpCenterScreen extends StatelessWidget {
             'Notes to self — a private space for your own notes',
             'Starred messages — messages you’ve saved',
             'Chat privacy — control who is allowed to message you',
-            'Messages are NOT end-to-end encrypted. They are stored on our '
-                'servers and can be accessed by administrators when a report '
-                'is made, or where safety or the law requires it. Church '
-                'admins cannot read your private chats.',
+            E2eeService.isEncryptionOn
+                ? 'Private and group chats — messages, photos and voice '
+                      'notes — are end-to-end encrypted. Nobody else, not '
+                      'even us, can read them. Church announcement channels '
+                      'are not encrypted. Reporting a message sends us a '
+                      'readable copy of that one message.'
+                : 'Messages are NOT end-to-end encrypted. They are stored on our '
+                      'servers and can be accessed by administrators when a report '
+                      'is made, or where safety or the law requires it. Church '
+                      'admins cannot read your private chats.',
           ],
         ),
         LegalSection(

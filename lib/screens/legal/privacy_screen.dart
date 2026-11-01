@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/e2ee/e2ee_service.dart';
 import 'widgets/legal_layout.dart';
 
 class PrivacyScreen extends StatelessWidget {
@@ -13,7 +14,7 @@ class PrivacyScreen extends StatelessWidget {
       lastUpdated: '29 October 2026',
       intro:
           'Your privacy matters to us. This policy explains the personal information Adventist Super App collects when you use the app, how we use it, and the choices you have. We aim to keep this clear and honest — if anything is unclear please reach out and we\'ll explain.',
-      sections: const [
+      sections: [
         LegalSection(
           title: 'Information We Collect',
           body:
@@ -86,7 +87,9 @@ class PrivacyScreen extends StatelessWidget {
             'You — your own data, and content shared with you. This is enforced at the database level with row-level security, not just in the app.',
             'Other members — only what you make visible under the app\'s visibility rules, such as public versus friends-only posts, or public versus anonymous prayers.',
             'Church admins — cannot read your private chats.',
-            'Our servers and administrators — backend functions use a privileged database credential that can read stored data. This means authorised administrators can technically access stored content, including messages. Messaging is not end-to-end encrypted, and messages are stored on our servers in readable form.',
+            E2eeService.isEncryptionOn
+                ? 'Our servers and administrators — private and group chats are end-to-end encrypted: messages, photos and voice notes are stored only as encrypted data that we cannot read. Church announcement channels are not encrypted. When you report a message, your app sends us a readable copy of that message so it can be reviewed. Other stored data (profiles, posts, prayers) can be accessed by authorised administrators through a privileged database credential.'
+                : 'Our servers and administrators — backend functions use a privileged database credential that can read stored data. This means authorised administrators can technically access stored content, including messages. Messaging is not end-to-end encrypted, and messages are stored on our servers in readable form.',
           ],
         ),
         LegalSection(

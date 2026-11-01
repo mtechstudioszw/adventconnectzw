@@ -4930,10 +4930,9 @@ class _EncryptedLine extends StatelessWidget {
         children: [
           TextSpan(
             text:
-                'Text messages to $otherName are end-to-end encrypted — '
-                'nobody outside this chat, not even Adventist Super App, can '
-                'read them. Photos and voice notes are not end-to-end '
-                'encrypted and are stored on our servers. ',
+                'Messages, photos and voice notes with $otherName are '
+                'end-to-end encrypted — nobody outside this chat, not even '
+                'Adventist Super App, can read or listen to them. ',
           ),
           TextSpan(
             text: 'Learn more',

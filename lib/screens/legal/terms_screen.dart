@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/e2ee/e2ee_service.dart';
 import 'widgets/legal_layout.dart';
 
 class TermsScreen extends StatelessWidget {
@@ -13,7 +14,7 @@ class TermsScreen extends StatelessWidget {
       lastUpdated: '16 August 2026',
       intro:
           'Welcome to Adventist Super App. By creating an account or using our app you agree to these terms. Please take a moment to read them — they explain your rights, our responsibilities and the rules that keep this community a safe place for everyone.',
-      sections: const [
+      sections: [
         LegalSection(
           title: 'Acceptance of Terms',
           body:
@@ -57,7 +58,7 @@ class TermsScreen extends StatelessWidget {
           // only CONDUCT and never mentioned how messages are stored. Wording
           // follows the published version so the two agree.
           body:
-              'Direct messages must remain respectful. Unsolicited sales pitches, romantic harassment, threats and spam will result in account action. Block and report any member behaving inappropriately. Messages are not end-to-end encrypted: they are stored on our servers and may be accessed by administrators for moderation, security or legal reasons, as described in the Privacy Policy. Please do not send anything you would not want stored on a server.',
+              'Direct messages must remain respectful. Unsolicited sales pitches, romantic harassment, threats and spam will result in account action. Block and report any member behaving inappropriately. ${E2eeService.isEncryptionOn ? 'Private and group chats are end-to-end encrypted; reporting a message sends a readable copy of it for review, as described in the Privacy Policy.' : 'Messages are not end-to-end encrypted: they are stored on our servers and may be accessed by administrators for moderation, security or legal reasons, as described in the Privacy Policy. Please do not send anything you would not want stored on a server.'}',
         ),
         LegalSection(
           title: 'Prohibited Activities',

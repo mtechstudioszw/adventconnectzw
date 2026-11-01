@@ -224,7 +224,9 @@ class _PrayerScreenState extends State<PrayerScreen> {
             onPressed: () => Navigator.pop(ctx),
             child: Text(
               'Cancel',
-              style: AppTextStyles.labelMedium.copyWith(color: ctx.palette.text),
+              style: AppTextStyles.labelMedium.copyWith(
+                color: ctx.palette.text,
+              ),
             ),
           ),
           FilledButton(
@@ -267,15 +269,17 @@ class _PrayerScreenState extends State<PrayerScreen> {
           return;
         }
         _prayers = _prayers
-            .map((p) => p.id == prayer.id
-                ? p.copyWith(
-                    isAnswered: answered,
-                    // Mirror the trigger's stamp locally so the card can
-                    // render "Answered just now" without a refetch.
-                    answeredAt: answered ? DateTime.now() : null,
-                    testimony: testimony,
-                  )
-                : p)
+            .map(
+              (p) => p.id == prayer.id
+                  ? p.copyWith(
+                      isAnswered: answered,
+                      // Mirror the trigger's stamp locally so the card can
+                      // render "Answered just now" without a refetch.
+                      answeredAt: answered ? DateTime.now() : null,
+                      testimony: testimony,
+                    )
+                  : p,
+            )
             .toList();
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -596,8 +600,9 @@ class _PrayerScreenState extends State<PrayerScreen> {
       // Other looked exactly like an empty, broken Prayer tab — with a
       // button inviting you to post something you'd already posted.
       final filtered = _activeCategory != null || _answeredOnly;
-      final filterName =
-          _answeredOnly ? 'answered' : (_activeCategory?.label.toLowerCase() ?? '');
+      final filterName = _answeredOnly
+          ? 'answered'
+          : (_activeCategory?.label.toLowerCase() ?? '');
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
@@ -635,7 +640,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
                 Text(
                   filtered
                       ? 'There are prayers on the board — just none in this '
-                          'filter. Clear it to see them all.'
+                            'filter. Clear it to see them all.'
                       : 'Share a prayer request and pray together with the SDA community worldwide.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodyMedium.copyWith(
@@ -666,12 +671,22 @@ class _PrayerScreenState extends State<PrayerScreen> {
         ],
       );
     }
+    final answered = _prayers.where((p) => p.isAnswered).length;
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-      itemCount: _prayers.length,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+      // +1: the scripture hero on the unfiltered list.
+      itemCount: _prayers.length + 1,
       separatorBuilder: (context, index) => const SizedBox(height: 12),
-      itemBuilder: (context, i) {
+      itemBuilder: (context, rawIndex) {
+        if (rawIndex == 0) {
+          return _PrayerHero(
+            requests: _prayers.length,
+            answered: answered,
+            onShare: _openPostScreen,
+          );
+        }
+        final i = rawIndex - 1;
         final p = _prayers[i];
         // Anonymous prayers come back with an empty authorId — there's
         // nothing to navigate to and the row should stay inert.
@@ -709,6 +724,155 @@ class _PrayerScreenState extends State<PrayerScreen> {
   }
 }
 
+/// The top of the Prayer screen (premium redesign, 1 Nov 2026): a verse,
+/// what is happening in the room right now, and one clear way in.
+class _PrayerHero extends StatelessWidget {
+  const _PrayerHero({
+    required this.requests,
+    required this.answered,
+    required this.onShare,
+  });
+  final int requests;
+  final int answered;
+  final VoidCallback onShare;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.primaryBlue.withValues(alpha: 0.28),
+            AppColors.primaryBlue.withValues(alpha: 0.06),
+          ],
+        ),
+        border: Border.all(
+          color: AppColors.primaryBlue.withValues(alpha: 0.22),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.format_quote_rounded,
+                color: AppColors.primaryBlue,
+                size: 22,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '1 THESSALONIANS 5:17',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                  fontSize: 10.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Pray without ceasing.',
+            style: AppTextStyles.headlineSmall.copyWith(
+              color: palette.text,
+              fontWeight: FontWeight.w700,
+              fontSize: 22,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Carry each other\'s burdens. Tap “I prayed” so they know '
+            'they are not alone.',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: palette.textMuted,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _HeroStat(value: '$requests', label: 'requests'),
+              const SizedBox(width: 18),
+              _HeroStat(value: '$answered', label: 'answered'),
+              const Spacer(),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onShare,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Ink(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.volunteer_activism_rounded,
+                          size: 16,
+                          color: AppColors.white,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Share a request',
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({required this.value, required this.label});
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        value,
+        style: AppTextStyles.titleLarge.copyWith(
+          color: context.palette.text,
+          fontWeight: FontWeight.w800,
+          height: 1.1,
+        ),
+      ),
+      Text(
+        label,
+        style: AppTextStyles.labelSmall.copyWith(
+          color: context.palette.textMuted,
+        ),
+      ),
+    ],
+  );
+}
+
 class _CategoryChip extends StatelessWidget {
   const _CategoryChip({
     required this.label,
@@ -741,9 +905,7 @@ class _CategoryChip extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: selected ? accent : AppColors.divider,
-              ),
+              border: Border.all(color: selected ? accent : AppColors.divider),
             ),
             alignment: Alignment.center,
             child: Row(

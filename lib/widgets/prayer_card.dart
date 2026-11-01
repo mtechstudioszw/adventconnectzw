@@ -205,7 +205,8 @@ class PrayerCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.successGreen.withValues(alpha: 0.07),
+        // Blue, not green: CLAUDE.md never puts green behind content.
+        color: AppColors.primaryBlue.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../widgets/motion/pressable.dart';
+import '../../widgets/user_avatar.dart';
 import '../../widgets/screen_shell.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -287,7 +289,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                   final url = Uri(
                     scheme: 'mailto',
                     path: _supportEmail,
-                    queryParameters: {'subject': 'Adventist Super App — Support'},
+                    queryParameters: {
+                      'subject': 'Adventist Super App — Support',
+                    },
                   );
                   Navigator.of(ctx).pop();
                   await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -396,15 +400,15 @@ class _SettingsScreenState extends State<SettingsScreen>
       // ("remove ads", "stop ads") rather than only the product name.
       // Hidden on iOS (no In-App Purchase configured).
       if (!kHidePayments)
-      _SettingsEntry(
-        'Go Premium',
-        'Subscription',
-        Icons.star_rounded,
-        AppColors.goldAccent,
-        'premium subscription no ads remove ads stop ads adfree upgrade '
-            'support billing cancel restore',
-        () => context.pushNamed('premium'),
-      ),
+        _SettingsEntry(
+          'Go Premium',
+          'Subscription',
+          Icons.star_rounded,
+          AppColors.goldAccent,
+          'premium subscription no ads remove ads stop ads adfree upgrade '
+              'support billing cancel restore',
+          () => context.pushNamed('premium'),
+        ),
       // Account
       _SettingsEntry(
         'Edit profile',
@@ -439,10 +443,20 @@ class _SettingsScreenState extends State<SettingsScreen>
         'block unblock privacy people',
         () => context.pushNamed('blocked_users'),
       ),
-      // Preferences
+      // Notifications
+      _SettingsEntry(
+        'What can notify me',
+        'Notifications',
+        Icons.notifications_none_rounded,
+        AppColors.primaryBlue,
+        'notifications alerts push messages likes comments prayer events '
+            'announcements news watch marketplace quiz mute turn off',
+        () => _openNotificationSheet(),
+      ),
+      // App
       _SettingsEntry(
         'Notification permissions',
-        'Preferences',
+        'App',
         Icons.notifications_active_outlined,
         AppColors.goldAccent,
         'alerts push permission',
@@ -450,7 +464,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       _SettingsEntry(
         'Sound & haptics',
-        'Preferences',
+        'App',
         Icons.volume_up_outlined,
         AppColors.primaryBlue,
         'sound volume mute audio effects vibration haptics quiz silent',
@@ -458,7 +472,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       _SettingsEntry(
         'Appearance',
-        'Preferences',
+        'App',
         Icons.brightness_6_outlined,
         AppColors.primaryBlue,
         'theme dark light mode display',
@@ -466,7 +480,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       _SettingsEntry(
         'Sabbath place',
-        'Preferences',
+        'Sabbath',
         Icons.location_on_outlined,
         AppColors.goldAccent,
         'sundown sunset province state country location countdown timer',
@@ -474,7 +488,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       _SettingsEntry(
         'Sabbath mode',
-        'Preferences',
+        'Sabbath',
         Icons.do_not_disturb_on_outlined,
         AppColors.goldAccent,
         'quiet mute silence notifications sabbath friday sundown',
@@ -513,33 +527,32 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       // Support
       _SettingsEntry(
-        'Send feedback',
-        'Support',
-        Icons.feedback_outlined,
-        AppColors.successGreen,
-        'suggest idea complain',
-        () => context.pushNamed('feedback'),
-      ),
-      _SettingsEntry(
         'Help center',
         'Support',
         Icons.help_outline,
-        AppColors.successGreen,
-        'faq support question',
+        AppColors.primaryBlue,
+        'faq support question how to help',
+        () => context.pushNamed('help_center'),
+      ),
+      _SettingsEntry(
+        'Report a problem or send feedback',
+        'Support',
+        Icons.flag_outlined,
+        AppColors.primaryBlue,
+        'bug broken crash issue suggest idea complain feedback',
         () => context.pushNamed('feedback'),
       ),
       _SettingsEntry(
-        'Report a problem',
-        'Support',
-        Icons.bug_report_outlined,
+        'Delete account',
+        'Sign out',
+        Icons.delete_outline,
         AppColors.red,
-        'bug broken crash issue',
-        () => context.pushNamed('feedback'),
+        'remove close erase data',
+        () => _deleteAccount(),
       ),
-      // App
       _SettingsEntry(
         'About',
-        'App',
+        'About',
         Icons.info_outline,
         AppColors.primaryBlue,
         'version credits developer',
@@ -737,37 +750,31 @@ class _SettingsScreenState extends State<SettingsScreen>
                       // one-accent-per-screen colour, so this reads as the
                       // single different thing here without shouting.
                       if (!kHidePayments)
-                      ValueListenableBuilder<bool>(
-                        valueListenable: PremiumService.isPremium,
-                        builder: (context, isPremium, _) => Padding(
-                          padding: const EdgeInsets.only(bottom: 18),
-                          child: _Section(
-                            title: 'Subscription',
-                            accent: AppColors.goldAccent,
-                            children: [
-                              _NavRow(
-                                icon: Icons.star_rounded,
-                                tint: AppColors.goldAccent,
-                                label: isPremium
-                                    ? 'Premium'
-                                    : 'Go Premium — no ads',
-                                trailing: isPremium ? 'Active' : null,
-                                onTap: () => context.pushNamed('premium'),
-                              ),
-                            ],
+                        ValueListenableBuilder<bool>(
+                          valueListenable: PremiumService.isPremium,
+                          builder: (context, isPremium, _) => Padding(
+                            padding: const EdgeInsets.only(bottom: 18),
+                            child: _Section(
+                              title: 'Subscription',
+                              accent: AppColors.goldAccent,
+                              children: [
+                                _NavRow(
+                                  icon: Icons.star_rounded,
+                                  tint: AppColors.goldAccent,
+                                  label: isPremium
+                                      ? 'Premium'
+                                      : 'Go Premium — no ads',
+                                  trailing: isPremium ? 'Active' : null,
+                                  onTap: () => context.pushNamed('premium'),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
                       _Section(
                         title: 'Account',
                         accent: AppColors.primaryBlue,
                         children: [
-                          _NavRow(
-                            icon: Icons.person_outline,
-                            label: 'Edit profile',
-                            onTap: () => context.pushNamed('edit_profile'),
-                          ),
-                          const _Divider(),
                           _NavRow(
                             icon: Icons.lock_outline,
                             label: 'Change password',
@@ -796,142 +803,32 @@ class _SettingsScreenState extends State<SettingsScreen>
                             label: 'Blocked contacts',
                             onTap: () => context.pushNamed('blocked_users'),
                           ),
-                          const _Divider(),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      _Section(
+                        title: 'Notifications',
+                        accent: AppColors.primaryBlue,
+                        children: [
+                          // Audit, 1 Nov 2026: ten switches used to sit in
+                          // the middle of "Preferences" next to Appearance
+                          // and Sabbath. They are one decision — what may
+                          // reach me — so they live on one sheet.
                           _NavRow(
-                            icon: Icons.delete_outline,
-                            label: 'Delete account',
-                            destructive: true,
-                            onTap: _deleteAccount,
+                            icon: Icons.notifications_none_rounded,
+                            label: 'What can notify me',
+                            trailing:
+                                '${_categoryPrefs.enabledCount} of '
+                                '${NotificationCategoryPrefs.categoryCount} on',
+                            onTap: _openNotificationSheet,
                           ),
                         ],
                       ),
                       const SizedBox(height: 18),
                       _Section(
-                        title: 'Preferences',
+                        title: 'Sabbath',
                         accent: AppColors.goldAccent,
                         children: [
-                          _ToggleRow(
-                            icon: Icons.event_outlined,
-                            label: 'Event reminders',
-                            value: _categoryPrefs.events,
-                            onChanged: (v) => _setCategory(
-                              _categoryPrefs.copyWith(events: v),
-                            ),
-                          ),
-                          const _Divider(),
-                          _ToggleRow(
-                            icon: Icons.volunteer_activism_outlined,
-                            label: 'Prayer updates',
-                            value: _categoryPrefs.prayers,
-                            onChanged: (v) => _setCategory(
-                              _categoryPrefs.copyWith(prayers: v),
-                            ),
-                          ),
-                          const _Divider(),
-                          _ToggleRow(
-                            icon: Icons.chat_bubble_outline,
-                            label: 'New messages',
-                            value: _categoryPrefs.messages,
-                            onChanged: (v) => _setCategory(
-                              _categoryPrefs.copyWith(messages: v),
-                            ),
-                          ),
-                          const _Divider(),
-                          _ToggleRow(
-                            icon: Icons.favorite_border,
-                            label: 'Likes & comments',
-                            value: _categoryPrefs.social,
-                            onChanged: (v) => _setCategory(
-                              _categoryPrefs.copyWith(social: v),
-                            ),
-                          ),
-                          const _Divider(),
-                          // patch_283. Per-person/Page mutes live on their
-                          // profile; this is the switch for all of them.
-                          _ToggleRow(
-                            icon: Icons.person_add_alt_outlined,
-                            label: 'Posts from people & Pages you follow',
-                            value: _categoryPrefs.following,
-                            onChanged: (v) => _setCategory(
-                              _categoryPrefs.copyWith(following: v),
-                            ),
-                          ),
-                          const _Divider(),
-                          _ToggleRow(
-                            icon: Icons.storefront_outlined,
-                            label: 'Marketplace alerts',
-                            value: _categoryPrefs.marketplace,
-                            onChanged: (v) => _setCategory(
-                              _categoryPrefs.copyWith(marketplace: v),
-                            ),
-                          ),
-                          const _Divider(),
-                          _ToggleRow(
-                            icon: Icons.campaign_outlined,
-                            label: 'Church announcements',
-                            value: _categoryPrefs.announcements,
-                            onChanged: (v) => _setCategory(
-                              _categoryPrefs.copyWith(announcements: v),
-                            ),
-                          ),
-                          const _Divider(),
-                          _ToggleRow(
-                            icon: Icons.newspaper_outlined,
-                            label: 'Advent News updates',
-                            value: _categoryPrefs.news,
-                            onChanged: (v) =>
-                                _setCategory(_categoryPrefs.copyWith(news: v)),
-                          ),
-                          const _Divider(),
-                          _ToggleRow(
-                            icon: Icons.play_circle_outline,
-                            label: 'Watch — new videos & live',
-                            value: _categoryPrefs.watch,
-                            onChanged: (v) {
-                              _setCategory(_categoryPrefs.copyWith(watch: v));
-                              PushService.setWatchPushesEnabled(v);
-                            },
-                          ),
-                          const _Divider(),
-                          _ToggleRow(
-                            icon: Icons.emoji_events_outlined,
-                            // "Reminders", precisely. A live challenge from
-                            // a named person is not covered by this and
-                            // always arrives — see NotificationCategoryPrefs.quiz.
-                            label: 'Quiz reminders',
-                            value: _categoryPrefs.quiz,
-                            onChanged: (v) =>
-                                _setCategory(_categoryPrefs.copyWith(quiz: v)),
-                          ),
-                          const _Divider(),
-                          _NavRow(
-                            icon: Icons.shield_moon_outlined,
-                            label: 'Permissions',
-                            onTap: () => context.pushNamed('permissions'),
-                          ),
-                          const _Divider(),
-                          _NavRow(
-                            icon: Icons.volume_up_outlined,
-                            label: 'Sound & haptics',
-                            onTap: () => context.pushNamed('sound_settings'),
-                          ),
-                          const _Divider(),
-                          _NavRow(
-                            icon: Icons.brightness_6_outlined,
-                            label: 'Appearance',
-                            trailing: _themeLabel(_themeMode),
-                            onTap: _pickTheme,
-                          ),
-                          const _Divider(),
-                          // The app-language switcher is gone (18 Aug 2026).
-                          // It offered English / Shona / Ndebele and changed
-                          // nothing — the app has no translations, so it was
-                          // a setting that persisted a preference no screen
-                          // ever read. It also read as a promise the app
-                          // could not keep now that members outside Zimbabwe
-                          // are signing up. The Bible translation, Sabbath
-                          // School language (~90) and Hymnal language
-                          // pickers are separate and stay.
                           _ToggleRow(
                             icon: Icons.brightness_3,
                             label: 'Sabbath countdown',
@@ -969,9 +866,28 @@ class _SettingsScreenState extends State<SettingsScreen>
                       ),
                       const SizedBox(height: 18),
                       _Section(
-                        title: 'Watch',
-                        accent: AppColors.red,
+                        title: 'App',
+                        accent: AppColors.primaryBlue,
                         children: [
+                          _NavRow(
+                            icon: Icons.shield_moon_outlined,
+                            label: 'Permissions',
+                            onTap: () => context.pushNamed('permissions'),
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.volume_up_outlined,
+                            label: 'Sound & haptics',
+                            onTap: () => context.pushNamed('sound_settings'),
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.brightness_6_outlined,
+                            label: 'Appearance',
+                            trailing: _themeLabel(_themeMode),
+                            onTap: _pickTheme,
+                          ),
+                          const _Divider(),
                           _ToggleRow(
                             icon: Icons.smart_display_outlined,
                             label: 'Autoplay next video',
@@ -1023,21 +939,19 @@ class _SettingsScreenState extends State<SettingsScreen>
                         title: 'Support',
                         accent: AppColors.successGreen,
                         children: [
-                          _NavRow(
-                            icon: Icons.feedback_outlined,
-                            label: 'Send feedback',
-                            onTap: () => context.pushNamed('feedback'),
-                          ),
-                          const _Divider(),
+                          // "Send feedback", "Help center" and "Report a
+                          // problem" all opened the feedback form — and the
+                          // real Help center (route help_center) was
+                          // unreachable from here again.
                           _NavRow(
                             icon: Icons.help_outline,
                             label: 'Help center',
-                            onTap: () => context.pushNamed('feedback'),
+                            onTap: () => context.pushNamed('help_center'),
                           ),
                           const _Divider(),
                           _NavRow(
                             icon: Icons.flag_outlined,
-                            label: 'Report a problem',
+                            label: 'Report a problem or send feedback',
                             onTap: () => context.pushNamed('feedback'),
                           ),
                           const _Divider(),
@@ -1121,31 +1035,36 @@ class _SettingsScreenState extends State<SettingsScreen>
                       ],
                       const SizedBox(height: 18),
                       _Section(
-                        title: 'App',
+                        title: 'About',
                         accent: AppColors.primaryBlue,
                         children: [
                           _NavRow(
                             icon: Icons.info_outline,
-                            label: 'About',
+                            label: 'About Adventist Super App',
+                            // Version folded in here: a whole row for it was
+                            // a row you never tap.
+                            trailing: 'v$kAppVersionName',
                             onTap: () => context.pushNamed('about'),
                           ),
-                          const _Divider(),
-                          _InfoRow(
-                            icon: Icons.tag,
-                            label: 'App version',
-                            // The CI build stamps the commit SHA via
-                            // --dart-define=GIT_SHA. Shows "local" for local
-                            // builds. Lets you confirm at a glance that the
-                            // build you're running is the latest one (no more
-                            // chasing already-fixed bugs in a stale build).
-                            value: 'v$kAppVersionName',
-                          ),
-                          const _Divider(),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      _Section(
+                        title: 'Sign out',
+                        accent: AppColors.red,
+                        children: [
                           _NavRow(
                             icon: Icons.logout,
                             label: 'Sign out',
                             destructive: true,
                             onTap: _signOut,
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.delete_outline,
+                            label: 'Delete account',
+                            destructive: true,
+                            onTap: _deleteAccount,
                           ),
                         ],
                       ),
@@ -1172,11 +1091,263 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  /// The ten notification switches, on one sheet (settings audit).
+  Future<void> _openNotificationSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.palette.sheet,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (sheetCtx, setSheet) {
+          void set(NotificationCategoryPrefs next) {
+            _setCategory(next);
+            setSheet(() {});
+          }
+
+          Widget row(
+            IconData icon,
+            String label,
+            bool value,
+            NotificationCategoryPrefs Function(bool) next, {
+            void Function(bool)? also,
+          }) => _ToggleRow(
+            icon: icon,
+            label: label,
+            value: value,
+            onChanged: (v) {
+              set(next(v));
+              also?.call(v);
+            },
+          );
+
+          final p = _categoryPrefs;
+          return DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.8,
+            maxChildSize: 0.94,
+            builder: (ctx, controller) => ListView(
+              controller: controller,
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: context.palette.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'What can notify me',
+                  style: AppTextStyles.titleLarge.copyWith(
+                    color: context.palette.text,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Turn off anything you don\'t need. A live quiz challenge '
+                  'from a friend always reaches you.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: context.palette.textMuted,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _Section(
+                  title: 'People',
+                  accent: AppColors.primaryBlue,
+                  children: [
+                    row(
+                      Icons.chat_bubble_outline,
+                      'New messages',
+                      p.messages,
+                      (v) => p.copyWith(messages: v),
+                    ),
+                    const _Divider(),
+                    row(
+                      Icons.favorite_border,
+                      'Likes & comments',
+                      p.social,
+                      (v) => p.copyWith(social: v),
+                    ),
+                    const _Divider(),
+                    row(
+                      Icons.person_add_alt_outlined,
+                      'Posts from people & Pages you follow',
+                      p.following,
+                      (v) => p.copyWith(following: v),
+                    ),
+                    const _Divider(),
+                    row(
+                      Icons.volunteer_activism_outlined,
+                      'Prayer updates',
+                      p.prayers,
+                      (v) => p.copyWith(prayers: v),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _Section(
+                  title: 'Church',
+                  accent: AppColors.primaryBlue,
+                  children: [
+                    row(
+                      Icons.campaign_outlined,
+                      'Church announcements',
+                      p.announcements,
+                      (v) => p.copyWith(announcements: v),
+                    ),
+                    const _Divider(),
+                    row(
+                      Icons.event_outlined,
+                      'Event reminders',
+                      p.events,
+                      (v) => p.copyWith(events: v),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _Section(
+                  title: 'Updates',
+                  accent: AppColors.primaryBlue,
+                  children: [
+                    row(
+                      Icons.newspaper_outlined,
+                      'Advent News updates',
+                      p.news,
+                      (v) => p.copyWith(news: v),
+                    ),
+                    const _Divider(),
+                    row(
+                      Icons.play_circle_outline,
+                      'Watch — new videos & live',
+                      p.watch,
+                      (v) => p.copyWith(watch: v),
+                      also: PushService.setWatchPushesEnabled,
+                    ),
+                    const _Divider(),
+                    row(
+                      Icons.storefront_outlined,
+                      'Marketplace alerts',
+                      p.marketplace,
+                      (v) => p.copyWith(marketplace: v),
+                    ),
+                    const _Divider(),
+                    row(
+                      Icons.emoji_events_outlined,
+                      'Quiz reminders',
+                      p.quiz,
+                      (v) => p.copyWith(quiz: v),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
   Widget _buildHero() {
-    return const ScreenHero(
-      title: 'Tune the app to you',
-      tagline: 'Settings',
-      fallbackRoute: 'profile',
+    final user = AuthService.currentUser;
+    final meta = user?.userMetadata ?? const {};
+    final name = (meta['full_name'] ?? '').toString().trim();
+    final photo = (meta['profile_photo_url'] ?? '').toString().trim();
+    final email = (user?.email ?? '').trim();
+    final palette = context.palette;
+    return Column(
+      children: [
+        const ScreenHero(
+          title: 'Settings',
+          tagline: 'Your account',
+          fallbackRoute: 'profile',
+        ),
+        // Who you are, first — the way every settings app opens. Tapping it
+        // edits your profile (the row that used to sit in Account).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+          child: Pressable(
+            onTap: () => context.pushNamed('edit_profile'),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primaryBlue.withValues(alpha: 0.22),
+                    palette.card,
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.12),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  UserAvatar(
+                    photoUrl: photo.isEmpty ? null : photo,
+                    name: name.isEmpty ? 'Me' : name,
+                    size: 58,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name.isEmpty ? 'Your profile' : name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.titleMedium.copyWith(
+                            color: palette.text,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 17,
+                          ),
+                        ),
+                        if (email.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            email,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: palette.textMuted,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 6),
+                        Text(
+                          'Edit profile',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.primaryBlue,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: palette.textMuted),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1573,47 +1744,6 @@ class _ToggleRow extends StatelessWidget {
             onChanged: onChanged,
             activeThumbColor: AppColors.white,
             activeTrackColor: AppColors.primaryBlue,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.text, size: 20),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              label,
-              style: AppTextStyles.titleMedium.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 14.5,
-              ),
-            ),
-          ),
-          Text(
-            value,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: AppColors.textMuted,
-              fontWeight: FontWeight.w600,
-            ),
           ),
         ],
       ),

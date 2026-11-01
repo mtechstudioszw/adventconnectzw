@@ -42,6 +42,7 @@ class _EventsScreenState extends State<EventsScreen>
   List<Event> _past = [];
   Set<String> _rsvpedIds = <String>{};
   DateTimeRange? _dateRange;
+
   /// Events are scoped to the member's own country unless they ask for
   /// worldwide. A camp meeting on another continent is not an invitation.
   bool _worldwide = false;
@@ -239,9 +240,10 @@ class _EventsScreenState extends State<EventsScreen>
         ),
         child: Column(
           children: [
+            // Filters were four stacked rows (~200px) before a single event
+            // showed. Now: search + date button, then where + when.
             _buildSearchBar(),
             _buildCountryScope(),
-            _buildDateFilter(),
             _buildPillTabs(),
             const SizedBox(height: 4),
             Expanded(
@@ -264,19 +266,34 @@ class _EventsScreenState extends State<EventsScreen>
   Widget _buildCountryScope() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: CountryScopeToggle(
-          countryCode: _country,
-          worldwide: _worldwide,
-          onChanged: (v) {
-            setState(() => _worldwide = v);
-            // Both tabs, or Past keeps the other scope's results until the
-            // member happens to pull-to-refresh it.
-            _loadUpcoming();
-            if (_past.isNotEmpty || _tabController.index == 1) _loadPast();
-          },
-        ),
+      child: Row(
+        children: [
+          CountryScopeToggle(
+            countryCode: _country,
+            worldwide: _worldwide,
+            onChanged: (v) {
+              setState(() => _worldwide = v);
+              // Both tabs, or Past keeps the other scope's results until the
+              // member happens to pull-to-refresh it.
+              _loadUpcoming();
+              if (_past.isNotEmpty || _tabController.index == 1) _loadPast();
+            },
+          ),
+          const SizedBox(width: 8),
+          if (_dateRange != null)
+            Flexible(
+              child: InputChip(
+                label: Text(
+                  '${_formatRangeDate(_dateRange!.start)} – '
+                  '${_formatRangeDate(_dateRange!.end)}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onPressed: _pickDateRange,
+                onDeleted: _clearDateRange,
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -327,8 +344,44 @@ class _EventsScreenState extends State<EventsScreen>
   }
 
   Widget _buildSearchBar() {
+    final active = _dateRange != null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Row(
+        children: [
+          Expanded(child: _searchField()),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: active ? 'Change dates' : 'Filter by dates',
+            child: Material(
+              color: active
+                  ? AppColors.primaryBlue.withValues(alpha: 0.14)
+                  : context.palette.inputFill,
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                onTap: _pickDateRange,
+                borderRadius: BorderRadius.circular(14),
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: Icon(
+                    Icons.date_range_rounded,
+                    color: active
+                        ? AppColors.primaryBlue
+                        : context.palette.textMuted,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _searchField() {
+    return Padding(
+      padding: EdgeInsets.zero,
       child: TextField(
         controller: _searchController,
         onChanged: _onSearchChanged,
@@ -351,75 +404,6 @@ class _EventsScreenState extends State<EventsScreen>
           fillColor: context.palette.inputFill,
           contentPadding: const EdgeInsets.symmetric(vertical: 4),
         ),
-      ),
-    );
-  }
-
-  Widget _buildDateFilter() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: InkWell(
-              onTap: _pickDateRange,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: context.palette.card,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _dateRange != null
-                        ? AppColors.primaryBlue
-                        : context.palette.divider,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.date_range,
-                      size: 18,
-                      color: _dateRange != null
-                          ? AppColors.primaryBlue
-                          : context.palette.textMuted,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _dateRange == null
-                            ? 'Filter by date range'
-                            : '${_formatRangeDate(_dateRange!.start)}  →  ${_formatRangeDate(_dateRange!.end)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: _dateRange != null
-                              ? context.palette.text
-                              : context.palette.textMuted,
-                          fontWeight: _dateRange != null
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          if (_dateRange != null) ...[
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: _clearDateRange,
-              icon: const Icon(Icons.close, size: 20),
-              color: context.palette.textMuted,
-              tooltip: 'Clear date filter',
-            ),
-          ],
-        ],
       ),
     );
   }

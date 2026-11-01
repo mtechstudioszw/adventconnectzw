@@ -43,6 +43,10 @@ class EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // No cover photo: a compact card — a calendar tile beside the details.
+    // A 16:9 slab of gradient with a calendar icon on it said nothing and
+    // fitted one and a half events on a screen (redesign, 1 Nov 2026).
+    if ((event.coverPhotoUrl ?? '').trim().isEmpty) return _compact(context);
     return PressEffect(
       child: Container(
         decoration: BoxDecoration(
@@ -146,6 +150,136 @@ class EventCard extends StatelessWidget {
                             color: AppColors.primaryBlue,
                             size: 20,
                           ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _compact(BuildContext context) {
+    final palette = context.palette;
+    final d = event.eventDate;
+    final when = event.isPast
+        ? 'Ended  ·  ${_weekdays[d.weekday - 1]} ${d.day} ${_titleCase(_months[d.month - 1])}'
+        : '${_weekdays[d.weekday - 1]}  ·  ${_formatTime(event.eventTime)}';
+    return PressEffect(
+      child: Material(
+        color: palette.card,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        elevation: 0,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Calendar tile.
+                Container(
+                  width: 62,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    gradient: event.isPast ? null : AppColors.primaryGradient,
+                    color: event.isPast ? palette.cardMuted : null,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        _months[d.month - 1],
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: event.isPast
+                              ? palette.textMuted
+                              : AppColors.white.withValues(alpha: 0.85),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 10.5,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      Text(
+                        '${d.day}',
+                        style: AppTextStyles.titleLarge.copyWith(
+                          color: event.isPast
+                              ? palette.textMuted
+                              : AppColors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 24,
+                          height: 1.15,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        event.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleMedium.copyWith(
+                          color: palette.text,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15.5,
+                          height: 1.25,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _InfoRow(
+                        icon: event.isPast ? Icons.event_busy : Icons.schedule,
+                        text: when,
+                      ),
+                      if ((event.location ?? '').isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        _InfoRow(
+                          icon: Icons.place_outlined,
+                          text: event.location!,
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.people_outline,
+                            size: 15,
+                            color: AppColors.primaryBlue,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            event.capacity != null
+                                ? '${event.rsvpCount} / ${event.capacity} going'
+                                : '${event.rsvpCount} going',
+                            style: AppTextStyles.labelMedium.copyWith(
+                              color: AppColors.primaryBlue,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (isGoing)
+                            const _GoingChip()
+                          else if (event.isFull)
+                            const _FullChip(),
                         ],
                       ),
                     ],

@@ -133,6 +133,23 @@ class NotificationCategoryPrefs {
 
   static const defaults = NotificationCategoryPrefs();
 
+  /// How many switches Settings shows (the sheet's rows).
+  static const int categoryCount = 10;
+
+  /// How many of them are on — the "8 of 10 on" summary in Settings.
+  int get enabledCount => [
+    events,
+    prayers,
+    messages,
+    marketplace,
+    announcements,
+    news,
+    social,
+    watch,
+    quiz,
+    following,
+  ].where((on) => on).length;
+
   factory NotificationCategoryPrefs.fromJson(Map<String, dynamic> json) {
     bool read(String key, bool fallback) {
       final value = json[key];

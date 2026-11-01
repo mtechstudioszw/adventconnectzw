@@ -42,23 +42,35 @@ class ChurchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PressEffect(
-      child: Card(
+      child: Material(
+        color: context.palette.card,
+        borderRadius: BorderRadius.circular(20),
         clipBehavior: Clip.antiAlias,
+        elevation: 0,
+        shadowColor: Colors.black.withValues(alpha: 0.08),
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 SizedBox(
-                  width: 76,
-                  height: 76,
+                  width: 60,
+                  height: 60,
                   child: AspectRatio(
                     aspectRatio: 1,
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: _CoverImage(url: church.coverPhotoUrl),
+                      borderRadius: BorderRadius.circular(16),
+                      // The church's own logo first — it is what members
+                      // recognise; the cover is a landscape photo cropped
+                      // to a square. Neither: the church's initials.
+                      child: _CoverImage(
+                        url: (church.profilePhotoUrl ?? '').isNotEmpty
+                            ? church.profilePhotoUrl
+                            : church.coverPhotoUrl,
+                        initials: _initials(church.name),
+                      ),
                     ),
                   ),
                 ),
@@ -75,7 +87,11 @@ class ChurchCard extends StatelessWidget {
                               church.name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.titleLarge,
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: context.palette.text,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15.5,
+                              ),
                             ),
                           ),
                           if (church.isVerified) ...[
@@ -98,7 +114,7 @@ class ChurchCard extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                'MINE',
+                                'HOME',
                                 style: AppTextStyles.labelSmall.copyWith(
                                   color: AppColors.white,
                                   fontSize: 9,
@@ -251,10 +267,7 @@ class ChurchCard extends StatelessWidget {
                   ),
                 ),
                 if (onSetHome != null)
-                  _HomeChurchButton(
-                    isHome: isHomeChurch,
-                    onTap: onSetHome!,
-                  )
+                  _HomeChurchButton(isHome: isHomeChurch, onTap: onSetHome!)
                 else
                   Icon(Icons.chevron_right, color: AppColors.textMuted),
               ],
@@ -276,13 +289,44 @@ class ChurchCard extends StatelessWidget {
   /// One line for a row: "Sabbath School · 08:30", plus "+2 more" when
   /// the church listed several. The full list lives on church details.
   static String _serviceSummary(Church church) {
-    final first = church.serviceTimes.first;
-    final head = [
-      if (first.label.trim().isNotEmpty) first.label.trim(),
-      if (first.whenLabel.isNotEmpty) first.whenLabel,
-    ].join(' · ');
-    final extra = church.serviceTimes.length - 1;
-    return extra > 0 ? '$head  +$extra more' : head;
+    // "Sabbath 09:00 · 11:00" — the times are what fit on a row; the
+    // labels ("Sabbath School", "Divine Service") live on church details.
+    // It used to print "Sabbath School · Saturday · 09:0…" and cut off.
+    final times = <String>[
+      for (final s in church.serviceTimes)
+        if ((s.time ?? '').trim().isNotEmpty) s.time!.trim(),
+    ];
+    if (times.isEmpty) {
+      final first = church.serviceTimes.first;
+      return first.label.trim().isNotEmpty
+          ? first.label.trim()
+          : first.whenLabel;
+    }
+    final day = (church.serviceTimes.first.day ?? '').trim().toLowerCase();
+    final prefix = day.isEmpty || day.startsWith('sat')
+        ? 'Sabbath'
+        : _short(day);
+    return '$prefix ${times.take(3).join(' · ')}';
+  }
+
+  static String _short(String day) =>
+      day.length <= 3 ? day : day[0].toUpperCase() + day.substring(1, 3);
+
+  static String _initials(String name) {
+    final words = name
+        .replaceAll(
+          RegExp(
+            r'\b(SDA|Seventh[- ]day|Adventist|Church)\b',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    if (words.isEmpty) return '⛪';
+    return words.take(2).map((w) => w[0].toUpperCase()).join();
   }
 }
 
@@ -347,8 +391,7 @@ class _FriendFaces extends StatelessWidget {
                     child: (shown[i].photoUrl ?? '').isEmpty
                         ? Center(
                             child: Text(
-                              shown[i].firstName.characters.first
-                                  .toUpperCase(),
+                              shown[i].firstName.characters.first.toUpperCase(),
                               style: AppTextStyles.labelSmall.copyWith(
                                 color: AppColors.white,
                                 fontSize: 10,
@@ -454,15 +497,29 @@ class _HomeChurchButton extends StatelessWidget {
 }
 
 class _CoverImage extends StatelessWidget {
-  const _CoverImage({this.url});
+  const _CoverImage({this.url, this.initials = ''});
   final String? url;
+  final String initials;
 
   @override
   Widget build(BuildContext context) {
     if (url == null || url!.isEmpty) {
+      // A soft blue tile with the church's initials, not a navy slab with
+      // a church glyph that looked the same on every row (CLAUDE.md:
+      // appBarGradient is a last resort behind missing imagery).
       return Container(
-        decoration: const BoxDecoration(gradient: AppColors.appBarGradient),
-        child: const Icon(Icons.church, color: AppColors.white, size: 32),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppColors.primaryBlue.withValues(alpha: 0.14),
+        ),
+        child: Text(
+          initials,
+          style: AppTextStyles.titleMedium.copyWith(
+            color: AppColors.primaryBlue,
+            fontWeight: FontWeight.w800,
+            fontSize: 18,
+          ),
+        ),
       );
     }
     return CachedImage(

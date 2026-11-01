@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -1611,7 +1613,9 @@ class _StoryComposerState extends State<_StoryComposer> {
     if (_uploading) return;
     setState(() => _uploading = true);
     try {
-      final url = await StorageService.pickAndUploadStoryPhoto();
+      // Picked, not uploaded: the upload happens at Share, sealed first
+      // when stories are end-to-end encrypted (patch_300).
+      final url = await StorageService.pickStoryPhotoLocal();
       if (!mounted) return;
       setState(() {
         _mediaUrl = url ?? _mediaUrl;
@@ -1632,6 +1636,11 @@ class _StoryComposerState extends State<_StoryComposer> {
       );
     }
   }
+
+  /// The picked story photo: a local file now, a URL for older drafts.
+  Widget _storyPhoto(String src) => src.startsWith('/')
+      ? Image.file(File(src), fit: BoxFit.cover)
+      : CachedImage(src, fit: BoxFit.cover);
 
   bool get _canShare => _textMode
       ? _statusText.text.trim().isNotEmpty
@@ -1676,7 +1685,7 @@ class _StoryComposerState extends State<_StoryComposer> {
                   fit: StackFit.expand,
                   children: [
                     if (_mediaUrl != null)
-                      CachedImage(_mediaUrl!, fit: BoxFit.cover)
+                      _storyPhoto(_mediaUrl!)
                     else
                       const ColoredBox(color: AppColors.darkNavy),
                     if (_caption.text.trim().isNotEmpty)
@@ -1738,7 +1747,9 @@ class _StoryComposerState extends State<_StoryComposer> {
               textFont: kStoryFontKeys[_fontIndex],
             )
           : await FeedService.createStory(
-              mediaUrl: _mediaUrl!,
+              localPhotoPath:
+                  _mediaUrl!.startsWith('/') ? _mediaUrl : null,
+              mediaUrl: _mediaUrl!.startsWith('/') ? null : _mediaUrl,
               caption: _caption.text.trim().isEmpty
                   ? null
                   : _caption.text.trim(),
@@ -2063,10 +2074,7 @@ class _StoryComposerState extends State<_StoryComposer> {
                               borderRadius: BorderRadius.circular(14),
                               child: AspectRatio(
                                 aspectRatio: 4 / 5,
-                                child: CachedImage(
-                                  _mediaUrl!,
-                                  fit: BoxFit.cover,
-                                ),
+                                child: _storyPhoto(_mediaUrl!),
                               ),
                             ),
                           const SizedBox(height: 12),

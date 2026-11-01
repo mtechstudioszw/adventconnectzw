@@ -1,3 +1,7 @@
+import 'storage_service.dart';
+import 'e2ee/story_crypto.dart';
+import 'e2ee/media_crypto.dart';
+import 'dart:io';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -894,14 +898,17 @@ class FeedService {
         .gt('expires_at', nowIso)
         .order('created_at', ascending: false)
         .limit(200);
-    return (response as List)
+    final stories = (response as List)
         .map((row) => Story.fromJson(row as Map<String, dynamic>))
         .where((s) => !s.isExpired)
         .toList();
+    // Encrypted stories (patch_300): open the ones this phone can.
+    return StoryCrypto.openAll(stories);
   }
 
   static Future<Story> createStory({
     String? mediaUrl,
+    String? localPhotoPath,
     String? caption,
     String kind = 'photo',
     String? textContent,
@@ -912,6 +919,38 @@ class FeedService {
     if (user == null) {
       throw const AuthException('Sign in to post a story.');
     }
+
+    // End-to-end encrypted story (patch_300). The row gets no readable
+    // text; the photo is sealed; friends get the envelope per phone.
+    StoryEnvelope? envelope;
+    if (StoryCrypto.shouldEncrypt) {
+      MediaKey? key;
+      if (localPhotoPath != null) {
+        final sealed = MediaCrypto.encrypt(
+          await File(localPhotoPath).readAsBytes(),
+        );
+        key = sealed.key;
+        mediaUrl = await StorageService.uploadStoryBytes(
+          sealed.bytes,
+          ext: 'jpg',
+          sealed: true,
+        );
+      }
+      envelope = StoryEnvelope(
+        text: (textContent ?? '').trim().isEmpty ? null : textContent!.trim(),
+        caption: (caption ?? '').trim().isEmpty ? null : caption!.trim(),
+        key: key,
+      );
+      textContent = null;
+      caption = null;
+    } else if (localPhotoPath != null) {
+      final path = localPhotoPath;
+      mediaUrl = await StorageService.uploadStoryBytes(
+        await File(path).readAsBytes(),
+        ext: path.contains('.') ? path.split('.').last : 'jpg',
+      );
+    }
+
     final inserted = await PostLimitError.guard(
       PostSection.story,
       () => _client
@@ -926,6 +965,7 @@ class FeedService {
             if (textFont != null && textFont.isNotEmpty) 'text_font': textFont,
             if (caption != null && caption.trim().isNotEmpty)
               'caption': caption.trim(),
+            if (envelope != null) 'e2ee_version': 1,
           })
           .select(
             '*, '
@@ -933,7 +973,19 @@ class FeedService {
           )
           .single(),
     );
-    return Story.fromJson(inserted);
+    final story = Story.fromJson(inserted);
+    if (envelope == null) return story;
+    await StoryCrypto.rememberOwn(story.id, envelope);
+    // Friends' keys. Not awaited past a short wait: a slow network must
+    // not hold the composer open; friends who load before it lands see
+    // the story a moment later.
+    await StoryCrypto.distribute(story.id, envelope)
+        .timeout(const Duration(seconds: 20), onTimeout: () => 0);
+    return story.opened(
+      textContent: envelope.text,
+      caption: envelope.caption,
+      mediaKey: envelope.key,
+    );
   }
 
   /// Fetch a single story by id (for opening a status-reply's tagged
@@ -951,7 +1003,8 @@ class FeedService {
           .maybeSingle();
       if (row == null) return null;
       final s = Story.fromJson(row);
-      return s.isExpired ? null : s;
+      if (s.isExpired) return null;
+      return (await StoryCrypto.openAll([s])).first;
     } catch (_) {
       return null;
     }

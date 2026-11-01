@@ -165,6 +165,48 @@ class StorageService {
         imageQuality: 82,
       );
 
+  /// Pick a story photo WITHOUT uploading it (1 Nov 2026). The upload
+  /// happens when the member taps Share, so an encrypted story's photo is
+  /// sealed on the phone first — uploading on pick put the plain photo on
+  /// the server before anyone could encrypt it. Returns a local path.
+  static Future<String?> pickStoryPhotoLocal() async {
+    try {
+      final picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 82,
+        requestFullMetadata: false,
+      );
+      return picked?.path;
+    } catch (e, st) {
+      debugPrint('StorageService.pickStoryPhotoLocal failed: $e\n$st');
+      return null;
+    }
+  }
+
+  /// Uploads story photo bytes (plain or sealed) to `story_photos` and
+  /// returns the public URL. A sealed upload is opaque bytes.
+  static Future<String> uploadStoryBytes(
+    Uint8List bytes, {
+    required String ext,
+    bool sealed = false,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw const AuthException('Sign in to post a story.');
+    final path = _buildPath(userId: user.id, ext: sealed ? 'bin' : ext);
+    await _client.storage.from('story_photos').uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(
+            cacheControl: '3600',
+            contentType: sealed ? 'application/octet-stream' : _mimeFor(ext),
+            upsert: false,
+          ),
+        );
+    return _client.storage.from('story_photos').getPublicUrl(path);
+  }
+
   /// Generic flow used by the convenience methods above.
   /// Returns the public URL of the uploaded file, or null if the user
   /// cancelled the picker. When `crop` is supplied the source image is

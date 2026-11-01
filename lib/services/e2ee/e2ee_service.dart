@@ -538,6 +538,22 @@ class E2eeService {
     }
   }
 
+  /// Encrypts [plaintext] for [userId]'s CURRENT phone, saying which one
+  /// (story keys are stored per device). Null when they have no keys.
+  static Future<({EncryptedPayload payload, int deviceId})?> encryptForUser({
+    required String userId,
+    required String plaintext,
+  }) async {
+    final device = await _latestDevice(userId);
+    if (device == null) return null;
+    final payload = await encryptToDevice(
+      userId: userId,
+      deviceId: device,
+      plaintext: plaintext,
+    );
+    return payload == null ? null : (payload: payload, deviceId: device);
+  }
+
   /// Encrypts [plaintext] for ONE device of [userId].
   static Future<EncryptedPayload?> encryptToDevice({
     required String userId,

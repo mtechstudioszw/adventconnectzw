@@ -1,3 +1,5 @@
+import '../services/e2ee/media_crypto.dart';
+
 /// A 24-hour ephemeral story tile from the home feed. Mirrors
 /// public.stories (patch_011). Rows past their expires_at are filtered
 /// server-side via RLS, so anything we receive is still active.
@@ -16,6 +18,9 @@ class Story {
     this.textContent,
     this.backgroundColor,
     this.textFont,
+    this.e2eeVersion,
+    this.mediaKey,
+    this.locked = false,
   });
 
   final String id;
@@ -36,7 +41,44 @@ class Story {
   final String? backgroundColor;
   final String? textFont;
 
+  /// End-to-end encrypted story (patch_300): the row holds no readable
+  /// text and [mediaUrl] points at a sealed file opened with [mediaKey].
+  final int? e2eeVersion;
+  bool get isEncrypted => (e2eeVersion ?? 0) > 0;
+
+  /// The photo's key, from the envelope this phone opened. Phone only.
+  final MediaKey? mediaKey;
+
+  /// Encrypted, and this phone has no key for it (an older build, or a
+  /// phone that wasn't set up when it was posted).
+  final bool locked;
+
   bool get isText => kind == 'text';
+
+  Story opened({
+    String? textContent,
+    String? caption,
+    MediaKey? mediaKey,
+    String? mediaUrl,
+    bool locked = false,
+  }) => Story(
+    id: id,
+    authorId: authorId,
+    authorName: authorName,
+    mediaUrl: mediaUrl ?? this.mediaUrl,
+    createdAt: createdAt,
+    expiresAt: expiresAt,
+    authorPhotoUrl: authorPhotoUrl,
+    authorIsVerified: authorIsVerified,
+    caption: caption ?? this.caption,
+    kind: kind,
+    textContent: textContent ?? this.textContent,
+    backgroundColor: backgroundColor,
+    textFont: textFont,
+    e2eeVersion: e2eeVersion,
+    mediaKey: mediaKey ?? this.mediaKey,
+    locked: locked,
+  );
 
   /// Time remaining until expiry. Negative means stale — the home
   /// screen drops anything where this is non-positive as a belt-and-
@@ -62,6 +104,9 @@ class Story {
         'text_content': textContent,
         'background_color': backgroundColor,
         'text_font': textFont,
+        'e2ee_version': ?e2eeVersion,
+        if (mediaKey != null) MediaCrypto.metaKey: mediaKey!.toMeta(),
+        if (locked) '_locked': true,
         'created_at': createdAt.toIso8601String(),
         'expires_at': expiresAt.toIso8601String(),
       };
@@ -91,6 +136,9 @@ class Story {
       textContent: json['text_content'] as String?,
       backgroundColor: json['background_color'] as String?,
       textFont: json['text_font'] as String?,
+      e2eeVersion: (json['e2ee_version'] as num?)?.toInt(),
+      mediaKey: MediaKey.fromMeta(json),
+      locked: json['_locked'] == true,
       createdAt: createdAt,
       expiresAt: expiresAt,
     );

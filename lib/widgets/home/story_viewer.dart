@@ -12,6 +12,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import 'story_text_style.dart';
 import '../cached_image.dart';
+import 'story_media.dart';
 import 'report_sheet.dart';
 
 /// Full-screen story viewer modelled on Instagram / Facebook. Each
@@ -111,8 +112,12 @@ class _StoryViewerState extends State<StoryViewer>
         messageType: 'story_reply',
         meta: {
           'story_id': story.id,
-          'story_image': story.mediaUrl,
-          if ((story.caption ?? '').isNotEmpty) 'caption': story.caption,
+          // An encrypted story's photo URL is ciphertext and its caption
+          // is private; the reply carries only the id (the chat itself is
+          // encrypted, the meta column is not).
+          if (!story.isEncrypted) 'story_image': story.mediaUrl,
+          if (!story.isEncrypted && (story.caption ?? '').isNotEmpty)
+            'caption': story.caption,
         },
       );
       _replyController.clear();
@@ -389,7 +394,9 @@ class _StoryViewerState extends State<StoryViewer>
           fit: StackFit.expand,
           children: [
             Center(
-              child: story.isText
+              child: story.locked
+                  ? StoryMedia(story: story, fit: BoxFit.contain)
+                  : story.isText
                   // Text status — centred text on a coloured background.
                   ? Container(
                       width: double.infinity,
@@ -407,18 +414,7 @@ class _StoryViewerState extends State<StoryViewer>
                         ),
                       ),
                     )
-                  : CachedImage(
-                      story.mediaUrl,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) =>
-                          const Center(
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          size: 48,
-                          color: AppColors.white,
-                        ),
-                      ),
-                    ),
+                  : StoryMedia(story: story, fit: BoxFit.contain),
             ),
             // Gesture layer — WhatsApp Status semantics.
             //   - Tap LEFT third  → previous story

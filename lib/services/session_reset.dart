@@ -1,3 +1,4 @@
+import 'e2ee/story_crypto.dart';
 import 'search_history_service.dart';
 import 'package:flutter/foundation.dart';
 
@@ -75,6 +76,8 @@ class SessionReset {
     // this handset's push tokens so it stops ringing for an account that
     // is no longer on it.
     await _step('calls', CallService.clearOnSignOut);
+    // Decrypted copies of encrypted story photos are this account's.
+    await _step('storyPhotos', StoryCrypto.clear);
     // The missed-call dot is about a PERSON, not a handset — leaving it
     // lit would show the next member to sign in on this phone somebody
     // else's missed calls.

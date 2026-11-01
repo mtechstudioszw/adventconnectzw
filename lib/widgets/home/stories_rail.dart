@@ -1,3 +1,4 @@
+import 'story_media.dart';
 import 'package:flutter/material.dart';
 import '../../models/story_model.dart';
 import '../../theme/app_colors.dart';
@@ -205,12 +206,12 @@ class _YourStoryCard extends StatelessWidget {
                                     ),
                                   ),
                                 )
-                              : CachedImage(
-                                  ownStories!.first.mediaUrl,
+                              : StoryMedia(
+                                  story: ownStories!.first,
                                   fit: BoxFit.cover,
                                   width: double.infinity,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      _avatarBackground(),
+                                  compact: true,
+                                  errorBuilder: (_) => _avatarBackground(),
                                 ),
                         ),
                         // Bottom: white banner with label only — no overlay
@@ -401,10 +402,11 @@ class _FriendStoryCard extends StatelessWidget {
                           child: Transform.scale(scale: 1.18, child: child),
                         );
                       },
-                      child: CachedImage(
-                        story.mediaUrl,
+                      child: StoryMedia(
+                        story: story,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
+                        compact: true,
+                        errorBuilder: (_) =>
                             Container(color: AppColors.darkNavy),
                       ),
                     ),

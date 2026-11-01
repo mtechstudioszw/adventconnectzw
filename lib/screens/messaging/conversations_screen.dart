@@ -1,3 +1,4 @@
+import '../../services/e2ee/chat_backup_service.dart';
 import '../../config/platform_flags.dart';
 import 'dart:async';
 
@@ -207,6 +208,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     // has to be right. Unawaited — a missed-call count must never hold
     // up the inbox.
     unawaited(MissedCallBadge.refresh());
+    unawaited(_checkRestoreOffer());
     _startActivityWatcher();
     // Local inbox changes (delete-for-me preview floor) emit no realtime
     // event, so listen for them explicitly and rebuild — otherwise a message
@@ -1441,6 +1443,14 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     }
     final list = _applyFilter(all, _chatFilter);
     final headers = <Widget>[
+      if (_offerRestore)
+        _RestoreBackupBanner(
+          onRestore: () async {
+            await context.pushNamed('chat_backup');
+            if (mounted) _checkRestoreOffer();
+          },
+          onDismiss: () => setState(() => _offerRestore = false),
+        ),
       _buildActiveRail(),
       _buildChatFilterChips(all),
       if (requestCount > 0)
@@ -1779,6 +1789,20 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         ],
       ],
     );
+  }
+
+  /// A chat backup exists for this account but this phone hasn't
+  /// restored it (a new phone or a reinstall) — offer it once.
+  bool _offerRestore = false;
+
+  Future<void> _checkRestoreOffer() async {
+    try {
+      final enabled = await ChatBackupService.isEnabled();
+      final remote = enabled
+          ? false
+          : await ChatBackupService.hasRemoteBackup();
+      if (mounted) setState(() => _offerRestore = !enabled && remote);
+    } catch (_) {}
   }
 
   /// Shared conversation list (used by Chats + Groups). Rebuilds on the
@@ -3967,6 +3991,67 @@ class _CircleIconButton extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: context.palette.text, size: 18),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Restore your chats" — shown on a phone that has not restored an
+/// existing encrypted chat backup.
+class _RestoreBackupBanner extends StatelessWidget {
+  const _RestoreBackupBanner({
+    required this.onRestore,
+    required this.onDismiss,
+  });
+  final VoidCallback onRestore;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 4, 6, 8),
+      child: Material(
+        color: AppColors.primaryBlue.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onRestore,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+            child: Row(
+              children: [
+                const Icon(Icons.restore_rounded, color: AppColors.primaryBlue),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Restore your chats',
+                        style: AppTextStyles.titleSmall.copyWith(
+                          color: palette.text,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        'You have an encrypted backup. Enter its password '
+                        'to read your older messages here.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: palette.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.close, size: 18, color: palette.textMuted),
+                  onPressed: onDismiss,
+                ),
+              ],
+            ),
           ),
         ),
       ),

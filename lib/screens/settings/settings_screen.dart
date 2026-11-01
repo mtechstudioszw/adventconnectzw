@@ -436,6 +436,14 @@ class _SettingsScreenState extends State<SettingsScreen>
         () => context.pushNamed('chat_privacy'),
       ),
       _SettingsEntry(
+        'Chat backup',
+        'Account',
+        Icons.cloud_sync_outlined,
+        AppColors.primaryBlue,
+        'backup restore new phone reinstall encrypted messages history password',
+        () => context.pushNamed('chat_backup'),
+      ),
+      _SettingsEntry(
         'Blocked contacts',
         'Account',
         Icons.block,
@@ -802,6 +810,12 @@ class _SettingsScreenState extends State<SettingsScreen>
                             icon: Icons.block,
                             label: 'Blocked contacts',
                             onTap: () => context.pushNamed('blocked_users'),
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.cloud_sync_outlined,
+                            label: 'Chat backup',
+                            onTap: () => context.pushNamed('chat_backup'),
                           ),
                         ],
                       ),

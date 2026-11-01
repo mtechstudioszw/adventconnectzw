@@ -504,6 +504,18 @@ class E2eeService {
     await _store?.clearGroupSenderKeys(conversationId);
   }
 
+  /// Readable history for the chat backup (see E2eeStore.exportReadable).
+  static Map<String, String> exportReadable() =>
+      _store?.exportReadable() ?? const {};
+
+  /// Restores backed-up readable history; returns how many entries were
+  /// new. Open threads re-read via [plaintextRevision].
+  static Future<int> importReadable(Map<String, String> entries) async {
+    final n = await _store?.importReadable(entries) ?? 0;
+    if (n > 0) plaintextRevision.value++;
+    return n;
+  }
+
   // ---------- retry receipts (patch_298) ----------
   //
   // A NEW message that this phone cannot open (a group key that hasn't

@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/app_bootstrap.dart';
 import 'config/router_config.dart';
 import 'screens/messaging/conversations_screen.dart';
+import 'services/e2ee/chat_backup_service.dart';
 import 'services/account_mode_service.dart';
 import 'services/analytics_service.dart';
 import 'services/auth_service.dart';
@@ -259,7 +260,11 @@ Future<void> _initBackgroundServices() async {
           unawaited(
             E2eeService.start(
               data.session!.user.id,
-            ).then((_) => E2eeService.serveResends()),
+            ).then((_) {
+              unawaited(E2eeService.serveResends());
+              // Daily encrypted chat backup, if the member turned it on.
+              unawaited(ChatBackupService.autoBackup());
+            }),
           );
           // Premium is per Advent account, so it has to be re-read on
           // every sign-in — the cached expiry belongs to whoever was
@@ -300,7 +305,10 @@ Future<void> _initBackgroundServices() async {
     unawaited(PresenceService.start());
     unawaited(TypingSignal.start(warmUser.id));
     unawaited(
-      E2eeService.start(warmUser.id).then((_) => E2eeService.serveResends()),
+      E2eeService.start(warmUser.id).then((_) {
+        unawaited(E2eeService.serveResends());
+        unawaited(ChatBackupService.autoBackup());
+      }),
     );
   }
 

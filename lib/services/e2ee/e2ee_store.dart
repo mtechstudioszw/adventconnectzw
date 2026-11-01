@@ -344,6 +344,30 @@ class E2eeStore implements SignalProtocolStore, SenderKeyStore {
   Future<void> deletePlaintext(String messageId) =>
       _box.delete(_plaintextKey(messageId));
 
+  // ---------- chat backup (1 Nov 2026) ----------
+
+  /// Every readable message body and inbox line this phone holds —
+  /// exactly what a chat backup needs to bring history back on a new
+  /// phone. Keys, sessions and prekeys are NOT included: a new phone gets
+  /// fresh keys, and old ciphertext opens from this cache instead.
+  Map<String, String> exportReadable() => {
+    for (final k in _box.keys.whereType<String>())
+      if (k.startsWith('plain/') || k.startsWith('preview/')) k: _box.get(k)!,
+  };
+
+  /// Adds backed-up entries this phone doesn't already have. Never
+  /// overwrites — what this phone decrypted itself wins.
+  Future<int> importReadable(Map<String, String> entries) async {
+    final fresh = <String, String>{
+      for (final e in entries.entries)
+        if ((e.key.startsWith('plain/') || e.key.startsWith('preview/')) &&
+            !_box.containsKey(e.key))
+          e.key: e.value,
+    };
+    if (fresh.isNotEmpty) await _box.putAll(fresh);
+    return fresh.length;
+  }
+
   // ---------- inbox previews ----------
   //
   // Kept separately from message plaintext because the inbox needs the

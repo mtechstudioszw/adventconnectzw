@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../screens/settings/chat_backup_screen.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_library_screen.dart';
 import '../screens/admin/admin_login_screen.dart';
@@ -417,6 +418,12 @@ final GoRouter appRouter = GoRouter(
                   path: 'privacy',
                   name: 'chat_privacy',
                   builder: (context, state) => const ChatPrivacyScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'chat-backup',
+                  name: 'chat_backup',
+                  builder: (context, state) => const ChatBackupScreen(),
                 ),
                 GoRoute(
                   parentNavigatorKey: rootNavigatorKey,

@@ -416,7 +416,10 @@ class _SearchScreenState extends State<SearchScreen>
 
     final results = await Future.wait([
       safe(() => DirectoryService.fetchSuggestedMembers(limit: 20)),
-      safe(() => ChurchService.fetchChurches()),
+      // Only for members with no home church, in Zimbabwe (owner rule).
+      safe(() async => await ChurchService.shouldSuggestChurches()
+          ? ChurchService.fetchChurches(country: 'ZW', limit: 30)
+          : <Church>[]),
       safe(() => EventService.fetchEvents(upcomingOnly: true)),
       safe(() => MarketplaceService.fetchProducts()),
       safe(() => JobService.fetchJobs()),

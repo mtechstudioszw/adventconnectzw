@@ -210,7 +210,7 @@ class ChurchCard extends StatelessWidget {
                                 // app users following this church — NOT
                                 // congregation membership, which the app
                                 // has no data for.
-                                '${_formatCount(church.membersCount)} on Advent',
+                                '${_formatCount(church.membersCount)} in the app',
                                 style: AppTextStyles.labelMedium.copyWith(
                                   color: AppColors.primaryBlue,
                                   fontWeight: FontWeight.w600,

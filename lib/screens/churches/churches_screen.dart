@@ -77,7 +77,8 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
 
   /// The viewer's `profiles.church_id`. Drives the MINE badge and the
   /// home glyph on each row.
-  String? _homeChurchId;
+  String? _homeChurchId = AuthService.currentUser?.userMetadata?['church_id']
+      ?.toString();
 
   @override
   void initState() {
@@ -126,6 +127,9 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
   Future<void> _loadHomeChurch() async {
     final id = await ChurchService.fetchHomeChurchId();
     if (!mounted) return;
+    // A failed read (offline) must not wipe the home church we already
+    // know from the account, or the tab tells a member to "choose" one.
+    if (id == null && (_homeChurchId ?? '').isNotEmpty) return;
     setState(() => _homeChurchId = id);
   }
 
@@ -164,8 +168,8 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
         ),
         content: Text(
           isHome
-              ? 'You\'ll stop getting ${church.name}\'s announcements unless '
-                  'you follow it.'
+              ? 'You\'ll stop getting ${church.name}\'s announcements '
+                  'and leave its church chat.'
               : hadOther
                   ? '${church.name} becomes your home church, replacing the '
                       'one you set before. Its announcements come straight '
@@ -482,6 +486,124 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// The one rule of this tab, said where it applies (owner, 1 Nov 2026):
+  /// you belong to ONE church here — your home church. There is no
+  /// following other churches; a church that wants followers creates a
+  /// Page, which anyone can follow.
+  Widget _buildHomeChurchCard() {
+    final palette = context.palette;
+    Church? home;
+    for (final c in _churches) {
+      if (c.id == _homeChurchId) {
+        home = c;
+        break;
+      }
+    }
+    final hasHome = (_homeChurchId ?? '').isNotEmpty;
+    final title = hasHome ? 'Your home church' : 'Choose your home church';
+    final name = home?.name;
+    final body = hasHome
+        ? 'This tab is for your home church — the one church you belong to '
+              'here. Its announcements and church chat come to you.'
+        : 'Tap the house on the church you attend. It becomes the one church '
+              'you belong to here, with its announcements and church chat.';
+    return Pressable(
+      onTap: home == null
+          ? null
+          : () => context.pushNamed(
+              'church_details',
+              pathParameters: {'id': home!.id},
+              extra: home,
+            ),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    hasHome ? Icons.home_rounded : Icons.home_outlined,
+                    color: AppColors.primaryBlue,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title.toUpperCase(),
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: palette.textMuted,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 10.5,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                      if (name != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.titleSmall.copyWith(
+                            color: palette.text,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (home != null)
+                  Icon(Icons.chevron_right, color: palette.textMuted),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              body,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: palette.textMuted,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Want updates from another church? It can create a Page — '
+              'anyone can follow a Page.',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: palette.textMuted,
+                height: 1.45,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -908,7 +1030,9 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
 
     final list = _visibleChurches();
     final cachedAt = CacheService.cachedAt(_cacheKey);
-    final leading = cachedAt != null ? 1 : 0;
+    final strip = cachedAt != null ? 1 : 0;
+    // The home-church card explains the one rule of this tab.
+    final leading = strip + 1;
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       physics: const AlwaysScrollableScrollPhysics(),
@@ -926,6 +1050,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
             onRefresh: _loadChurches,
           );
         }
+        if (rawIndex == strip) return _buildHomeChurchCard();
         final i = rawIndex - leading;
         if (i >= list.length) return _buildSuggestFooter();
         final c = list[i];

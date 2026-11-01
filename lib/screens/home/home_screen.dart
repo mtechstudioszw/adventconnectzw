@@ -817,6 +817,10 @@ class _HomeScreenState extends State<HomeScreen>
         _soft('products', MarketplaceService.fetchProducts(), _products),
         _soft('jobs', JobService.fetchJobs(), _jobs),
         _soft('music', LibraryService.fetchItems('music'), _music),
+        // Owner, 1 Nov 2026: church suggestions only for members with no
+        // home church yet, in Zimbabwe. Index 11.
+        _soft('suggest churches', ChurchService.shouldSuggestChurches(),
+            false),
       ]);
       if (!mounted) return;
       // Drop events whose start time is more than a few hours in the
@@ -893,9 +897,11 @@ class _HomeScreenState extends State<HomeScreen>
       setState(() {
         _events = events;
         _churches = churches;
-        _churchPool = churchPool
-            .where((c) => !_followedChurchIds.contains(c.id))
-            .toList();
+        _churchPool = (results[11] as bool)
+            ? churchPool
+                  .where((c) => !_followedChurchIds.contains(c.id))
+                  .toList()
+            : const [];
         _rsvpedEventIds = results[2] as Set<String>;
         _suggestedMembers = results[3] as List<MemberDirectoryEntry>;
         _pendingFriendRequests = results[4] as int;
@@ -2634,19 +2640,49 @@ class _HomeScreenState extends State<HomeScreen>
         return reveal(BeliefMomentCard(belief: _beliefPool[i]));
       case FeedBlockKind.church:
         final c = _churchPool[i];
+        // Only reaches members with no home church (shouldSuggestChurches).
+        // The action is "this is my church", not "follow": you belong to
+        // one church here and there is no following others.
         return reveal(ChurchFollowCard(
           church: c,
-          following: _followedChurchIds.contains(c.id),
+          following: false,
           onFollow: () async {
             HapticFeedback.selectionClick();
-            setState(() => _followedChurchIds = {..._followedChurchIds, c.id});
+            final ok = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Is this your church?'),
+                content: Text(
+                  '${c.name} becomes your home church — the one church you '
+                  'belong to here. Its announcements and church chat come '
+                  'to you. You can change it later from your profile.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Not now'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Yes, my church'),
+                  ),
+                ],
+              ),
+            );
+            if (ok != true || !mounted) return;
+            final messenger = ScaffoldMessenger.of(context);
             try {
-              await ChurchService.follow(c.id);
+              await ChurchService.setHomeChurch(c.id);
+              if (!mounted) return;
+              // A member with a church gets no more church suggestions.
+              setState(() => _churchPool = const []);
+              messenger.showSnackBar(
+                SnackBar(content: Text('${c.name} is now your home church.')),
+              );
             } catch (_) {
-              if (mounted) {
-                setState(() => _followedChurchIds = {..._followedChurchIds}
-                  ..remove(c.id));
-              }
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Could not save that. Try again.')),
+              );
             }
           },
         ));

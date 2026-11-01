@@ -958,7 +958,7 @@ class _QuickActionsCard extends StatelessWidget {
             // patch_171: the fan-out is followers UNION members now, so
             // this line was understating it by exactly the people who
             // never tapped Follow on their own congregation.
-            subtitle: 'Reaches your members and followers. Can be scheduled.',
+            subtitle: 'Reaches every member whose home church this is. Can be scheduled.',
             onTap: onPost,
           ),
           const _Divider(),
@@ -998,7 +998,7 @@ class _QuickActionsCard extends StatelessWidget {
           _Row(
             icon: Icons.groups_outlined,
             title: 'Members',
-            subtitle: 'See who follows your church, by name.',
+            subtitle: 'Everyone whose home church this is, by name.',
             onTap: onMembers,
           ),
           const _Divider(),

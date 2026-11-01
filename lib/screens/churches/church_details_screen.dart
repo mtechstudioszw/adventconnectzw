@@ -35,8 +35,6 @@ class ChurchDetailsScreen extends StatefulWidget {
 class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
   Church? _church;
   bool _loading = true;
-  bool _isFollowing = false;
-  bool _followBusy = false;
   bool _hasAdmin = true; // optimistic — gate only flips when we confirm
   String? _error;
   // The signed-in user's mandatory home church (profiles.church_id). You
@@ -75,7 +73,6 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     try {
       final results = await Future.wait([
         ChurchService.fetchChurchById(widget.churchId),
-        ChurchService.isFollowing(widget.churchId),
         ChurchService.hasApprovedAdmin(widget.churchId),
         ChurchService.fetchMyAdminRoles(),
         // Real membership (profiles.church_id), not followers. Fetched
@@ -83,7 +80,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
         ChurchService.memberCount(widget.churchId),
       ]);
       if (!mounted) return;
-      final roles = results[3] as List<ChurchAdminRole>;
+      final roles = results[2] as List<ChurchAdminRole>;
       ChurchAdminRole? mine;
       bool pending = false;
       for (final r in roles) {
@@ -96,11 +93,10 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
       }
       setState(() {
         _church = (results[0] as Church?) ?? _church;
-        _isFollowing = results[1] as bool;
-        _hasAdmin = results[2] as bool;
+        _hasAdmin = results[1] as bool;
         _myRole = mine;
         _myPendingForThis = pending;
-        _memberCount = results[4] as int?;
+        _memberCount = results[3] as int?;
         _loading = false;
       });
     } catch (_) {
@@ -109,86 +105,6 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
         _error = 'Could not load church details.';
         _loading = false;
       });
-    }
-  }
-
-  void _churchToast(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          msg,
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _toggleFollow() async {
-    final church = _church;
-    if (church == null) return;
-
-    // You can't unfollow your HOME church — you change it (every 2 weeks)
-    // from your profile, not by unfollowing here.
-    if (_isFollowing && _isHomeChurch) {
-      _churchToast(
-        'This is your home church. Change it from your profile — '
-        'you can switch once every 2 weeks.',
-      );
-      return;
-    }
-    // You can only be part of your home church — no following other churches.
-    if (!_isFollowing && !_isHomeChurch) {
-      _churchToast(
-        'You can only follow your home church. Set this as your home '
-        'church from your profile (Edit profile → Home church).',
-      );
-      return;
-    }
-
-    setState(() => _followBusy = true);
-    try {
-      if (_isFollowing) {
-        await ChurchService.unfollow(church.id);
-        if (!mounted) return;
-        setState(() {
-          _isFollowing = false;
-          _church = church.copyWith(
-            membersCount: (church.membersCount - 1).clamp(0, 1 << 31),
-          );
-        });
-      } else {
-        await ChurchService.follow(church.id);
-        if (!mounted) return;
-        setState(() {
-          _isFollowing = true;
-          _church = church.copyWith(membersCount: church.membersCount + 1);
-        });
-      }
-      // Pull the authoritative follower_count back from the server
-      // so a stale cached count plus the optimistic +/- 1 doesn't
-      // leave the visible number wrong. The trigger updates the row
-      // in the same transaction as the follower insert/delete, so by
-      // the time this resolves the count is correct.
-      try {
-        final fresh = await ChurchService.fetchChurchById(church.id);
-        if (!mounted || fresh == null) return;
-        setState(() => _church = fresh);
-      } catch (_) {
-        // Best-effort.
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Could not update follow. Please try again.',
-            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _followBusy = false);
     }
   }
 
@@ -535,8 +451,8 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                       // attend — so the two are different sets, and the
                       // label now says which one it is showing.
                       _memberCount != null
-                          ? '$_memberCount ${_memberCount == 1 ? "member" : "members"} on Advent'
-                          : '${church.membersCount} following on Advent',
+                          ? '$_memberCount ${_memberCount == 1 ? "member" : "members"} in the app'
+                          : '${church.membersCount} in the app',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodyMedium.copyWith(
@@ -578,91 +494,80 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
     );
   }
 
+  /// Replaces the old Follow button (owner, 1 Nov 2026). A member belongs
+  /// to ONE church here — their home church — and there is no following
+  /// other churches; a church that wants followers creates a Page.
   Widget _buildFollowButton() {
-    final following = _isFollowing;
+    final palette = context.palette;
+    final home = _isHomeChurch;
+    final hasOtherHome = !home && (_homeChurchId ?? '').isNotEmpty;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-      child: SizedBox(
-        width: double.infinity,
-        child: following
-            ? OutlinedButton.icon(
-                onPressed: _followBusy ? null : _toggleFollow,
-                icon: _followBusy
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.primaryBlue,
-                        ),
-                      )
-                    : const Icon(Icons.check, color: AppColors.primaryBlue),
-                label: Text(
-                  _isHomeChurch ? 'Home church' : 'Following',
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: AppColors.primaryBlue,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(
-                    color: AppColors.primaryBlue,
-                    width: 1.5,
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              )
-            : Container(
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primaryBlue.withValues(alpha: 0.25),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: home
+              ? AppColors.primaryBlue.withValues(alpha: 0.10)
+              : palette.cardMuted,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              home ? Icons.home_rounded : Icons.info_outline_rounded,
+              color: home ? AppColors.primaryBlue : palette.textMuted,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    home ? 'Your home church' : 'Not your home church',
+                    style: AppTextStyles.titleSmall.copyWith(
+                      color: palette.text,
+                      fontWeight: FontWeight.w700,
                     ),
-                  ],
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: _followBusy ? null : _toggleFollow,
-                    borderRadius: BorderRadius.circular(14),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      child: Center(
-                        child: _followBusy
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.white,
-                                ),
-                              )
-                            : Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.add,
-                                    color: AppColors.white,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Follow',
-                                    style: AppTextStyles.buttonText,
-                                  ),
-                                ],
-                              ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    home
+                        ? 'You belong here. Its announcements and church chat '
+                              'come to you. Change it from your profile — once '
+                              'every 2 weeks.'
+                        : hasOtherHome
+                        ? 'You belong to one church here — your home church. '
+                              'To get updates from this one too, it can create '
+                              'a Page, and anyone can follow a Page.'
+                        : 'You belong to one church here. If you attend this '
+                              'one, make it your home church from your profile.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: palette.textMuted,
+                      height: 1.45,
+                    ),
+                  ),
+                  if (!home) ...[
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: () => context.pushNamed('edit_profile'),
+                      child: Text(
+                        hasOtherHome
+                            ? 'Change my home church'
+                            : 'Set my home church',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                  ],
+                ],
               ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -701,7 +606,7 @@ class _ChurchDetailsScreenState extends State<ChurchDetailsScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'You can follow, but don\'t expect announcements until a pastor or elder claims it.',
+                    'Announcements start once a pastor or elder of this church claims it.',
                     style: AppTextStyles.bodySmall.copyWith(
                       color: context.palette.textMuted,
                       height: 1.4,

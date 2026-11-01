@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/church_model.dart';
 import '../utils/postgrest_filter.dart';
 import 'analytics_service.dart';
+import 'auth_service.dart';
 import 'cache_service.dart';
 import 'connectivity_service.dart';
 
@@ -701,6 +702,30 @@ class ChurchService {
         .eq('id', user.id);
   }
 
+  /// Whether to SUGGEST churches to the viewer at all (owner, 1 Nov 2026):
+  /// only members with no home church yet, and only in Zimbabwe for now —
+  /// the directory is Zimbabwe's. Everyone else already belongs to one
+  /// church here, and suggesting others to them is noise.
+  ///
+  /// Fails closed (no suggestions) when we can't tell.
+  static Future<bool> shouldSuggestChurches() async {
+    if (AuthService.currentCountry().toUpperCase() != 'ZW') return false;
+    final meta = _client.auth.currentUser?.userMetadata?['church_id'];
+    if (meta != null && meta.toString().trim().isNotEmpty) return false;
+    final user = _client.auth.currentUser;
+    if (user == null) return false;
+    try {
+      final row = await _client
+          .from('profiles')
+          .select('church_id')
+          .eq('id', user.id)
+          .maybeSingle();
+      return row != null && row['church_id'] == null;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// The signed-in member's home church id, or null.
   static Future<String?> fetchHomeChurchId() async {
     final user = _client.auth.currentUser;
@@ -928,7 +953,7 @@ class ChurchService {
     }
   }
 
-  /// Members (followers) of the church, with name + photo, A→Z. Empty unless
+  /// Members of the church (home church = this one, patch_297), A→Z. Empty unless
   /// the caller is the church's approved admin / super admin (patch_139).
   static Future<List<ChurchMember>> fetchMembers(String churchId) async {
     try {

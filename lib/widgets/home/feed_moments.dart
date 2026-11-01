@@ -540,7 +540,8 @@ class BeliefMomentCard extends StatelessWidget {
   }
 }
 
-/// A church to follow.
+/// A church suggestion for a member who has no home church yet. The
+/// action makes it their home church (there is no following churches).
 class ChurchFollowCard extends StatelessWidget {
   const ChurchFollowCard({
     super.key,
@@ -626,7 +627,7 @@ class ChurchFollowCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(AppRadius.button),
                   ),
                 ),
-                child: Text(following ? 'Following' : 'Follow'),
+                child: Text(following ? 'My church' : 'My church?'),
               ),
             ],
           ),

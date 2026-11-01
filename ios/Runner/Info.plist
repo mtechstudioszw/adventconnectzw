@@ -4,16 +4,21 @@
 <dict>
 	<key>GIDClientID</key>
 	<string>13892017929-dg9g51c203gldfk9qb05mv80ps7t997m.apps.googleusercontent.com</string>
-	<!-- `audio` was removed 29 Oct 2026 (App Review, Guideline 2.5.4).
-	     Music is hidden on iOS (kHideMusic in lib/config/platform_flags.dart),
-	     so nothing plays in the background. To restore it, put `audio` back
-	     here, flip kHideMusic, and send Apple a screen recording.
-	     `remote-notification` stays: it lets push notifications wake the
-	     app (chat delivered-ticks). -->
+	<!-- Background modes (1 Nov 2026, voice calls switched on for iPhone):
+	     `voip`  — PushKit VoIP pushes wake a closed app to ring (CallKit).
+	     `audio` — keeps a LIVE CALL's audio running when the screen locks or
+	               the member switches app. This is what Apple rejected on 29
+	               Oct (Guideline 2.5.4) because nothing then used it; a voice
+	               call is exactly the documented use. Tell App Review in the
+	               notes and attach a screen recording of a call continuing
+	               with the screen locked (docs/APP_REVIEW_NOTES.md).
+	     `remote-notification` — pushes wake the app (chat ticks). -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>audio</string>
+		<string>voip</string>
 		<string>remote-notification</string>
 	</array>
 
@@ -22,7 +27,7 @@
 
 	<!-- Microphone access is used for recording voice notes in chats. -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Adventist Super App needs microphone access so you can record voice notes in your chats.</string>
+	<string>Adventist Super App needs microphone access for voice calls and to record voice notes in your chats.</string>
 
 	<key>NSCameraUsageDescription</key>
 	<string>Adventist Super App uses your camera to take photos for your profile, posts, listings and chats, and to scan friend QR codes.</string>

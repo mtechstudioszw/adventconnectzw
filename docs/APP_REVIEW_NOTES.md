@@ -27,6 +27,34 @@ These are settings in App Store Connect, not code. The last rejection
    2.0.2 can stay — it was never released.
 7. **Encryption.** Answer as before (standard HTTPS only — exempt).
 
+## Voice calls (added 1 Nov 2026) — read before the next upload
+
+This build turns on **voice calls**, which brings back the `audio`
+background mode Apple rejected on 29 Oct (Guideline 2.5.4), plus `voip`.
+This time they have a real use. Add this paragraph to the Notes below and
+**attach a screen recording** (App Store Connect → App Review Information →
+Attachment) showing:
+1. Account A calls account B from a chat (call button, top right).
+2. B's iPhone is LOCKED and rings with the native call screen.
+3. B answers; both talk; B presses the side button to lock — audio
+   continues.
+4. Hang up.
+
+Paragraph to paste:
+
+> Voice calling: members can make 1:1 and small-group voice calls to
+> friends. We use the `voip` background mode with PushKit/CallKit so an
+> incoming call rings on a locked iPhone, and the `audio` background mode
+> so a call in progress keeps its audio when the screen locks. Calls are
+> peer-to-peer (WebRTC); no audio is recorded or stored. A screen
+> recording is attached. To test: sign in to the demo account on two
+> devices is not required — call the second review account "Apple Dev
+> Teter 2" (or ask us and we will call you during review).
+
+**You need a second demo account** that is friends with the review demo
+account, so the reviewer has someone to call. Create it, make the two
+friends, and put its email/password in the Notes.
+
 ## The message for App Review (paste into Notes)
 
 > Hello App Review team,

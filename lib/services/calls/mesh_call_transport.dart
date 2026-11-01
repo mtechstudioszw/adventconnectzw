@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import 'call_api.dart' show IceConfig;
+import 'call_e2ee.dart';
 import 'call_signaling.dart';
 import 'call_transport.dart';
 
@@ -40,9 +41,51 @@ import 'call_transport.dart';
 ///     from the server's roster. A peer connection can therefore never
 ///     outlive the participant row it belongs to.
 class MeshCallTransport implements CallTransport {
-  MeshCallTransport({required this.selfUserId});
+  MeshCallTransport({
+    required this.selfUserId,
+    this.sealFingerprint,
+    this.verifyFingerprint,
+  });
 
   final String selfUserId;
+
+  /// End-to-end key check (CallE2ee). Seals our DTLS fingerprint for a
+  /// peer; the result rides in the offer/answer as `fp`.
+  final Future<Map<String, Object>?> Function(String peerId, String sdp)?
+  sealFingerprint;
+
+  /// Checks a peer's offer/answer against its sealed fingerprint. A
+  /// mismatch fails that peer — someone altered the handshake.
+  final Future<CallKeyCheck> Function(String peerId, String sdp, Object? fp)?
+  verifyFingerprint;
+
+  /// Per peer: did their keys check out? Read by CallService for the
+  /// "end-to-end encrypted" line on the call screen.
+  final Map<String, CallKeyCheck> keyChecks = {};
+
+  Future<bool> _checkKeys(String peerId, String sdp, Object? fp) async {
+    final verify = verifyFingerprint;
+    if (verify == null) return true;
+    final result = await verify(peerId, sdp, fp);
+    keyChecks[peerId] = result;
+    if (result == CallKeyCheck.mismatch) {
+      debugPrint('MeshCallTransport: KEY MISMATCH from $peerId — refusing');
+      _emit(PeerStateChanged(peerId, PeerMediaState.failed));
+      return false;
+    }
+    return true;
+  }
+
+  Future<Map<String, Object>> _withSeal(
+    String peerId,
+    Map<String, Object?> data,
+  ) async {
+    final seal = sealFingerprint;
+    final sdp = data['sdp'];
+    if (seal == null || sdp is! String) return {...data.cast<String, Object>()};
+    final fp = await seal(peerId, sdp);
+    return {...data.cast<String, Object>(), 'fp': ?fp};
+  }
 
   final _events = StreamController<TransportEvent>.broadcast();
   @override
@@ -186,7 +229,7 @@ class MeshCallTransport implements CallTransport {
         TransportSignal(
           peer.id,
           renegotiate ? CallSignalType.renegotiate : CallSignalType.offer,
-          {'sdp': tuned.sdp, 'type': tuned.type},
+          await _withSeal(peer.id, {'sdp': tuned.sdp, 'type': tuned.type}),
         ),
       );
     } catch (e) {
@@ -249,6 +292,9 @@ class MeshCallTransport implements CallTransport {
       return;
     }
 
+    // End-to-end key check BEFORE applying anything from the offer.
+    if (!await _checkKeys(peer.id, sdp, signal.data['fp'])) return;
+
     try {
       await peer.pc.setRemoteDescription(
         RTCSessionDescription(sdp, (signal.data['type'] ?? 'offer').toString()),
@@ -265,10 +311,11 @@ class MeshCallTransport implements CallTransport {
       );
       await peer.pc.setLocalDescription(tuned);
       _emit(
-        TransportSignal(peer.id, CallSignalType.answer, {
-          'sdp': tuned.sdp,
-          'type': tuned.type,
-        }),
+        TransportSignal(
+          peer.id,
+          CallSignalType.answer,
+          await _withSeal(peer.id, {'sdp': tuned.sdp, 'type': tuned.type}),
+        ),
       );
     } catch (e) {
       // A malformed SDP from a peer must fail THAT peer, not the call.
@@ -293,6 +340,7 @@ class MeshCallTransport implements CallTransport {
         );
         return;
       }
+      if (!await _checkKeys(peer.id, sdp, signal.data['fp'])) return;
       await peer.pc.setRemoteDescription(
         RTCSessionDescription(
           sdp,

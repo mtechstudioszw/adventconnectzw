@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/call_model.dart';
 import 'call_api.dart';
+import 'call_e2ee.dart';
 import 'call_audio.dart';
 import 'call_config.dart';
 import 'call_signaling.dart';
@@ -66,6 +67,15 @@ class CallService {
   static Stream<String> get onShowCallScreen => _screenRequests.stream;
 
   static CallTransport? _transport;
+
+  /// True when every peer's call keys were checked end-to-end over the
+  /// Signal session and matched (CallE2ee). False while unchecked, or if
+  /// a peer's app can't do the check — the audio is still encrypted.
+  static bool get keysVerified {
+    final t = _transport;
+    if (t is! MeshCallTransport || t.keyChecks.isEmpty) return false;
+    return t.keyChecks.values.every((c) => c == CallKeyCheck.verified);
+  }
   static CallSignaling? _signaling;
   static StreamSubscription<TransportEvent>? _transportSub;
   static StreamSubscription<CallKitEvent>? _callKitSub;
@@ -580,7 +590,12 @@ class CallService {
     final ice = await CallApi.iceServers(session.id);
     if (generation != _generation) return;
 
-    final transport = MeshCallTransport(selfUserId: myId);
+    final transport = MeshCallTransport(
+      selfUserId: myId,
+      // End-to-end key check over the Signal session (CallE2ee).
+      sealFingerprint: CallE2ee.seal,
+      verifyFingerprint: CallE2ee.verify,
+    );
     _transport = transport;
     _transportSub = transport.events.listen(_onTransportEvent);
 

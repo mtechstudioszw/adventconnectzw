@@ -220,13 +220,40 @@ class _StatusLine extends StatelessWidget {
     // server's `connected_at`, so it never counts ringing time and
     // cannot drift with the device clock.
     if (phase == CallPhase.connected) {
-      return Text(
-        _formatDuration(state.elapsed),
-        style: AppTextStyles.titleMedium.copyWith(
-          color: AppColors.successGreen,
-          fontWeight: FontWeight.w600,
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ),
+      final verified = CallService.keysVerified;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _formatDuration(state.elapsed),
+            style: AppTextStyles.titleMedium.copyWith(
+              color: AppColors.successGreen,
+              fontWeight: FontWeight.w600,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+          const SizedBox(height: 4),
+          // Honest about which: "end-to-end encrypted" only when the keys
+          // were checked over the Signal session (CallE2ee); otherwise
+          // the audio is still encrypted in transit, and it says that.
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.lock_outline,
+                size: 12,
+                color: palette.textMuted,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                verified ? 'End-to-end encrypted' : 'Encrypted',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: palette.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ],
       );
     }
 

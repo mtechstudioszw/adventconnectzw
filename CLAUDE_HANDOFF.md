@@ -570,14 +570,15 @@ paused until redesigned (topic push, not a row per member); Pro plan
 - Plans only (owner: don't build yet): docs/CALLS_PLAN.md (calls +
   story encryption). 35 calls were ever attempted; none connected.
 
-**Calls restored (Android only, `kHideCalls` on iOS)** — see the top of
+**Calls on Android AND iPhone (kHideCalls = false)** — see the top of
 docs/CALLS_PLAN.md for the root cause and the owner steps (TURN key,
 Play full-screen-intent declaration, two-phone test).
 
 **Patches to run in the SQL editor, in this order** (all unapplied):
 
-1. `patch_296_group_safety.sql` — URGENT. Any member could post into any
-   chat as anyone via `_group_system_message`.
+1. `patch_296_group_safety.sql` — its first part (REVOKE on
+   _group_system_message) IS APPLIED (1 Nov, via the tool). Run the file
+   anyway for the rest (admins who left, last-admin, announcement mode).
 2. `patch_294_e2ee_server_previews.sql` — no ciphertext in notifications.
 3. `patch_297_home_church_only.sql` — members = home church.
 4. `patch_293_message_client_id_unique.sql`
@@ -585,7 +586,10 @@ Play full-screen-intent declaration, two-phone test).
 6. `patch_208` (ss_highlights) if still wanted.
 7. `patch_298_e2ee_resend.sql` — new encrypted messages always open
    (retry receipts); also stops a one-time key being used up per send.
-8. `patch_295_e2ee_on_for_everyone.sql` — ONLY after the two-phone test
+8. `patch_299_prune_e2ee_copies.sql`
+9. `patch_300_story_e2ee.sql` — encrypted stories.
+10. `patch_301_chat_backups.sql` — chat backup bucket.
+11. `patch_295_e2ee_on_for_everyone.sql` — ONLY after the two-phone test
    written at its top.
 
 ## 5. Pending owner actions

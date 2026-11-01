@@ -48,6 +48,7 @@ class Conversation {
     this.lastDelivered = false,
     this.lastRead = false,
     this.otherUserIsVerified = false,
+    this.adminsOnlySend = false,
   });
 
   final String id;
@@ -88,6 +89,9 @@ class Conversation {
   /// header. Always false for groups.
   final bool otherUserIsVerified;
 
+  /// Announcement mode (patch_296): only group admins can send.
+  final bool adminsOnlySend;
+
   bool get isChurchGroup => churchKind != null;
   bool get isChurchChannel => churchKind == 'channel';
 
@@ -106,14 +110,13 @@ class Conversation {
       return Conversation(
         id: json['id'].toString(),
         otherUserId: '',
-        otherUserName:
-            (json['name'] as String?)?.trim().isNotEmpty == true
-                ? (json['name'] as String).trim()
-                : 'Group',
+        otherUserName: (json['name'] as String?)?.trim().isNotEmpty == true
+            ? (json['name'] as String).trim()
+            : 'Group',
         otherUserPhotoUrl: json['photo_url'] as String?,
         lastMessage: (json['last_message'] ?? '') as String,
-        lastMessageAt: DateTime.tryParse(
-                json['last_message_at']?.toString() ?? '') ??
+        lastMessageAt:
+            DateTime.tryParse(json['last_message_at']?.toString() ?? '') ??
             DateTime.tryParse(json['created_at']?.toString() ?? '') ??
             DateTime.now(),
         unreadCount: _readInt(json['unread_count']),
@@ -129,12 +132,12 @@ class Conversation {
         // keeps ✓✓ instead of reverting to a single ✓.
         lastDelivered: json['last_delivered'] == true,
         lastRead: json['last_read'] == true,
+        adminsOnlySend: json['admins_only_send'] == true,
       );
     }
     final participantA = (json['participant_a_id'] ?? '').toString();
     final participantB = (json['participant_b_id'] ?? '').toString();
-    final selfChat =
-        participantA.isNotEmpty && participantA == participantB;
+    final selfChat = participantA.isNotEmpty && participantA == participantB;
     final isCurrentA = participantA == currentUserId;
     final otherId = selfChat
         ? currentUserId
@@ -142,10 +145,10 @@ class Conversation {
     final otherName = selfChat
         ? 'Notes to self'
         : ((isCurrentA
-                    ? json['participant_b_name']
-                    : json['participant_a_name'])
-                ?.toString() ??
-            'Member');
+                      ? json['participant_b_name']
+                      : json['participant_a_name'])
+                  ?.toString() ??
+              'Member');
     // The joined profile photo is brought in by fetchConversations
     // via select('*, participant_a:participant_a_id(profile_photo_url),
     // participant_b:participant_b_id(profile_photo_url)'). Pick the
@@ -154,8 +157,7 @@ class Conversation {
     String? otherPhoto;
     final pa = json['participant_a'];
     final pb = json['participant_b'];
-    bool verifiedOf(dynamic p) =>
-        p is Map && (p['is_verified'] == true);
+    bool verifiedOf(dynamic p) => p is Map && (p['is_verified'] == true);
     bool otherVerified;
     if (selfChat) {
       otherPhoto = (pa is Map ? pa['profile_photo_url'] : null) as String?;
@@ -173,8 +175,8 @@ class Conversation {
       otherUserName: otherName,
       otherUserPhotoUrl: otherPhoto,
       lastMessage: (json['last_message'] ?? '') as String,
-      lastMessageAt: DateTime.tryParse(
-              json['last_message_at']?.toString() ?? '') ??
+      lastMessageAt:
+          DateTime.tryParse(json['last_message_at']?.toString() ?? '') ??
           DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
       unreadCount: _readInt(json['unread_count']),
@@ -205,6 +207,7 @@ class Conversation {
     String? otherUserPhotoUrl,
     bool? lastDelivered,
     bool? lastRead,
+    bool? adminsOnlySend,
   }) {
     return Conversation(
       id: id,
@@ -222,9 +225,14 @@ class Conversation {
       isGroup: isGroup ?? this.isGroup,
       churchKind: churchKind,
       churchId: churchId,
+      // These two were missing, so any copy (an unread reset, a tick
+      // update) made a deleted group look live and lost its pinned message.
+      deletedAt: deletedAt,
+      pinnedMessageId: pinnedMessageId,
       lastDelivered: lastDelivered ?? this.lastDelivered,
       lastRead: lastRead ?? this.lastRead,
       otherUserIsVerified: otherUserIsVerified,
+      adminsOnlySend: adminsOnlySend ?? this.adminsOnlySend,
     );
   }
 
@@ -361,7 +369,8 @@ class Message {
       senderId: (json['sender_id'] ?? '').toString(),
       senderName: (json['sender_name'] ?? 'Member') as String,
       content: (json['content'] ?? '') as String,
-      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),
       sentAt: DateTime.tryParse(json['sent_at']?.toString() ?? ''),
       read: json['read'] == true,

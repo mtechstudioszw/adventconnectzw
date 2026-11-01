@@ -16,27 +16,44 @@ class GroupService {
     String? description,
     required List<String> memberIds,
   }) async {
-    final id = await _client.rpc('create_group', params: {
-      'p_name': name,
-      'p_photo_url': photoUrl,
-      'p_description': description,
-      'p_member_ids': memberIds,
-    });
+    final id = await _client.rpc(
+      'create_group',
+      params: {
+        'p_name': name,
+        'p_photo_url': photoUrl,
+        'p_description': description,
+        'p_member_ids': memberIds,
+      },
+    );
     return id.toString();
   }
 
   static Future<void> addMembers(String conversationId, List<String> userIds) {
-    return _client.rpc('add_group_members', params: {
-      'p_conversation': int.parse(conversationId),
-      'p_user_ids': userIds,
-    });
+    return _client.rpc(
+      'add_group_members',
+      params: {
+        'p_conversation': int.parse(conversationId),
+        'p_user_ids': userIds,
+      },
+    );
   }
 
   static Future<void> removeMember(String conversationId, String userId) {
-    return _client.rpc('remove_group_member', params: {
-      'p_conversation': int.parse(conversationId),
-      'p_user_id': userId,
-    });
+    return _client.rpc(
+      'remove_group_member',
+      params: {
+        'p_conversation': int.parse(conversationId),
+        'p_user_id': userId,
+      },
+    );
+  }
+
+  /// Announcement mode: only admins can send (patch_296).
+  static Future<void> setAdminsOnly(String conversationId, bool on) {
+    return _client.rpc(
+      'set_group_admins_only',
+      params: {'p_conversation': int.parse(conversationId), 'p_on': on},
+    );
   }
 
   static Future<void> setAdmin(
@@ -44,11 +61,14 @@ class GroupService {
     String userId, {
     required bool makeAdmin,
   }) {
-    return _client.rpc('set_group_admin', params: {
-      'p_conversation': int.parse(conversationId),
-      'p_user_id': userId,
-      'p_make_admin': makeAdmin,
-    });
+    return _client.rpc(
+      'set_group_admin',
+      params: {
+        'p_conversation': int.parse(conversationId),
+        'p_user_id': userId,
+        'p_make_admin': makeAdmin,
+      },
+    );
   }
 
   static Future<void> updateGroup(
@@ -57,32 +77,38 @@ class GroupService {
     String? photoUrl,
     String? description,
   }) {
-    return _client.rpc('update_group', params: {
-      'p_conversation': int.parse(conversationId),
-      'p_name': name,
-      'p_photo_url': photoUrl,
-      'p_description': description,
-    });
+    return _client.rpc(
+      'update_group',
+      params: {
+        'p_conversation': int.parse(conversationId),
+        'p_name': name,
+        'p_photo_url': photoUrl,
+        'p_description': description,
+      },
+    );
   }
 
   static Future<void> leaveGroup(String conversationId) {
-    return _client.rpc('leave_group', params: {
-      'p_conversation': int.parse(conversationId),
-    });
+    return _client.rpc(
+      'leave_group',
+      params: {'p_conversation': int.parse(conversationId)},
+    );
   }
 
   static Future<void> deleteGroup(String conversationId) {
-    return _client.rpc('delete_group', params: {
-      'p_conversation': int.parse(conversationId),
-    });
+    return _client.rpc(
+      'delete_group',
+      params: {'p_conversation': int.parse(conversationId)},
+    );
   }
 
   /// Remove the group from MY list (after I've left) — deletes my
   /// membership row only (patch_079). The group stays for everyone else.
   static Future<void> deleteGroupConversation(String conversationId) {
-    return _client.rpc('delete_group_conversation', params: {
-      'p_conversation': int.parse(conversationId),
-    });
+    return _client.rpc(
+      'delete_group_conversation',
+      params: {'p_conversation': int.parse(conversationId)},
+    );
   }
 
   /// Members of a group, each as {user_id, role, full_name,
@@ -121,10 +147,12 @@ class GroupService {
   /// Members of a CHURCH group (implicit membership via profiles.church_id,
   /// patch_078). No admins/roles — everyone is a plain member.
   static Future<List<GroupMember>> fetchChurchMembers(
-      String conversationId) async {
-    final rows = await _client.rpc('church_conversation_members', params: {
-      'p_conv': int.parse(conversationId),
-    });
+    String conversationId,
+  ) async {
+    final rows = await _client.rpc(
+      'church_conversation_members',
+      params: {'p_conv': int.parse(conversationId)},
+    );
     if (rows is! List) return const [];
     return rows.map((r) {
       final map = r as Map<String, dynamic>;
@@ -135,33 +163,35 @@ class GroupService {
             ? (map['full_name'] as String).trim()
             : 'Member',
         photoUrl: map['photo_url'] as String?,
-        isVerified:
-            map['is_verified'] == true,
+        isVerified: map['is_verified'] == true,
       );
     }).toList();
   }
 
   /// Reset (revoke) the invite link — old links stop working (patch_096).
   static Future<String> resetInvite(String conversationId) async {
-    final token = await _client.rpc('reset_group_invite', params: {
-      'p_conversation': int.parse(conversationId),
-    });
+    final token = await _client.rpc(
+      'reset_group_invite',
+      params: {'p_conversation': int.parse(conversationId)},
+    );
     return token.toString();
   }
 
   /// Get (or lazily create) the shareable invite token for a group.
   static Future<String> inviteToken(String conversationId) async {
-    final token = await _client.rpc('get_or_create_group_invite', params: {
-      'p_conversation': int.parse(conversationId),
-    });
+    final token = await _client.rpc(
+      'get_or_create_group_invite',
+      params: {'p_conversation': int.parse(conversationId)},
+    );
     return token.toString();
   }
 
   /// Join a group from an invite token; returns the conversation id.
   static Future<String> joinViaInvite(String token) async {
-    final id = await _client.rpc('join_group_via_invite', params: {
-      'p_token': token,
-    });
+    final id = await _client.rpc(
+      'join_group_via_invite',
+      params: {'p_token': token},
+    );
     return id.toString();
   }
 }

@@ -1498,7 +1498,20 @@ class _ChatScreenState extends State<ChatScreen>
   /// people who have been friends for a year.
   ComposerGate? get _composerGate {
     final convo = _conversation;
-    if (convo == null || convo.isGroup || convo.isSelfChat) return null;
+    if (convo == null || convo.isSelfChat) return null;
+    if (convo.isGroup) {
+      // Announcement mode (patch_296). Waits for the member list so an
+      // admin never sees the lock flash on while it loads.
+      if (!convo.adminsOnlySend || convo.isChurchGroup) return null;
+      if (_groupMembers.isEmpty) return null;
+      final me = AuthService.currentUser?.id ?? '';
+      final amAdmin = _groupMembers.any((m) => m.userId == me && m.isAdmin);
+      if (amAdmin) return null;
+      return const ComposerGate(
+        title: 'Only admins can send messages',
+        body: 'You can still read and react. Admins can change this in Group info.',
+      );
+    }
     if (!_friendshipResolved) return null;
     final me = AuthService.currentUser?.id ?? '';
     final other = convo.otherUserId;

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/member_directory_model.dart';
 import '../../models/message_model.dart';
@@ -68,6 +69,31 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       return a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase());
     });
   }
+
+  bool _settingAdminsOnly = false;
+
+  Future<void> _setAdminsOnly(bool on) async {
+    final g = _group;
+    if (g == null) return;
+    setState(() {
+      _settingAdminsOnly = true;
+      _group = g.copyWith(adminsOnlySend: on);
+    });
+    try {
+      await GroupService.setAdminsOnly(widget.conversationId, on);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _group = g);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Couldn't change that. Check your connection."),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _settingAdminsOnly = false);
+    }
+  }
+
   bool get _isChurch => _group?.isChurchGroup ?? false;
   bool get _isChannel => _group?.isChurchChannel ?? false;
 
@@ -372,6 +398,15 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         await GroupService.removeMember(widget.conversationId, m.userId);
         _load();
       }
+    } on PostgrestException catch (e) {
+      // The server's own words ("A group needs at least one admin…") are
+      // the useful answer; they're written for members.
+      if (mounted) {
+        _toast(
+          e.message.length < 120 ? e.message : 'Action failed.',
+          error: true,
+        );
+      }
     } catch (_) {
       if (mounted) _toast('Action failed.', error: true);
     }
@@ -599,7 +634,9 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                             vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.primaryBlue.withValues(alpha: 0.09),
+                            color: AppColors.primaryBlue.withValues(
+                              alpha: 0.09,
+                            ),
                             borderRadius: BorderRadius.circular(AppRadius.pill),
                           ),
                           child: Row(
@@ -698,6 +735,30 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                       icon: Icons.link_off,
                       label: 'Reset invite link',
                       onTap: _resetInvite,
+                    ),
+                    // Announcement mode (patch_296).
+                    SwitchListTile.adaptive(
+                      value: _group?.adminsOnlySend ?? false,
+                      onChanged: _settingAdminsOnly ? null : _setAdminsOnly,
+                      activeTrackColor: AppColors.primaryBlue,
+                      secondary: const Icon(
+                        Icons.campaign_outlined,
+                        color: AppColors.primaryBlue,
+                      ),
+                      title: Text(
+                        'Only admins can send',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: context.palette.text,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Turn the group into announcements. Members can '
+                        'still read and react.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: context.palette.textMuted,
+                        ),
+                      ),
                     ),
                   ],
                   const SizedBox(height: 8),

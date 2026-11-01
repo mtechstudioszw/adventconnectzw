@@ -62,10 +62,7 @@ class E2eeStore implements SignalProtocolStore, SenderKeyStore {
       final registrationId = generateRegistrationId(false);
       identityB64 = base64Encode(identity.serialize());
       regIdRaw = registrationId.toString();
-      await SecureStorageService.write(
-        identityStorageKey(userId),
-        identityB64,
-      );
+      await SecureStorageService.write(identityStorageKey(userId), identityB64);
       await SecureStorageService.write(
         registrationStorageKey(userId),
         regIdRaw,

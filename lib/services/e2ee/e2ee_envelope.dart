@@ -31,6 +31,10 @@ class E2eeEnvelope {
   /// closely enough to be familiar without pretending to be it.
   static const String placeholder = 'Waiting for this message';
 
+  /// A NEW message this phone has asked the sender's phone to re-send
+  /// (patch_298). Old messages keep [placeholder].
+  static const String recovering = 'Getting this message…';
+
   /// What gets written to `conversations.last_message` for an encrypted
   /// send.
   ///
@@ -105,7 +109,12 @@ class E2eeEnvelope {
     // encrypted, so if the store above did not have it — a reinstall, or
     // a message sent from another device — it is simply gone for us.
     if (myUserId != null && senderId == myUserId) {
-      return {...row, 'content': placeholder, '_e2ee_own': true};
+      return {
+        ...row,
+        'content': placeholder,
+        '_e2ee_own': true,
+        '_e2ee_failed': true,
+      };
     }
 
     if (!isReadableVersion(row)) {
@@ -115,7 +124,7 @@ class E2eeEnvelope {
     final deviceRaw = row['sender_device_id'];
     final typeRaw = row['ciphertext_type'];
     if (deviceRaw is! num || typeRaw is! num || senderId.isEmpty) {
-      return {...row, 'content': placeholder};
+      return {...row, 'content': placeholder, '_e2ee_failed': true};
     }
 
     final plaintext = isGroup
@@ -138,7 +147,9 @@ class E2eeEnvelope {
     if (plaintext != null && messageId.isNotEmpty) {
       await E2eeService.cachePlaintext(messageId, plaintext);
     }
-    if (plaintext == null) return {...row, 'content': placeholder};
+    if (plaintext == null) {
+      return {...row, 'content': placeholder, '_e2ee_failed': true};
+    }
     return withPlaintext(row, plaintext);
   }
 
@@ -182,6 +193,31 @@ class E2eeEnvelope {
         ),
       );
     }
-    return out;
+    // Retry receipts (patch_298): one batched pickup for every row that
+    // did not open. The server only accepts requests for messages newer
+    // than this install, so old ones stay [placeholder] as intended.
+    final failed = [
+      for (final r in out)
+        if (r['_e2ee_failed'] == true && '${r['id'] ?? ''}'.isNotEmpty)
+          '${r['id']}',
+    ];
+    if (failed.isEmpty) return out;
+    final recovered = await E2eeService.recoverMessages(failed);
+    return [
+      for (final r in out)
+        if (r['_e2ee_failed'] != true)
+          r
+        else if (recovered['${r['id']}'] != null)
+          withPlaintext(
+            Map<String, dynamic>.from(r)
+              ..remove('_e2ee_failed')
+              ..remove('_e2ee_own'),
+            recovered['${r['id']}']!,
+          )
+        else if (E2eeService.isAwaitingCopy('${r['id']}'))
+          {...r, 'content': recovering}
+        else
+          r,
+    ];
   }
 }

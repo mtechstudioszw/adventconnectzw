@@ -310,6 +310,24 @@ class E2eeService {
     if (store == null || myDevice == null) return null;
 
     try {
+      // patch_298: with a session already open to their current phone,
+      // encrypt straight away. Claiming a bundle per message used up one
+      // of their one-time keys on every send.
+      final latest = await _latestDevice(recipientUserId);
+      if (latest != null) {
+        final open = _address(recipientUserId, latest);
+        if (await store.containsSession(open)) {
+          final message = await SessionCipher.fromStore(
+            store,
+            open,
+          ).encrypt(Uint8List.fromList(utf8.encode(plaintext)));
+          return EncryptedPayload(
+            ciphertext: base64Encode(message.serialize()),
+            type: message.getType(),
+            senderDeviceId: myDevice,
+          );
+        }
+      }
       final bundle = await _claimBundle(recipientUserId);
       if (bundle == null && !await _hasAnySession(store, recipientUserId)) {
         return null; // they are not on an E2EE build
@@ -361,13 +379,8 @@ class E2eeService {
       final cipher = SessionCipher.fromStore(store, address);
 
       final plain = type == CiphertextMessage.prekeyType
-          ? await cipher.decryptWithCallback(
-              PreKeySignalMessage(bytes),
-              (_) {},
-            )
-          : await cipher.decryptFromSignal(
-              SignalMessage.fromSerialized(bytes),
-            );
+          ? await cipher.decryptWithCallback(PreKeySignalMessage(bytes), (_) {})
+          : await cipher.decryptFromSignal(SignalMessage.fromSerialized(bytes));
       return utf8.decode(plain);
     } catch (e) {
       // Includes DuplicateMessageException, which realtime + the polling
@@ -491,6 +504,206 @@ class E2eeService {
     await _store?.clearGroupSenderKeys(conversationId);
   }
 
+  // ---------- retry receipts (patch_298) ----------
+  //
+  // A NEW message that this phone cannot open (a group key that hasn't
+  // arrived, a message that went to the member's other phone, our own
+  // message sent from another phone) is asked for again; the sender's
+  // phone re-encrypts it for this device. Messages older than this
+  // install stay "Waiting for this message" — the server refuses those
+  // requests (owner, 1 Nov 2026).
+
+  /// Bumped when a copy arrives, so an open thread re-reads its rows.
+  static final ValueNotifier<int> plaintextRevision = ValueNotifier(0);
+
+  static final Set<String> _requested = {};
+
+  /// Old messages the server will not re-send (older than this install):
+  /// never asked about again this session — they stay "Waiting".
+  static final Set<String> _refused = {};
+
+  /// Ids this phone has asked for and not yet opened.
+  static bool isAwaitingCopy(String messageId) =>
+      _requested.contains(messageId);
+
+  static Future<int?> _latestDevice(String userId) async {
+    try {
+      final r = await _client.rpc(
+        'e2ee_latest_device',
+        params: {'p_user': userId},
+      );
+      return (r as num?)?.toInt();
+    } catch (_) {
+      return null; // patch_298 not applied: the old path still works
+    }
+  }
+
+  /// Encrypts [plaintext] for ONE device of [userId].
+  static Future<EncryptedPayload?> encryptToDevice({
+    required String userId,
+    required int deviceId,
+    required String plaintext,
+  }) async {
+    final store = _store;
+    final myDevice = _deviceId;
+    if (store == null || myDevice == null) return null;
+    try {
+      final address = _address(userId, deviceId);
+      if (!await store.containsSession(address)) {
+        final rows = await _client.rpc(
+          'claim_prekey_bundle_for',
+          params: {'p_user': userId, 'p_device': deviceId},
+        );
+        if (rows is! List || rows.isEmpty) return null;
+        final bundle = ClaimedBundle.fromJson(
+          Map<String, dynamic>.from(rows.first as Map),
+        );
+        await SessionBuilder.fromSignalStore(
+          store,
+          address,
+        ).processPreKeyBundle(bundle.toPreKeyBundle());
+      }
+      final message = await SessionCipher.fromStore(
+        store,
+        address,
+      ).encrypt(Uint8List.fromList(utf8.encode(plaintext)));
+      return EncryptedPayload(
+        ciphertext: base64Encode(message.serialize()),
+        type: message.getType(),
+        senderDeviceId: myDevice,
+      );
+    } catch (e) {
+      debugPrint('E2eeService.encryptToDevice: $e');
+      return null;
+    }
+  }
+
+  /// Picks up copies for [messageIds] and opens them. Returns id → text
+  /// for every one that opened (and caches it). Asks the sender for any
+  /// that have no copy yet. Never throws.
+  static Future<Map<String, String>> recoverMessages(
+    List<String> messageIds,
+  ) async {
+    final device = _deviceId;
+    final out = <String, String>{};
+    messageIds = messageIds.where((id) => !_refused.contains(id)).toList();
+    if (device == null || messageIds.isEmpty) return out;
+    final ids = messageIds
+        .map(int.tryParse)
+        .whereType<int>()
+        .take(200)
+        .toList();
+    if (ids.isEmpty) return out;
+    try {
+      final rows = await _client.rpc(
+        'e2ee_copies_for',
+        params: {'p_messages': ids, 'p_device': device},
+      );
+      for (final raw in (rows as List? ?? const [])) {
+        final r = Map<String, dynamic>.from(raw as Map);
+        final id = '${r['message_id']}';
+        final plain = await decryptDirect(
+          senderUserId: '${r['sender_id']}',
+          senderDeviceId: (r['sender_device'] as num).toInt(),
+          ciphertextB64: '${r['ciphertext']}',
+          type: (r['ciphertext_type'] as num).toInt(),
+        );
+        if (plain != null) {
+          await cachePlaintext(id, plain);
+          _requested.remove(id);
+          out[id] = plain;
+        }
+      }
+    } catch (e) {
+      debugPrint('E2eeService.recoverMessages copies: $e');
+    }
+    for (final id in messageIds) {
+      if (out.containsKey(id) || _requested.contains(id)) continue;
+      final n = int.tryParse(id);
+      if (n == null) continue;
+      try {
+        final ok = await _client.rpc(
+          'e2ee_request_resend',
+          params: {'p_message': n, 'p_device': device},
+        );
+        if (ok == true) {
+          _requested.add(id);
+        } else {
+          _refused.add(id);
+        }
+      } catch (_) {
+        // patch_298 not applied yet: nothing to ask.
+      }
+    }
+    if (_requested.isNotEmpty) _schedulePickup();
+    return out;
+  }
+
+  static bool _pickupScheduled = false;
+  static int _pickupRounds = 0;
+
+  /// Checks back for copies a few times after asking — the sender's
+  /// phone answers whenever it is next online.
+  static void _schedulePickup() {
+    if (_pickupScheduled) return;
+    _pickupScheduled = true;
+    Future<void>.delayed(const Duration(seconds: 20), () async {
+      _pickupScheduled = false;
+      if (_requested.isEmpty) {
+        _pickupRounds = 0;
+        return;
+      }
+      final got = await recoverMessages(_requested.toList());
+      if (got.isNotEmpty) plaintextRevision.value++;
+      // ~10 minutes of checking, then wait for the next chat open.
+      if (_requested.isNotEmpty && ++_pickupRounds < 30) _schedulePickup();
+    });
+  }
+
+  static bool _serving = false;
+
+  /// Answers other phones' requests for messages WE sent, from the
+  /// plaintext kept on this phone. Safe to call often. Never throws.
+  static Future<int> serveResends() async {
+    if (_serving || !isReady) return 0;
+    _serving = true;
+    var served = 0;
+    try {
+      final rows = await _client.rpc('e2ee_pending_resends');
+      for (final raw in (rows as List? ?? const [])) {
+        final r = Map<String, dynamic>.from(raw as Map);
+        final id = '${r['message_id']}';
+        final plain = cachedPlaintext(id);
+        if (plain == null) continue; // not on this phone — another may have it
+        final user = '${r['requester_user']}';
+        final device = (r['requester_device'] as num).toInt();
+        final payload = await encryptToDevice(
+          userId: user,
+          deviceId: device,
+          plaintext: plain,
+        );
+        if (payload == null) continue;
+        await _client.rpc(
+          'e2ee_fulfill_resend',
+          params: {
+            'p_message': int.parse(id),
+            'p_user': user,
+            'p_device': device,
+            'p_sender_device': payload.senderDeviceId,
+            'p_ciphertext': payload.ciphertext,
+            'p_type': payload.type,
+          },
+        );
+        served++;
+      }
+    } catch (e) {
+      debugPrint('E2eeService.serveResends: $e');
+    } finally {
+      _serving = false;
+    }
+    return served;
+  }
+
   // ---------- the local plaintext store ----------
 
   /// The already-decrypted body of [messageId], or null.
@@ -573,9 +786,7 @@ class E2eeService {
             Uint8List.fromList(utf8.encode(peerUserId)),
             remote,
           );
-      return _groupDigits(
-        fingerprint.displayableFingerprint.getDisplayText(),
-      );
+      return _groupDigits(fingerprint.displayableFingerprint.getDisplayText());
     } catch (e, st) {
       debugPrint('E2eeService.securityCode failed: $e\n$st');
       return null;
@@ -723,9 +934,7 @@ class ClaimedBundle {
     registrationId,
     deviceId,
     prekeyId,
-    prekey == null
-        ? null
-        : Curve.decodePoint(base64Decode(prekey!), 0),
+    prekey == null ? null : Curve.decodePoint(base64Decode(prekey!), 0),
     signedKeyId,
     Curve.decodePoint(base64Decode(signedKey), 0),
     base64Decode(signedSig),

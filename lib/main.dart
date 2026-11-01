@@ -255,7 +255,11 @@ Future<void> _initBackgroundServices() async {
           // public keys. Not awaited — a member must never wait on key
           // setup to reach their inbox, and if it fails the app simply
           // keeps sending the way every previous build did.
-          unawaited(E2eeService.start(data.session!.user.id));
+          unawaited(
+            E2eeService.start(
+              data.session!.user.id,
+            ).then((_) => E2eeService.serveResends()),
+          );
           // Premium is per Advent account, so it has to be re-read on
           // every sign-in — the cached expiry belongs to whoever was
           // signed in last and grants this user nothing until confirmed.
@@ -294,7 +298,9 @@ Future<void> _initBackgroundServices() async {
   if (warmUser != null) {
     unawaited(PresenceService.start());
     unawaited(TypingSignal.start(warmUser.id));
-    unawaited(E2eeService.start(warmUser.id));
+    unawaited(
+      E2eeService.start(warmUser.id).then((_) => E2eeService.serveResends()),
+    );
   }
 
   // Crashlytics + the rest of Push. Firebase itself and the FCM

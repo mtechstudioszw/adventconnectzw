@@ -179,6 +179,16 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  /// A message this phone asked to have re-sent (patch_298) has arrived:
+  /// re-read the thread so "Getting this message…" becomes the text.
+  Future<void> _onCopiesArrived() async {
+    try {
+      final list = await MessagingService.fetchMessages(widget.conversationId);
+      if (!mounted) return;
+      setState(() => _applyServerMessages(list));
+    } catch (_) {}
+  }
+
   /// True while at least one message the viewer sent is not yet read — i.e.
   /// while a tick on screen could still legitimately change.
   bool get _hasUnsettledOutgoing {
@@ -798,6 +808,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   // Typing indicator state.
   RealtimeChannel? _typingChannel;
+
   /// Joined channel used to ping the PEER's inbox row. Opened lazily on
   /// the first typing/recording ping (see _pingPeerInbox) and removed in
   /// dispose — a joined channel that outlives the screen is a leaked
@@ -947,6 +958,7 @@ class _ChatScreenState extends State<ChatScreen>
     _resolveConversation();
     // Unsent messages from earlier — shown with a clock, sent on reconnect.
     _loadOutbox();
+    E2eeService.plaintextRevision.addListener(_onCopiesArrived);
     MessagingService.outboxRevision.addListener(_loadOutbox);
     // Opening the chat clears its tray notification (WhatsApp parity) — the
     // user is now reading it, so the heads-up shouldn't linger.
@@ -1127,7 +1139,8 @@ class _ChatScreenState extends State<ChatScreen>
     } else {
       // One reaction per person (the server replaces it), so switching
       // from ❤️ to 👍 takes the ❤️ off first.
-      for (final k in current.keys.where((k) => k.startsWith('_mine_')).toList()) {
+      for (final k
+          in current.keys.where((k) => k.startsWith('_mine_')).toList()) {
         final old = k.substring(6);
         current.remove(k);
         final c = (current[old] ?? 1) - 1;
@@ -1242,8 +1255,8 @@ class _ChatScreenState extends State<ChatScreen>
       final url = media.startsWith('/')
           ? media
           : key != null
-              ? await MessagingService.decryptedChatImagePath(media, key)
-              : await MessagingService.signedChatMediaUrl(media);
+          ? await MessagingService.decryptedChatImagePath(media, key)
+          : await MessagingService.signedChatMediaUrl(media);
       final ok = await GalleryService.saveImageFromUrl(url);
       if (!mounted) return;
       _toast(ok ? 'Saved to gallery.' : 'Could not save the image.');
@@ -1509,7 +1522,8 @@ class _ChatScreenState extends State<ChatScreen>
       if (amAdmin) return null;
       return const ComposerGate(
         title: 'Only admins can send messages',
-        body: 'You can still read and react. Admins can change this in Group info.',
+        body:
+            'You can still read and react. Admins can change this in Group info.',
       );
     }
     if (!_friendshipResolved) return null;
@@ -1541,6 +1555,7 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void dispose() {
     MessagingService.outboxRevision.removeListener(_loadOutbox);
+    E2eeService.plaintextRevision.removeListener(_onCopiesArrived);
     if (PushService.openConversationId == widget.conversationId) {
       PushService.openConversationId = null;
     }
@@ -1768,8 +1783,9 @@ class _ChatScreenState extends State<ChatScreen>
     // Opened lazily on the first ping rather than in initState, because
     // `_conversation` is null until the thread loads and most chats are
     // opened and read without ever typing — no keystroke, no socket.
-    final channel =
-        _peerInboxChannel ??= MessagingService.openPeerInboxChannel(other);
+    final channel = _peerInboxChannel ??= MessagingService.openPeerInboxChannel(
+      other,
+    );
 
     unawaited(
       MessagingService.broadcastTypingToInbox(
@@ -1962,7 +1978,9 @@ class _ChatScreenState extends State<ChatScreen>
       if (mounted) {
         setState(() => _pending.removeWhere((m) => m.id == tempId));
         _loadOutbox();
-        _toast("No connection. Your voice note will send when you're back online.");
+        _toast(
+          "No connection. Your voice note will send when you're back online.",
+        );
       }
     } on PostgrestException catch (e) {
       // Silent block parity for voice notes too — RLS rejection keeps
@@ -2728,10 +2746,7 @@ class _ChatScreenState extends State<ChatScreen>
                   onPressed: count == 0 ? null : _forwardSelected,
                 ),
                 IconButton(
-                  icon: Icon(
-                    Icons.delete_outline,
-                    color: context.palette.text,
-                  ),
+                  icon: Icon(Icons.delete_outline, color: context.palette.text),
                   tooltip: 'Delete',
                   onPressed: count == 0 ? null : _confirmDeleteSelected,
                 ),
@@ -2955,7 +2970,8 @@ class _ChatScreenState extends State<ChatScreen>
                                           key: const ValueKey('group-sub'),
                                           style: AppTextStyles.labelSmall
                                               .copyWith(
-                                                color: context.palette.textMuted,
+                                                color:
+                                                    context.palette.textMuted,
                                                 fontSize: 11,
                                               ),
                                         )
@@ -3075,15 +3091,15 @@ class _ChatScreenState extends State<ChatScreen>
                           tint: AppColors.primaryBlue,
                           label: 'Unblock',
                           subtitle: 'They can message you again.',
-                          onTap: () =>
-                              run(() => _confirmUnblock(otherUserId)),
+                          onTap: () => run(() => _confirmUnblock(otherUserId)),
                         )
                       else
                         _ChatAction(
                           icon: Icons.block,
                           tint: AppColors.red,
                           label: 'Block',
-                          subtitle: 'Stops their messages everywhere, '
+                          subtitle:
+                              'Stops their messages everywhere, '
                               'not just here.',
                           onTap: () => run(() => _confirmBlock(otherUserId)),
                         ),
@@ -3387,8 +3403,7 @@ class _ChatScreenState extends State<ChatScreen>
     // that they can't is the cheapest trust the screen can buy. Only on
     // private threads: in a group or an announcements channel it would be
     // a lie, because everyone in the group genuinely can read it.
-    final showPrivacyLine =
-        !_isGroup && !(_conversation?.isSelfChat ?? false);
+    final showPrivacyLine = !_isGroup && !(_conversation?.isSelfChat ?? false);
     final leading = showPrivacyLine ? 1 : 0;
     // "Security code changed" sits at the BOTTOM, where WhatsApp puts it:
     // it is the newest thing that happened in this thread, and burying it
@@ -3415,10 +3430,7 @@ class _ChatScreenState extends State<ChatScreen>
               if (_peerContextLoaded &&
                   _messages.length < 8 &&
                   (_peerMutuals > 0 || (_peerChurch ?? '').isNotEmpty))
-                _PeerContextStrip(
-                  church: _peerChurch,
-                  mutuals: _peerMutuals,
-                ),
+                _PeerContextStrip(church: _peerChurch, mutuals: _peerMutuals),
               _PrivacyNotice(
                 otherName: _conversation?.otherUserName ?? 'this person',
                 encrypted: E2eeService.isEncryptionOn,
@@ -4429,7 +4441,8 @@ ComposerGate? composerGateFor({
   if (whoCanMessage == 'nobody') {
     return ComposerGate(
       title: '$name isn\'t taking new messages',
-      body: 'They\'ve turned off new conversations in their chat settings. '
+      body:
+          'They\'ve turned off new conversations in their chat settings. '
           'You\'ll be able to write once they message you.',
     );
   }
@@ -4441,7 +4454,8 @@ ComposerGate? composerGateFor({
   if (whoCanMessage == 'friends') {
     return ComposerGate(
       title: '$name only accepts messages from friends',
-      body: 'Send a friend request. Once they accept, you can write to '
+      body:
+          'Send a friend request. Once they accept, you can write to '
           'each other freely.',
       showAddFriend: !requestPending,
     );
@@ -4799,11 +4813,7 @@ class _SecurityCodeChanged extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(
-              Icons.lock_reset,
-              size: 16,
-              color: AppColors.goldAccent,
-            ),
+            const Icon(Icons.lock_reset, size: 16, color: AppColors.goldAccent),
             const SizedBox(width: 9),
             Expanded(
               child: Text(
@@ -6119,8 +6129,7 @@ class _ImageBubbleState extends State<_ImageBubble> {
       // the key from the message body, and show the decrypted local copy.
       final key = MediaKey.fromMeta(widget.message.meta);
       if (key != null) {
-        final local =
-            await MessagingService.decryptedChatImagePath(path, key);
+        final local = await MessagingService.decryptedChatImagePath(path, key);
         if (mounted) {
           setState(() {
             _isLocal = true;
@@ -6177,56 +6186,56 @@ class _ImageBubbleState extends State<_ImageBubble> {
           mainAxisSize: MainAxisSize.min,
           children: [
             GestureDetector(
-          onTap: _open,
-          child: Container(
-            constraints: BoxConstraints(
-              minWidth: 160,
-              minHeight: 160,
-              maxHeight: maxImageHeight,
-            ),
-            color: context.palette.cardMuted,
-            child: Stack(
-              fit: StackFit.passthrough,
-              children: [
-                _buildImage(),
-                // WhatsApp-style upload overlay: while the optimistic
-                // (local) bubble is still uploading, dim the photo and
-                // show a spinner so it's clearly "sending", not gone.
-                if (_isLocal && isMine) ...[
-                  Positioned.fill(
-                    child: Container(
-                      color: Colors.black.withValues(alpha: 0.32),
-                      alignment: Alignment.center,
-                      child: Text(
-                        widget.uploadProgress != null
-                            ? '${(widget.uploadProgress! * 100).round()}%'
-                            : '',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
+              onTap: _open,
+              child: Container(
+                constraints: BoxConstraints(
+                  minWidth: 160,
+                  minHeight: 160,
+                  maxHeight: maxImageHeight,
+                ),
+                color: context.palette.cardMuted,
+                child: Stack(
+                  fit: StackFit.passthrough,
+                  children: [
+                    _buildImage(),
+                    // WhatsApp-style upload overlay: while the optimistic
+                    // (local) bubble is still uploading, dim the photo and
+                    // show a spinner so it's clearly "sending", not gone.
+                    if (_isLocal && isMine) ...[
+                      Positioned.fill(
+                        child: Container(
+                          color: Colors.black.withValues(alpha: 0.32),
+                          alignment: Alignment.center,
+                          child: Text(
+                            widget.uploadProgress != null
+                                ? '${(widget.uploadProgress! * 100).round()}%'
+                                : '',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  // Upload progress BAR pinned to the bottom of the photo.
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: LinearProgressIndicator(
-                      value: widget.uploadProgress, // null → indeterminate
-                      minHeight: 4,
-                      backgroundColor: Colors.white.withValues(alpha: 0.30),
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        Colors.white,
+                      // Upload progress BAR pinned to the bottom of the photo.
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: LinearProgressIndicator(
+                          value: widget.uploadProgress, // null → indeterminate
+                          minHeight: 4,
+                          backgroundColor: Colors.white.withValues(alpha: 0.30),
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
+                    ],
+                  ],
+                ),
+              ),
             ),
             if (hasCaption)
               Container(

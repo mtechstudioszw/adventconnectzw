@@ -579,7 +579,9 @@ paused until redesigned (topic push, not a row per member); Pro plan
 4. `patch_293_message_client_id_unique.sql`
 5. `patch_292_storage_cleanup.sql`, then each VACUUM FULL line on its own.
 6. `patch_208` (ss_highlights) if still wanted.
-7. `patch_295_e2ee_on_for_everyone.sql` — ONLY after the two-phone test
+7. `patch_298_e2ee_resend.sql` — new encrypted messages always open
+   (retry receipts); also stops a one-time key being used up per send.
+8. `patch_295_e2ee_on_for_everyone.sql` — ONLY after the two-phone test
    written at its top.
 
 ## 5. Pending owner actions

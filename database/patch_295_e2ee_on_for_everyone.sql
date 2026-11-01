@@ -1,6 +1,7 @@
 -- =====================================================================
 --  PATCH 295 — switch end-to-end encryption ON for everyone
---  STATUS: not yet applied.  RUN ONLY AFTER patch_294 AND a phone test.
+--  STATUS: not yet applied.  RUN ONLY AFTER patch_294, patch_298 AND a
+--  phone test.
 --
 --  Today e2ee_enabled holds ONE account id (the test allowlist). This
 --  makes every NEW text, photo and voice note in a 1:1 or group chat
@@ -10,9 +11,11 @@
 --
 --  The honest trade-offs — read before running:
 --   1. NO KEY BACKUP YET. Reinstalling the app, or a new phone, means
---      that phone cannot read messages from before; they show "Waiting
---      for this message". WhatsApp solves this with encrypted backups;
---      we have not built that.
+--      that phone cannot read messages from BEFORE the install; they show
+--      "Waiting for this message" (owner: fine for old messages). NEW
+--      messages always open: patch_298 has the sender's phone re-send any
+--      that a phone can't open ("Getting this message…" until it lands —
+--      the sender's phone must come online once).
 --   2. Members on an OLD app build receive "Waiting for this message"
 --      for encrypted photos/voice notes until they update. Text sent to
 --      them is only encrypted if their build published keys.

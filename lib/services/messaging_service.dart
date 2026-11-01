@@ -101,6 +101,8 @@ class MessagingService {
   /// Open the outbox and subscribe to connectivity transitions so
   /// queued messages flush automatically when the device comes back
   /// online. Safe to call multiple times. Hive must already be inited.
+  static Timer? _resendTimer;
+
   static Future<void> startOutboxFlusher() async {
     if (_outboxFlushSub != null) return;
     try {
@@ -111,13 +113,23 @@ class MessagingService {
       return;
     }
     _outboxFlushSub = ConnectivityService.onChanged.listen((online) {
-      if (online) unawaited(flushOutbox());
+      if (online) {
+        unawaited(flushOutbox());
+        // Other phones may have asked this one to re-send messages it
+        // sent (patch_298); back online is when to answer.
+        unawaited(E2eeService.serveResends());
+      }
     });
     // Try once on boot in case we never went offline but the previous
     // session shut down with queued items still present.
     if (ConnectivityService.isOnline) {
       unawaited(flushOutbox());
     }
+    // Answer re-send requests every 2 minutes while the app is running.
+    // One small RPC; empty almost always.
+    _resendTimer ??= Timer.periodic(const Duration(minutes: 2), (_) {
+      if (ConnectivityService.isOnline) unawaited(E2eeService.serveResends());
+    });
   }
 
   /// True when at least one message is queued. Cheap synchronous check.
@@ -232,19 +244,23 @@ class MessagingService {
               plain,
             );
           }
-          await _client.from(_conversationsTable).update({
-            'last_message': encrypted
-                ? E2eeEnvelope.previewSentinel
-                : payload['content'],
-            'last_sender_id': payload['sender_id'],
-            // The outbox is exactly where this matters: `created_at` is the
-            // moment the flush happened, which may be many hours after the
-            // member wrote the message.
-            'last_message_at': (inserted['sent_at'] ??
-                    inserted['created_at'] ??
-                    DateTime.now().toUtc().toIso8601String())
-                .toString(),
-          }).eq('id', payload['conversation_id']);
+          await _client
+              .from(_conversationsTable)
+              .update({
+                'last_message': encrypted
+                    ? E2eeEnvelope.previewSentinel
+                    : payload['content'],
+                'last_sender_id': payload['sender_id'],
+                // The outbox is exactly where this matters: `created_at` is the
+                // moment the flush happened, which may be many hours after the
+                // member wrote the message.
+                'last_message_at':
+                    (inserted['sent_at'] ??
+                            inserted['created_at'] ??
+                            DateTime.now().toUtc().toIso8601String())
+                        .toString(),
+              })
+              .eq('id', payload['conversation_id']);
           AnalyticsService.messageSent(source: 'text_outbox');
           await box.delete(key);
           flushed += 1;
@@ -317,8 +333,8 @@ class MessagingService {
               m['sender_id'] != me) {
             continue;
           }
-          final at = DateTime.tryParse('${m['sent_at']}')?.toLocal() ??
-              DateTime.now();
+          final at =
+              DateTime.tryParse('${m['sent_at']}')?.toLocal() ?? DateTime.now();
           final isVoice = m['kind'] == 'voice';
           final caption = (m['caption'] as String?) ?? '';
           out.add(
@@ -348,7 +364,8 @@ class MessagingService {
             payload['sender_id'] != me) {
           continue;
         }
-        final sentAt = DateTime.tryParse('${payload['sent_at']}')?.toLocal() ??
+        final sentAt =
+            DateTime.tryParse('${payload['sent_at']}')?.toLocal() ??
             DateTime.now();
         out.add(
           Message(
@@ -356,7 +373,8 @@ class MessagingService {
             conversationId: conversationId,
             senderId: me,
             senderName: 'You',
-            content: (decoded['plain'] as String?) ??
+            content:
+                (decoded['plain'] as String?) ??
                 (payload['content'] ?? '').toString(),
             createdAt: sentAt,
             sentAt: sentAt,
@@ -453,8 +471,10 @@ class MessagingService {
     final hits = <String, MessageSearchHit>{};
 
     try {
-      final rows = await _client
-          .rpc('search_my_messages', params: {'p_query': q, 'p_limit': 50});
+      final rows = await _client.rpc(
+        'search_my_messages',
+        params: {'p_query': q, 'p_limit': 50},
+      );
       for (final r in (rows as List)) {
         final m = Map<String, dynamic>.from(r as Map);
         final content = (m['content'] ?? '').toString();
@@ -465,7 +485,8 @@ class MessagingService {
           messageId: m['message_id'].toString(),
           conversationId: m['conversation_id'].toString(),
           content: content,
-          createdAt: DateTime.tryParse(m['created_at']?.toString() ?? '') ??
+          createdAt:
+              DateTime.tryParse(m['created_at']?.toString() ?? '') ??
               DateTime.now(),
           senderId: m['sender_id']?.toString(),
         );
@@ -497,7 +518,10 @@ class MessagingService {
       for (final m in readCachedMessages(convo.id)) {
         final content = m.content;
         if (content.isEmpty) continue;
-        if (content == E2eeEnvelope.placeholder) continue;
+        if (content == E2eeEnvelope.placeholder ||
+            content == E2eeEnvelope.recovering) {
+          continue;
+        }
         if (!content.toLowerCase().contains(needle)) continue;
         out.add(
           MessageSearchHit(
@@ -552,9 +576,7 @@ class MessagingService {
         _client
             .from(_conversationsTable)
             .select(_conversationSelect)
-            .or(
-              'participant_a_id.eq.${user.id},participant_b_id.eq.${user.id}',
-            )
+            .or('participant_a_id.eq.${user.id},participant_b_id.eq.${user.id}')
             .order('last_message_at', ascending: false)
             .limit(100),
         _client
@@ -586,8 +608,8 @@ class MessagingService {
       final deletedAtRaw = isA
           ? raw['deleted_by_a_at']
           : isB
-              ? raw['deleted_by_b_at']
-              : null;
+          ? raw['deleted_by_b_at']
+          : null;
       if (deletedAtRaw == null) return true;
       final deletedAt = DateTime.tryParse(deletedAtRaw.toString());
       if (deletedAt == null) return true;
@@ -627,50 +649,48 @@ class MessagingService {
     // cache-restore preserves badges accurately — caching the raw
     // server response (without counts) was the source of the
     // "open chat, refresh, message reverts to unread" bug.
-    final enriched = filteredResponse
-        .map((r) {
-          final raw = Map<String, dynamic>.from(r as Map);
-          final id = raw['id'].toString();
-          raw['unread_count'] = unreadById[id] ?? 0;
-          // Persist the inbox tick (delivered/read of the LAST outgoing
-          // message) INTO the cached row, so a cache-restore on app open
-          // paints the correct ✓ / ✓✓ / ✓✓(blue) instead of reverting to a
-          // single ✓ — the "tick says sent but it was delivered" bug.
-          final stTick = lastStatus[id];
-          raw['last_delivered'] = stTick?.delivered ?? false;
-          raw['last_read'] = stTick?.read ?? false;
-          // Overlay the per-user preview when we have one (covered convo +
-          // at least one visible message). Church groups / all-hidden convos
-          // aren't returned, so they keep the shared column. Overlaying into
-          // the raw row means the cached inbox is corrected too.
-          final pv = previews[id];
-          if (pv != null) {
-            raw['last_message'] = pv['content'] ?? '';
-            raw['last_message_at'] =
-                pv['sent_at'] ?? pv['created_at'] ?? raw['last_message_at'];
-            raw['last_sender_id'] = pv['sender_id'];
-          }
-          // E2EE: an encrypted thread stores a sentinel server-side, so
-          // the readable line only exists on this device. Swap it in
-          // here — before the row is cached — so the inbox, the cached
-          // inbox and search all see the same text.
-          //
-          // This runs on BOTH the shared column and the patch_127
-          // preview: my_inbox_previews reads `messages.content`, which
-          // for an encrypted row is base64, and that must never reach a
-          // tile.
-          final lastMessage = raw['last_message']?.toString() ?? '';
-          final encryptedPreview =
-              E2eeEnvelope.isSentinelPreview(lastMessage) ||
-              (pv != null && E2eeEnvelope.isEncrypted(Map<String, dynamic>.from(pv)));
-          if (encryptedPreview) {
-            raw['last_message'] =
-                E2eeService.cachedPreview(id) ??
-                E2eeEnvelope.previewPlaceholder;
-          }
-          return raw;
-        })
-        .toList();
+    final enriched = filteredResponse.map((r) {
+      final raw = Map<String, dynamic>.from(r as Map);
+      final id = raw['id'].toString();
+      raw['unread_count'] = unreadById[id] ?? 0;
+      // Persist the inbox tick (delivered/read of the LAST outgoing
+      // message) INTO the cached row, so a cache-restore on app open
+      // paints the correct ✓ / ✓✓ / ✓✓(blue) instead of reverting to a
+      // single ✓ — the "tick says sent but it was delivered" bug.
+      final stTick = lastStatus[id];
+      raw['last_delivered'] = stTick?.delivered ?? false;
+      raw['last_read'] = stTick?.read ?? false;
+      // Overlay the per-user preview when we have one (covered convo +
+      // at least one visible message). Church groups / all-hidden convos
+      // aren't returned, so they keep the shared column. Overlaying into
+      // the raw row means the cached inbox is corrected too.
+      final pv = previews[id];
+      if (pv != null) {
+        raw['last_message'] = pv['content'] ?? '';
+        raw['last_message_at'] =
+            pv['sent_at'] ?? pv['created_at'] ?? raw['last_message_at'];
+        raw['last_sender_id'] = pv['sender_id'];
+      }
+      // E2EE: an encrypted thread stores a sentinel server-side, so
+      // the readable line only exists on this device. Swap it in
+      // here — before the row is cached — so the inbox, the cached
+      // inbox and search all see the same text.
+      //
+      // This runs on BOTH the shared column and the patch_127
+      // preview: my_inbox_previews reads `messages.content`, which
+      // for an encrypted row is base64, and that must never reach a
+      // tile.
+      final lastMessage = raw['last_message']?.toString() ?? '';
+      final encryptedPreview =
+          E2eeEnvelope.isSentinelPreview(lastMessage) ||
+          (pv != null &&
+              E2eeEnvelope.isEncrypted(Map<String, dynamic>.from(pv)));
+      if (encryptedPreview) {
+        raw['last_message'] =
+            E2eeService.cachedPreview(id) ?? E2eeEnvelope.previewPlaceholder;
+      }
+      return raw;
+    }).toList();
     unawaited(_writeInboxCache(enriched));
     final list = enriched.map((raw) {
       var c = Conversation.fromJson(raw, currentUserId: user.id);
@@ -723,7 +743,7 @@ class MessagingService {
   /// Used for the inbox tick. Conversations whose last message is from the
   /// other party are absent.
   static Future<Map<String, ({bool delivered, bool read})>>
-      fetchLastOutgoingStatus() async {
+  fetchLastOutgoingStatus() async {
     try {
       final rows = await _client.rpc('last_outgoing_message_status');
       if (rows is! List) return const {};
@@ -919,7 +939,8 @@ class MessagingService {
       if (isBusiness && convoRow['is_business'] != true) {
         await _client
             .from(_conversationsTable)
-            .update({'is_business': true}).eq('id', convoRow['id']);
+            .update({'is_business': true})
+            .eq('id', convoRow['id']);
         convoRow['is_business'] = true;
       }
     } else {
@@ -983,21 +1004,21 @@ class MessagingService {
       'sender_id': user.id,
       'content': body,
     });
-    await _client.from(_conversationsTable).update({
+    await _client
+        .from(_conversationsTable)
+        .update({
+          'last_message': body,
+          'last_sender_id': user.id,
+          'last_message_at': now,
+        })
+        .eq('id', conversationId);
+
+    return Conversation.fromJson({
+      ...convoRow,
       'last_message': body,
       'last_sender_id': user.id,
       'last_message_at': now,
-    }).eq('id', conversationId);
-
-    return Conversation.fromJson(
-      {
-        ...convoRow,
-        'last_message': body,
-        'last_sender_id': user.id,
-        'last_message_at': now,
-      },
-      currentUserId: user.id,
-    );
+    }, currentUserId: user.id);
   }
 
   /// True when an `accepted` friendship row exists between the two
@@ -1041,17 +1062,13 @@ class MessagingService {
       await _client.rpc(
         'soft_delete_conversation',
         params: {
-          'p_conversation_id':
-              int.tryParse(conversationId) ?? conversationId,
+          'p_conversation_id': int.tryParse(conversationId) ?? conversationId,
         },
       );
     } catch (_) {
       // RPC missing or transient — fall back to the legacy hard delete
       // so the caller's request to dismiss the thread isn't dropped.
-      await _client
-          .from(_conversationsTable)
-          .delete()
-          .eq('id', conversationId);
+      await _client.from(_conversationsTable).delete().eq('id', conversationId);
     }
   }
 
@@ -1061,8 +1078,10 @@ class MessagingService {
   static Future<DateTime?> messageFloor(String conversationId) async {
     if (_client.auth.currentUser == null) return null;
     try {
-      final res = await _client
-          .rpc('message_floor', params: {'p_conv': int.parse(conversationId)});
+      final res = await _client.rpc(
+        'message_floor',
+        params: {'p_conv': int.parse(conversationId)},
+      );
       return res == null ? null : DateTime.tryParse(res.toString());
     } catch (_) {
       return null;
@@ -1080,10 +1099,14 @@ class MessagingService {
   }
 
   /// Message ids the caller has hidden ("deleted for me") in a chat.
-  static Future<Set<String>> fetchHiddenMessageIds(String conversationId) async {
+  static Future<Set<String>> fetchHiddenMessageIds(
+    String conversationId,
+  ) async {
     try {
-      final res = await _client.rpc('hidden_message_ids',
-          params: {'p_conv': int.parse(conversationId)});
+      final res = await _client.rpc(
+        'hidden_message_ids',
+        params: {'p_conv': int.parse(conversationId)},
+      );
       if (res is List) return res.map((e) => e.toString()).toSet();
       return const {};
     } catch (_) {
@@ -1114,10 +1137,14 @@ class MessagingService {
 
   /// Merge [ids] into the locally-persisted hidden set for a conversation.
   static Future<void> addHiddenIdsCached(
-      String conversationId, Iterable<String> ids) async {
+    String conversationId,
+    Iterable<String> ids,
+  ) async {
     final merged = readHiddenIdsCached(conversationId)..addAll(ids);
     await CacheService.writeString(
-        _hiddenCacheKey(conversationId), jsonEncode(merged.toList()));
+      _hiddenCacheKey(conversationId),
+      jsonEncode(merged.toList()),
+    );
   }
 
   // ---- Per-user inbox preview floor --------------------------------------
@@ -1147,12 +1174,16 @@ class MessagingService {
   static final ValueNotifier<int> inboxLocalRevision = ValueNotifier<int>(0);
 
   static Future<void> setInboxPreviewFloor(
-      String conversationId, DateTime ts,
-      {String? hiddenText}) async {
+    String conversationId,
+    DateTime ts, {
+    String? hiddenText,
+  }) async {
     // Store the floor in UTC so the inbox can compare instants regardless of
     // how each side parsed its timestamp.
     await CacheService.writePref(
-        _previewFloorKey(conversationId), ts.toUtc().toIso8601String());
+      _previewFloorKey(conversationId),
+      ts.toUtc().toIso8601String(),
+    );
     final t = hiddenText?.trim() ?? '';
     if (t.isNotEmpty) {
       await CacheService.writePref(_previewTextKey(conversationId), t);
@@ -1177,7 +1208,9 @@ class MessagingService {
       CacheService.readPref(_notMemberKey(conversationId)) == '1';
 
   static Future<void> setGroupBlockedCached(
-      String conversationId, bool blocked) async {
+    String conversationId,
+    bool blocked,
+  ) async {
     if (blocked) {
       await CacheService.writePref(_notMemberKey(conversationId), '1');
     } else {
@@ -1189,9 +1222,10 @@ class MessagingService {
   /// cleared_at (server) and empties the local message cache so the
   /// messages don't reappear from cache on the next (offline) open.
   static Future<void> clearConversation(String conversationId) async {
-    await _client.rpc('clear_conversation', params: {
-      'p_conversation': int.parse(conversationId),
-    });
+    await _client.rpc(
+      'clear_conversation',
+      params: {'p_conversation': int.parse(conversationId)},
+    );
     unawaited(_writeMessagesCache(conversationId, const []));
   }
 
@@ -1219,9 +1253,8 @@ class MessagingService {
         // wrote it beforehand.
         query = query.gt('created_at', clearedAt.toIso8601String());
       }
-      final newestFirst = await query
-          .order('sent_at', ascending: false)
-          .limit(500) as List;
+      final newestFirst =
+          await query.order('sent_at', ascending: false).limit(500) as List;
       response = newestFirst.reversed.toList();
     } catch (_) {
       return readCachedMessages(conversationId);
@@ -1267,7 +1300,9 @@ class MessagingService {
     // "New message", and the server cannot tell us this.
     if (out.isNotEmpty) {
       final newest = out.last['content']?.toString() ?? '';
-      if (newest.isNotEmpty && newest != E2eeEnvelope.placeholder) {
+      if (newest.isNotEmpty &&
+          newest != E2eeEnvelope.placeholder &&
+          newest != E2eeEnvelope.recovering) {
         unawaited(E2eeService.cachePreview(conversationId, newest));
       }
     }
@@ -1300,7 +1335,7 @@ class MessagingService {
       if (convo.isChurchChannel) return null;
 
       if (convo.isGroup) {
-          return await E2eeService.encryptGroup(
+        return await E2eeService.encryptGroup(
           conversationId: conversationId,
           myUserId: me,
           plaintext: body,
@@ -1401,22 +1436,25 @@ class MessagingService {
         message = message.copyWith(content: body);
       }
 
-      await _client.from(_conversationsTable).update({
-        // `last_message` is the ONE place the server would still hold
-        // readable message text: it is denormalised onto a row BOTH
-        // participants can read. Encrypting every body and then copying
-        // the newest one out in the clear would be self-defeating, so an
-        // encrypted send writes a sentinel and the inbox reads the real
-        // line from its own local store.
-        'last_message': encrypted == null
-            ? message.content
-            : E2eeEnvelope.previewSentinel,
-        'last_sender_id': user.id,
-        // Send time here too, or a thread whose newest message was written
-        // offline sorts into the inbox at its flush time instead of where
-        // the member actually left the conversation.
-        'last_message_at': message.sentAt.toIso8601String(),
-      }).eq('id', conversationId);
+      await _client
+          .from(_conversationsTable)
+          .update({
+            // `last_message` is the ONE place the server would still hold
+            // readable message text: it is denormalised onto a row BOTH
+            // participants can read. Encrypting every body and then copying
+            // the newest one out in the clear would be self-defeating, so an
+            // encrypted send writes a sentinel and the inbox reads the real
+            // line from its own local store.
+            'last_message': encrypted == null
+                ? message.content
+                : E2eeEnvelope.previewSentinel,
+            'last_sender_id': user.id,
+            // Send time here too, or a thread whose newest message was written
+            // offline sorts into the inbox at its flush time instead of where
+            // the member actually left the conversation.
+            'last_message_at': message.sentAt.toIso8601String(),
+          })
+          .eq('id', conversationId);
       AnalyticsService.messageSent(source: 'text');
       return message;
     } on PostgrestException {
@@ -1468,7 +1506,9 @@ class MessagingService {
   /// changing which messages are cached (the floor-filtered set from
   /// [fetchMessages] stays intact). Cheap no-op when nothing changed.
   static Future<void> _updateCachedTicks(
-      String conversationId, List<Message> live) async {
+    String conversationId,
+    List<Message> live,
+  ) async {
     final raw = CacheService.readStringStale(_chatCacheKey(conversationId));
     if (raw == null || raw.isEmpty) return;
     try {
@@ -1493,7 +1533,9 @@ class MessagingService {
       }
       if (changed) {
         await CacheService.writeString(
-            _chatCacheKey(conversationId), jsonEncode(rows));
+          _chatCacheKey(conversationId),
+          jsonEncode(rows),
+        );
       }
     } catch (_) {
       // Cache tick refresh is best-effort.
@@ -1516,10 +1558,12 @@ class MessagingService {
       if (user == null) return const [];
       final list = jsonDecode(raw) as List;
       final convos = list
-          .map((row) => Conversation.fromJson(
-                Map<String, dynamic>.from(row as Map),
-                currentUserId: user.id,
-              ))
+          .map(
+            (row) => Conversation.fromJson(
+              Map<String, dynamic>.from(row as Map),
+              currentUserId: user.id,
+            ),
+          )
           .toList();
       // Sort identically to the live fetch (self-chat first, then newest
       // first) so the cache-first paint matches the fresh result and the
@@ -1837,28 +1881,35 @@ class MessagingService {
   /// "This message was deleted" tombstone (the row stays).
   /// Pin (or unpin, with null) a message in a conversation (patch_106).
   static Future<void> setPinnedMessage(
-      String conversationId, String? messageId) async {
-    await _client.rpc('set_pinned_message', params: {
-      'p_conv': int.tryParse(conversationId) ?? conversationId,
-      'p_message_id': messageId == null ? null : int.tryParse(messageId),
-    });
+    String conversationId,
+    String? messageId,
+  ) async {
+    await _client.rpc(
+      'set_pinned_message',
+      params: {
+        'p_conv': int.tryParse(conversationId) ?? conversationId,
+        'p_message_id': messageId == null ? null : int.tryParse(messageId),
+      },
+    );
   }
 
   static Future<void> softDeleteMessage(String messageId) async {
-    await _client.from(_messagesTable).update({
-      'is_deleted': true,
-      'content': '',
-      'media_url': null,
-    }).eq('id', messageId);
+    await _client
+        .from(_messagesTable)
+        .update({'is_deleted': true, 'content': '', 'media_url': null})
+        .eq('id', messageId);
   }
 
   /// Edit a sent message's text (sender only — enforced by RLS). Stamps
   /// edited_at so the UI can show an "edited" label.
   static Future<void> editMessage(String messageId, String newContent) async {
-    await _client.from(_messagesTable).update({
-      'content': newContent.trim(),
-      'edited_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', messageId);
+    await _client
+        .from(_messagesTable)
+        .update({
+          'content': newContent.trim(),
+          'edited_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', messageId);
   }
 
   // ----- Reactions (patch_056) ---------------------------------------
@@ -1897,7 +1948,7 @@ class MessagingService {
   /// WhatsApp. Keyed by conversation id. Best-effort — empty on any error so
   /// the inbox just falls back to the normal last-message preview.
   static Future<Map<String, InboxReactionPreview>>
-      fetchInboxReactionPreviews() async {
+  fetchInboxReactionPreviews() async {
     try {
       final rows = await _client.rpc('my_inbox_reaction_previews');
       final map = <String, InboxReactionPreview>{};
@@ -1975,7 +2026,10 @@ class MessagingService {
   }
 
   // ----- Starred messages (patch_056) --------------------------------
-  static Future<void> toggleStar(String messageId, {required bool starred}) async {
+  static Future<void> toggleStar(
+    String messageId, {
+    required bool starred,
+  }) async {
     final user = _client.auth.currentUser;
     if (user == null) return;
     final id = int.tryParse(messageId);
@@ -2009,8 +2063,10 @@ class MessagingService {
   /// (verified church admin / super admin). Members chat is open.
   static Future<bool> canPostToChurchChannel(String conversationId) async {
     try {
-      final res = await _client.rpc('can_post_church_channel',
-          params: {'p_conv': int.tryParse(conversationId) ?? conversationId});
+      final res = await _client.rpc(
+        'can_post_church_channel',
+        params: {'p_conv': int.tryParse(conversationId) ?? conversationId},
+      );
       return res == true;
     } catch (_) {
       return false;
@@ -2033,8 +2089,8 @@ class MessagingService {
   /// Per-user pin/mute/archive flags, keyed by conversation id. Empty
   /// map on error so the inbox still renders with default (unflagged)
   /// state.
-  static Future<Map<String, ConversationState>>
-      fetchConversationStates() => ChatSync.loadStates();
+  static Future<Map<String, ConversationState>> fetchConversationStates() =>
+      ChatSync.loadStates();
 
   /// Set one or more pin/mute/archive flags for a conversation (upsert).
   static Future<void> setConversationFlags(
@@ -2067,8 +2123,11 @@ class MessagingService {
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
       return (rows as List)
-          .map((r) => Message.fromJson(
-              ((r as Map)['messages']) as Map<String, dynamic>))
+          .map(
+            (r) => Message.fromJson(
+              ((r as Map)['messages']) as Map<String, dynamic>,
+            ),
+          )
           .toList();
     } catch (_) {
       return const [];
@@ -2086,7 +2145,9 @@ class MessagingService {
 
   /// [fetchStarredIds] that THROWS on failure, so [ChatSync] can tell
   /// "you starred nothing" apart from "couldn't ask" and keep its cache.
-  static Future<Set<String>> fetchStarredIdsStrict(String conversationId) async {
+  static Future<Set<String>> fetchStarredIdsStrict(
+    String conversationId,
+  ) async {
     final rows = await _client
         .from('starred_messages')
         .select('message_id, messages!inner(conversation_id)')
@@ -2158,8 +2219,8 @@ class MessagingService {
           .select('show_read_receipts')
           .eq('id', user.id)
           .maybeSingle();
-      final wantsReceipts = profileRow == null ||
-          profileRow['show_read_receipts'] != false;
+      final wantsReceipts =
+          profileRow == null || profileRow['show_read_receipts'] != false;
       // patch_032: same RLS reason as markMessagesDelivered — recipient
       // cannot UPDATE the row directly, so we go through the SECURITY
       // DEFINER RPC. p_with_timestamp=false leaves read_at NULL so the
@@ -2174,17 +2235,22 @@ class MessagingService {
       );
       // Also stamp last_read_at so church groups (implicit membership,
       // no per-message read flag) clear their unread badge (patch_090).
-      await _client.rpc('mark_conversation_read_at',
-          params: {'p_conv': int.tryParse(conversationId) ?? conversationId});
+      await _client.rpc(
+        'mark_conversation_read_at',
+        params: {'p_conv': int.tryParse(conversationId) ?? conversationId},
+      );
     } catch (_) {
       // Read receipts are best-effort — never block chat rendering.
     }
     // Groups don't use the 1:1 read boolean — stamp the per-member
     // last-read marker so the group's unread badge clears (patch_060).
     try {
-      await _client.rpc('mark_group_read', params: {
-        'p_conversation': int.tryParse(conversationId) ?? conversationId,
-      });
+      await _client.rpc(
+        'mark_group_read',
+        params: {
+          'p_conversation': int.tryParse(conversationId) ?? conversationId,
+        },
+      );
     } catch (_) {
       // Not a group / RPC issue — ignore.
     }
@@ -2323,8 +2389,7 @@ class MessagingService {
     if (!await file.exists()) {
       throw const StorageException('Recording not found on disk.');
     }
-    final clientId =
-        'v-${DateTime.now().microsecondsSinceEpoch}-${user.id}';
+    final clientId = 'v-${DateTime.now().microsecondsSinceEpoch}-${user.id}';
     final sentAt = DateTime.now().toUtc().toIso8601String();
     final bytes = await file.readAsBytes();
     Future<Never> queue() async {
@@ -2404,8 +2469,9 @@ class MessagingService {
     final safe = storagePath.replaceAll(RegExp(r'[^A-Za-z0-9_.-]'), '_');
     final file = File('${cacheDir.path}/$safe');
     if (file.existsSync() && file.lengthSync() > 0) return file.path;
-    final cipher =
-        await _client.storage.from(_chatMediaBucket).download(storagePath);
+    final cipher = await _client.storage
+        .from(_chatMediaBucket)
+        .download(storagePath);
     await file.writeAsBytes(MediaCrypto.decrypt(cipher, key), flush: true);
     return file.path;
   }
@@ -2461,8 +2527,9 @@ class MessagingService {
     required void Function(double progress) onProgress,
   }) async {
     try {
-      final signed =
-          await _client.storage.from(bucket).createSignedUploadUrl(storagePath);
+      final signed = await _client.storage
+          .from(bucket)
+          .createSignedUploadUrl(storagePath);
       final client = HttpClient();
       final req = await client.putUrl(Uri.parse(signed.signedUrl));
       req.headers.set(HttpHeaders.contentTypeHeader, contentType);
@@ -2485,7 +2552,9 @@ class MessagingService {
       }
     } catch (_) {
       onProgress(0.99); // show near-complete while the fallback runs
-      await _client.storage.from(bucket).uploadBinary(
+      await _client.storage
+          .from(bucket)
+          .uploadBinary(
             storagePath,
             bytes,
             fileOptions: FileOptions(contentType: contentType, upsert: false),
@@ -2515,8 +2584,7 @@ class MessagingService {
       throw const AuthException('Sign in to send photos.');
     }
     final text = (caption ?? '').trim();
-    final clientId =
-        'i-${DateTime.now().microsecondsSinceEpoch}-${user.id}';
+    final clientId = 'i-${DateTime.now().microsecondsSinceEpoch}-${user.id}';
     final sentAt = DateTime.now().toUtc().toIso8601String();
     Future<Never> queue() async {
       await _enqueueMedia(
@@ -2638,17 +2706,23 @@ class MessagingService {
       // Our own copy of the key — the ratchet can't reopen what it sealed.
       await E2eeService.cachePlaintext(message.id, envelope);
       await E2eeService.cachePreview(conversationId, preview);
-      message = Message.fromJson(E2eeEnvelope.withPlaintext(
-        Map<String, dynamic>.from(response),
-        envelope,
-      ));
+      message = Message.fromJson(
+        E2eeEnvelope.withPlaintext(
+          Map<String, dynamic>.from(response),
+          envelope,
+        ),
+      );
     }
-    await _client.from(_conversationsTable).update({
-      'last_message':
-          encrypted != null ? E2eeEnvelope.previewSentinel : preview,
-      'last_sender_id': user.id,
-      'last_message_at': message.sentAt.toIso8601String(),
-    }).eq('id', conversationId);
+    await _client
+        .from(_conversationsTable)
+        .update({
+          'last_message': encrypted != null
+              ? E2eeEnvelope.previewSentinel
+              : preview,
+          'last_sender_id': user.id,
+          'last_message_at': message.sentAt.toIso8601String(),
+        })
+        .eq('id', conversationId);
     AnalyticsService.messageSent(source: kind);
     return message;
   }
@@ -2716,20 +2790,22 @@ class MessagingService {
       await dir.create(recursive: true);
       final file = File('${dir.path}/$clientId.$ext');
       await file.writeAsBytes(bytes, flush: true);
-      await box.add(jsonEncode({
-        'media': {
-          'kind': kind,
-          'conversation_id': conversationId,
-          'sender_id': me,
-          'local_path': file.path,
-          'ext': ext,
-          'client_id': clientId,
-          'sent_at': sentAt,
-          'caption': ?caption,
-          'duration': ?durationSeconds,
-          'reply_to_id': ?replyToId,
-        },
-      }));
+      await box.add(
+        jsonEncode({
+          'media': {
+            'kind': kind,
+            'conversation_id': conversationId,
+            'sender_id': me,
+            'local_path': file.path,
+            'ext': ext,
+            'client_id': clientId,
+            'sent_at': sentAt,
+            'caption': ?caption,
+            'duration': ?durationSeconds,
+            'reply_to_id': ?replyToId,
+          },
+        }),
+      );
       outboxRevision.value++;
     } catch (e, st) {
       debugPrint('MessagingService: media enqueue failed: $e\n$st');
@@ -2801,11 +2877,14 @@ class MessagingService {
           .select()
           .single();
       final message = Message.fromJson(response);
-      await _client.from(_conversationsTable).update({
-        'last_message': content,
-        'last_sender_id': user.id,
-        'last_message_at': message.sentAt.toIso8601String(),
-      }).eq('id', targetConversationId);
+      await _client
+          .from(_conversationsTable)
+          .update({
+            'last_message': content,
+            'last_sender_id': user.id,
+            'last_message_at': message.sentAt.toIso8601String(),
+          })
+          .eq('id', targetConversationId);
       AnalyticsService.messageSent(source: 'forward_$type');
     } else {
       await sendMessage(
@@ -2831,8 +2910,10 @@ class MessagingService {
     final url = await _client.storage
         .from(_chatMediaBucket)
         .createSignedUrl(storagePath, ttlSeconds);
-    _signedMediaCache[storagePath] =
-        _SignedUrlEntry(url, now.add(Duration(seconds: ttlSeconds)));
+    _signedMediaCache[storagePath] = _SignedUrlEntry(
+      url,
+      now.add(Duration(seconds: ttlSeconds)),
+    );
     return url;
   }
 

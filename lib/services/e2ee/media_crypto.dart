@@ -24,19 +24,19 @@ class MediaKey {
   /// The body a media message's ciphertext carries, as JSON text:
   /// `{"e2m":1,"t":"image","k":"…","n":"…","c":"caption"}`.
   String envelope({required String kind, String? caption}) => jsonEncode({
-        _marker: 1,
-        't': kind,
-        'k': base64Encode(key),
-        'n': base64Encode(nonce),
-        if ((caption ?? '').trim().isNotEmpty) 'c': caption!.trim(),
-      });
+    _marker: 1,
+    't': kind,
+    'k': base64Encode(key),
+    'n': base64Encode(nonce),
+    if ((caption ?? '').trim().isNotEmpty) 'c': caption!.trim(),
+  });
 
   /// What a decrypted row stores in `meta` so the bubble can open the
   /// file. Kept on the phone only — never written back to the server.
   Map<String, String> toMeta() => {
-        'k': base64Encode(key),
-        'n': base64Encode(nonce),
-      };
+    'k': base64Encode(key),
+    'n': base64Encode(nonce),
+  };
 
   static MediaKey? fromMeta(Object? meta) {
     if (meta is! Map) return null;
@@ -103,9 +103,10 @@ class MediaCrypto {
       Uint8List.fromList(List<int>.generate(n, (_) => _rng.nextInt(256)));
 
   static GCMBlockCipher _cipher(bool encrypt, MediaKey k) =>
-      GCMBlockCipher(AESEngine())
-        ..init(encrypt, AEADParameters(KeyParameter(k.key), 128, k.nonce,
-            Uint8List(0)));
+      GCMBlockCipher(AESEngine())..init(
+        encrypt,
+        AEADParameters(KeyParameter(k.key), 128, k.nonce, Uint8List(0)),
+      );
 
   /// Encrypts [plain] under a fresh key. The output carries the 16-byte
   /// GCM tag at its end, so tampering is detected on the way back.

@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/message_model.dart';
 import 'analytics_service.dart';
 import 'cache_service.dart';
+import 'chat_sync_service.dart';
 import 'connectivity_service.dart';
 import 'e2ee/e2ee_envelope.dart';
 import 'e2ee/e2ee_service.dart';
@@ -148,6 +149,8 @@ class MessagingService {
     } catch (e) {
       debugPrint('MessagingService: outbox clear failed: $e');
     }
+    // Queued reactions/pins/stars belong to this account too.
+    await ChatSync.clear();
     try {
       await CacheService.deletePrefsWithPrefix('pref:draft:');
     } catch (e) {
@@ -170,8 +173,18 @@ class MessagingService {
         final raw = box.get(key);
         if (raw == null) continue;
         Map<String, dynamic> payload;
+        String? plain;
         try {
-          payload = jsonDecode(raw) as Map<String, dynamic>;
+          final decoded = jsonDecode(raw) as Map<String, dynamic>;
+          // New shape (1 Nov 2026): {payload, plain} so an encrypted queued
+          // message can still be shown as text while it waits. Old entries
+          // are the bare payload.
+          if (decoded['payload'] is Map) {
+            payload = Map<String, dynamic>.from(decoded['payload'] as Map);
+            plain = decoded['plain'] as String?;
+          } else {
+            payload = decoded;
+          }
         } catch (_) {
           await box.delete(key);
           continue;
@@ -192,8 +205,20 @@ class MessagingService {
               .insert(payload)
               .select()
               .single();
+          final encrypted = payload['e2ee_version'] != null;
+          if (encrypted && plain != null) {
+            // Same as a live send: keep our own plaintext, since the
+            // ratchet cannot decrypt what it encrypted.
+            await E2eeService.cachePlaintext(inserted['id'].toString(), plain);
+            await E2eeService.cachePreview(
+              payload['conversation_id'].toString(),
+              plain,
+            );
+          }
           await _client.from(_conversationsTable).update({
-            'last_message': payload['content'],
+            'last_message': encrypted
+                ? E2eeEnvelope.previewSentinel
+                : payload['content'],
             'last_sender_id': payload['sender_id'],
             // The outbox is exactly where this matters: `created_at` is the
             // moment the flush happened, which may be many hours after the
@@ -206,6 +231,25 @@ class MessagingService {
           AnalyticsService.messageSent(source: 'text_outbox');
           await box.delete(key);
           flushed += 1;
+        } on PostgrestException catch (e) {
+          // 23505: this exact message (sender + client_id, patch_293)
+          // already reached the server — the response was lost the first
+          // time. It is sent; take it off the queue.
+          if (e.code == '23505') {
+            await box.delete(key);
+            flushed += 1;
+            continue;
+          }
+          if (ChatSync.isPermanentRefusal(e)) {
+            // A definite no (blocked, removed from the group…): it can
+            // never send, and keeping it would jam every message behind it.
+            debugPrint('MessagingService: outbox row refused: ${e.message}');
+            await box.delete(key);
+            continue;
+          }
+          // Overloaded / timed out: keep it and try again later.
+          debugPrint('MessagingService: outbox row will retry: ${e.message}');
+          break;
         } catch (e, st) {
           debugPrint('MessagingService: outbox flush row failed: $e\n$st');
           // Leave the row in the box; we'll retry on the next online
@@ -216,17 +260,69 @@ class MessagingService {
     } finally {
       _flushInFlight = false;
     }
+    if (flushed > 0) outboxRevision.value++;
     return flushed;
   }
 
-  static Future<void> _enqueueOutbox(Map<String, dynamic> payload) async {
+  static Future<void> _enqueueOutbox(
+    Map<String, dynamic> payload, {
+    String? plain,
+  }) async {
     final box = _outbox;
     if (box == null) return;
     try {
-      await box.add(jsonEncode(payload));
+      await box.add(jsonEncode({'payload': payload, 'plain': ?plain}));
+      outboxRevision.value++;
     } catch (e, st) {
       debugPrint('MessagingService: enqueue failed: $e\n$st');
     }
+  }
+
+  /// Bumped when a message is queued, so open chats can show it.
+  static final ValueNotifier<int> outboxRevision = ValueNotifier(0);
+
+  /// Messages waiting in the outbox for [conversationId], as Message rows
+  /// the chat can draw with a clock — they survive closing the app, the
+  /// way WhatsApp keeps an unsent message in the thread.
+  static List<Message> outboxFor(String conversationId) {
+    final box = _outbox;
+    final me = _client.auth.currentUser?.id;
+    if (box == null || me == null) return const [];
+    final out = <Message>[];
+    for (final key in box.keys) {
+      final raw = box.get(key);
+      if (raw == null) continue;
+      try {
+        final decoded = jsonDecode(raw) as Map<String, dynamic>;
+        final payload = decoded['payload'] is Map
+            ? Map<String, dynamic>.from(decoded['payload'] as Map)
+            : decoded;
+        if (payload['conversation_id']?.toString() != conversationId ||
+            payload['sender_id'] != me) {
+          continue;
+        }
+        final sentAt = DateTime.tryParse('${payload['sent_at']}')?.toLocal() ??
+            DateTime.now();
+        out.add(
+          Message(
+            id: 'outbox-$key',
+            conversationId: conversationId,
+            senderId: me,
+            senderName: 'You',
+            content: (decoded['plain'] as String?) ??
+                (payload['content'] ?? '').toString(),
+            createdAt: sentAt,
+            sentAt: sentAt,
+            messageType: (payload['message_type'] ?? 'text').toString(),
+            meta: payload['meta'] is Map
+                ? Map<String, dynamic>.from(payload['meta'] as Map)
+                : null,
+            clientId: payload['client_id'] as String?,
+          ),
+        );
+      } catch (_) {}
+    }
+    return out;
   }
 
   /// Realtime Broadcast channel name for the typing indicator. Keeping
@@ -1234,7 +1330,7 @@ class MessagingService {
     // UI can show a "we'll send this when you reconnect" hint instead
     // of the generic failure snackbar.
     if (!ConnectivityService.isOnline) {
-      await _enqueueOutbox(payload);
+      await _enqueueOutbox(payload, plain: encrypted != null ? body : null);
       throw const OutboxQueuedException();
     }
 
@@ -1276,14 +1372,18 @@ class MessagingService {
       }).eq('id', conversationId);
       AnalyticsService.messageSent(source: 'text');
       return message;
-    } catch (e) {
-      // If the network dropped between the connectivity check and the
-      // insert, fall back to the outbox.
-      if (!ConnectivityService.isOnline) {
-        await _enqueueOutbox(payload);
-        throw const OutboxQueuedException();
-      }
+    } on PostgrestException {
+      // The server answered and said no (blocked, friend gate, RLS). Not a
+      // connection problem — the caller shows the reason.
       rethrow;
+    } catch (e) {
+      // Anything else is the connection: dropped mid-send, timed out, or a
+      // "connected" Wi-Fi with no internet behind it. WhatsApp keeps the
+      // message and sends it later; so do we, instead of throwing it away.
+      // A lost response cannot double-post: client_id is unique per sender
+      // (patch_293) and the flush treats the duplicate as already sent.
+      await _enqueueOutbox(payload, plain: encrypted != null ? body : null);
+      throw const OutboxQueuedException();
     }
   }
 
@@ -1773,26 +1873,57 @@ class MessagingService {
   static Future<Map<String, Map<String, int>>> fetchReactions(
     String conversationId,
   ) async {
-    final user = _client.auth.currentUser;
     try {
-      final rows = await _client
-          .from('message_reactions')
-          .select('message_id, user_id, emoji, messages!inner(conversation_id)')
-          .eq('messages.conversation_id', int.parse(conversationId));
-      final out = <String, Map<String, int>>{};
-      for (final r in rows as List) {
-        final map = r as Map<String, dynamic>;
-        final mid = map['message_id'].toString();
-        final emoji = map['emoji'].toString();
-        final byMsg = out.putIfAbsent(mid, () => <String, int>{});
-        byMsg[emoji] = (byMsg[emoji] ?? 0) + 1;
-        if (user != null && map['user_id'].toString() == user.id) {
-          byMsg['_mine_$emoji'] = 1;
-        }
-      }
-      return out;
+      return await fetchReactionsStrict(conversationId);
     } catch (_) {
       return const {};
+    }
+  }
+
+  /// [fetchReactions] that THROWS on failure — see [fetchStarredIdsStrict].
+  static Future<Map<String, Map<String, int>>> fetchReactionsStrict(
+    String conversationId,
+  ) async {
+    final user = _client.auth.currentUser;
+    final rows = await _client
+        .from('message_reactions')
+        .select('message_id, user_id, emoji, messages!inner(conversation_id)')
+        .eq('messages.conversation_id', int.parse(conversationId))
+        .timeout(const Duration(seconds: 12));
+    final out = <String, Map<String, int>>{};
+    for (final r in rows as List) {
+      final map = r as Map<String, dynamic>;
+      final mid = map['message_id'].toString();
+      final emoji = map['emoji'].toString();
+      final byMsg = out.putIfAbsent(mid, () => <String, int>{});
+      byMsg[emoji] = (byMsg[emoji] ?? 0) + 1;
+      if (user != null && map['user_id'].toString() == user.id) {
+        byMsg['_mine_$emoji'] = 1;
+      }
+    }
+    return out;
+  }
+
+  /// Make the viewer's reaction on [messageId] exactly [emoji] — or none,
+  /// with null. Absolute rather than a toggle, so replaying it from the
+  /// offline queue (or twice) always lands in the state the member chose.
+  static Future<void> setReaction(String messageId, String? emoji) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return;
+    final id = int.tryParse(messageId);
+    if (id == null) return;
+    if (emoji == null) {
+      await _client
+          .from('message_reactions')
+          .delete()
+          .eq('message_id', id)
+          .eq('user_id', user.id);
+    } else {
+      await _client.from('message_reactions').upsert({
+        'message_id': id,
+        'user_id': user.id,
+        'emoji': emoji,
+      });
     }
   }
 
@@ -1856,23 +1987,7 @@ class MessagingService {
   /// map on error so the inbox still renders with default (unflagged)
   /// state.
   static Future<Map<String, ConversationState>>
-      fetchConversationStates() async {
-    final user = _client.auth.currentUser;
-    if (user == null) return const {};
-    try {
-      final rows = await _client
-          .from('conversation_state')
-          .select()
-          .eq('user_id', user.id);
-      return {
-        for (final r in (rows as List))
-          (r as Map)['conversation_id'].toString():
-              ConversationState.fromJson(Map<String, dynamic>.from(r)),
-      };
-    } catch (_) {
-      return const {};
-    }
-  }
+      fetchConversationStates() => ChatSync.loadStates();
 
   /// Set one or more pin/mute/archive flags for a conversation (upsert).
   static Future<void> setConversationFlags(
@@ -1916,16 +2031,23 @@ class MessagingService {
   /// The set of message ids the viewer has starred in a conversation.
   static Future<Set<String>> fetchStarredIds(String conversationId) async {
     try {
-      final rows = await _client
-          .from('starred_messages')
-          .select('message_id, messages!inner(conversation_id)')
-          .eq('messages.conversation_id', int.parse(conversationId));
-      return (rows as List)
-          .map((r) => (r as Map)['message_id'].toString())
-          .toSet();
+      return await fetchStarredIdsStrict(conversationId);
     } catch (_) {
       return <String>{};
     }
+  }
+
+  /// [fetchStarredIds] that THROWS on failure, so [ChatSync] can tell
+  /// "you starred nothing" apart from "couldn't ask" and keep its cache.
+  static Future<Set<String>> fetchStarredIdsStrict(String conversationId) async {
+    final rows = await _client
+        .from('starred_messages')
+        .select('message_id, messages!inner(conversation_id)')
+        .eq('messages.conversation_id', int.parse(conversationId))
+        .timeout(const Duration(seconds: 12));
+    return (rows as List)
+        .map((r) => (r as Map)['message_id'].toString())
+        .toSet();
   }
 
   static Future<void> markMessagesDelivered(List<String> messageIds) async {

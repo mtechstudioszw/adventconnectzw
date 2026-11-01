@@ -22,6 +22,7 @@ import '../../services/marketplace_service.dart';
 import '../../services/gallery_service.dart';
 import '../../services/group_service.dart';
 import '../../services/connectivity_service.dart';
+import '../../services/chat_sync_service.dart';
 import '../../services/messaging_service.dart';
 import '../../services/presence_service.dart';
 import '../../services/storage_service.dart';
@@ -113,9 +114,18 @@ class _ChatScreenState extends State<ChatScreen>
   /// rendered once, regardless of the order events arrive.
   List<Message> get _messages {
     final serverIds = _serverMessages.map((m) => m.id).toSet();
+    // Also by client id: a message queued offline (or restored from the
+    // outbox after a restart) never gets its temp id swapped — the server
+    // copy arrives through the stream carrying the same client_id.
+    final serverClientIds = {
+      for (final m in _serverMessages)
+        if (m.clientId != null) m.clientId!,
+    };
     final merged = <Message>[..._serverMessages];
     for (final p in _pending) {
-      if (!serverIds.contains(p.id)) merged.add(p);
+      if (serverIds.contains(p.id)) continue;
+      if (p.clientId != null && serverClientIds.contains(p.clientId)) continue;
+      merged.add(p);
     }
     merged.sort((a, b) {
       final c = a.sentAt.compareTo(b.sentAt);
@@ -934,6 +944,9 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _bootstrap();
     _resolveConversation();
+    // Unsent messages from earlier — shown with a clock, sent on reconnect.
+    _loadOutbox();
+    MessagingService.outboxRevision.addListener(_loadOutbox);
     // Opening the chat clears its tray notification (WhatsApp parity) — the
     // user is now reading it, so the heads-up shouldn't linger.
     PushService.cancelConversationNotification(widget.conversationId);
@@ -982,20 +995,55 @@ class _ChatScreenState extends State<ChatScreen>
         setState(() => _conversation = fetched);
       }
     }
-    if (mounted) setState(() => _pinnedId = _conversation?.pinnedMessageId);
+    // A pin changed offline wins over the server's copy until it syncs.
+    final queuedPin = ChatSync.pendingPinned(widget.conversationId);
+    if (mounted) {
+      setState(
+        () => _pinnedId = queuedPin == null
+            ? _conversation?.pinnedMessageId
+            : (queuedPin.isEmpty ? null : queuedPin),
+      );
+    }
     _wirePresence();
     _maybeLoadGroupMembers();
   }
 
+  /// Reactions and stars: the phone's copy first (works offline, survives
+  /// a restart), then the server's — with anything still queued laid on
+  /// top, so a reaction made offline never "forgets" (1 Nov 2026).
   Future<void> _loadReactionsAndStars() async {
-    final results = await Future.wait([
-      MessagingService.fetchReactions(widget.conversationId),
-      MessagingService.fetchStarredIds(widget.conversationId),
+    final cid = widget.conversationId;
+    if (_reactions.isEmpty && _starredIds.isEmpty) {
+      setState(() {
+        _reactions = ChatSync.cachedReactions(cid);
+        _starredIds = ChatSync.cachedStars(cid);
+      });
+    }
+    final results = await Future.wait<Object>([
+      ChatSync.loadReactions(cid),
+      ChatSync.loadStars(cid),
     ]);
     if (!mounted) return;
     setState(() {
       _reactions = results[0] as Map<String, Map<String, int>>;
       _starredIds = results[1] as Set<String>;
+    });
+  }
+
+  /// Messages still waiting to send — from this session or an earlier one.
+  /// Drawn with a clock until the outbox delivers them.
+  void _loadOutbox() {
+    if (!mounted) return;
+    final queued = MessagingService.outboxFor(widget.conversationId);
+    setState(() {
+      _pending.removeWhere((m) => m.id.startsWith('outbox-'));
+      for (final q in queued) {
+        // Skip one this session is already showing under its temp id.
+        final dup = _pending.any(
+          (p) => p.clientId != null && p.clientId == q.clientId,
+        );
+        if (!dup) _pending.add(q);
+      }
     });
   }
 
@@ -1038,7 +1086,6 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _toggleStar(Message m) async {
-    if (!_ensureOnline('star messages')) return;
     final starred = _starredIds.contains(m.id);
     setState(() {
       if (starred) {
@@ -1047,24 +1094,18 @@ class _ChatScreenState extends State<ChatScreen>
         _starredIds.add(m.id);
       }
     });
-    await MessagingService.toggleStar(m.id, starred: starred);
+    // Offline too: kept on the phone, sent when there's a connection.
+    await ChatSync.setStar(widget.conversationId, m.id, !starred);
   }
 
   Future<void> _togglePin(Message m) async {
-    if (!_ensureOnline('pin messages')) return;
     final wasPinned = _pinnedId == m.id;
     setState(() => _pinnedId = wasPinned ? null : m.id);
-    try {
-      await MessagingService.setPinnedMessage(
-        widget.conversationId,
-        wasPinned ? null : m.id,
-      );
-    } catch (_) {
-      if (mounted) {
-        setState(() => _pinnedId = wasPinned ? m.id : null);
-        _toast('Could not update the pin.');
-      }
-    }
+    // Offline too: kept on the phone, sent when there's a connection.
+    await ChatSync.setPinnedMessage(
+      widget.conversationId,
+      wasPinned ? null : m.id,
+    );
   }
 
   Future<void> _react(Message m, String emoji) async {
@@ -1082,19 +1123,30 @@ class _ChatScreenState extends State<ChatScreen>
         current[emoji] = c;
       }
     } else {
+      // One reaction per person (the server replaces it), so switching
+      // from ❤️ to 👍 takes the ❤️ off first.
+      for (final k in current.keys.where((k) => k.startsWith('_mine_')).toList()) {
+        final old = k.substring(6);
+        current.remove(k);
+        final c = (current[old] ?? 1) - 1;
+        if (c <= 0) {
+          current.remove(old);
+        } else {
+          current[old] = c;
+        }
+      }
       current[mineKey] = 1;
       current[emoji] = (current[emoji] ?? 0) + 1;
     }
     setState(() => _reactions = {..._reactions, m.id: current});
-    try {
-      await MessagingService.toggleReaction(m.id, emoji);
-      _loadReactionsAndStars(); // reconcile with server truth
-    } catch (_) {
-      if (mounted) {
-        _loadReactionsAndStars(); // revert to server truth on failure
-        _toast('Reaction will retry when you\'re back online.');
-      }
+    // What the member now has on this message: the emoji, or nothing.
+    String? mine;
+    for (final k in current.keys) {
+      if (k.startsWith('_mine_')) mine = k.substring(6);
     }
+    // Kept on the phone at once and sent when there's a connection — it
+    // never reverts (1 Nov 2026: "it forgets … WhatsApp remembers").
+    await ChatSync.setReaction(widget.conversationId, m.id, mine);
   }
 
   /// Forward a (text) message: pick a destination chat, then re-send the
@@ -1470,6 +1522,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   @override
   void dispose() {
+    MessagingService.outboxRevision.removeListener(_loadOutbox);
     if (PushService.openConversationId == widget.conversationId) {
       PushService.openConversationId = null;
     }
@@ -2210,9 +2263,7 @@ class _ChatScreenState extends State<ChatScreen>
   /// friends. Mirrors how Facebook/Instagram surface stranger DMs.
   Future<void> _unpin() async {
     setState(() => _pinnedId = null);
-    try {
-      await MessagingService.setPinnedMessage(widget.conversationId, null);
-    } catch (_) {}
+    await ChatSync.setPinnedMessage(widget.conversationId, null);
   }
 
   Widget _buildPinnedBanner() {
@@ -3495,7 +3546,8 @@ class _ChatScreenState extends State<ChatScreen>
                           // sent (✓) / delivered (✓✓ grey) there — never
                           // blue. 1:1 keeps the full three-state tick.
                           Icon(
-                            (m.id.startsWith('pending-') &&
+                            ((m.id.startsWith('pending-') ||
+                                        m.id.startsWith('outbox-')) &&
                                     !_localSentIds.contains(m.id))
                                 ? Icons.access_time
                                 : (m.deliveredAt != null || m.read

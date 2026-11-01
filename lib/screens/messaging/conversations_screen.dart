@@ -10,6 +10,7 @@ import '../../models/story_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
 import '../../services/group_service.dart';
+import '../../services/chat_sync_service.dart';
 import '../../services/messaging_service.dart';
 import '../../widgets/advent_ai_mark.dart';
 import '../../widgets/church_group_avatar.dart';
@@ -339,6 +340,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     // screen never blanks on cold start, even offline. The fresh
     // network fetch below replaces it once it lands.
     final cachedInbox = MessagingService.readCachedInbox();
+    // Pins, mutes and archives come from the phone too, so pinned chats
+    // sit at the top from the very first frame — they used to drop down
+    // until the server answered, then jump back up (1 Nov 2026).
+    final cachedStates = ChatSync.cachedStates();
+    if (cachedStates.isNotEmpty) _convStates = cachedStates;
     if (cachedInbox.isNotEmpty) {
       setState(() {
         _conversations = cachedInbox;
@@ -354,17 +360,23 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       // Make sure the viewer's church channel + members conversations
       // exist before we fetch, so they show on first open.
       await MessagingService.ensureMyChurchConversations();
-      final results = await Future.wait([
+      // Each part falls back on its own (1 Nov 2026): one slow request
+      // used to time out the whole Future.wait and leave the screen on
+      // whatever it had, pins included.
+      Future<T> soft<T>(Future<T> f, T fallback) => f
+          .timeout(const Duration(seconds: 15))
+          .catchError((Object _) => fallback);
+      final results = await Future.wait<Object>([
         MessagingService.fetchConversations(),
-        FeedService.fetchStories(),
-        FeedService.fetchPendingFriendRequests(),
+        soft(FeedService.fetchStories(), _stories),
+        soft(FeedService.fetchPendingFriendRequests(), _friendRequests),
         MessagingService.fetchConversationStates(),
-        FeedService.fetchMyViewedStoryIds(),
-        MessagingService.fetchInboxReactionPreviews(),
+        soft(FeedService.fetchMyViewedStoryIds(), _viewedStoryIds),
+        soft(MessagingService.fetchInboxReactionPreviews(), _reactionPreviews),
         // Who the viewer is ACTUALLY friends with — the Friends chip
         // needs real friendships, not "is a 1:1 chat".
-        FeedService.fetchMyFriendships(),
-      ]).timeout(const Duration(seconds: 15));
+        soft(FeedService.fetchMyFriendships(), const <Friendship>[]),
+      ]).timeout(const Duration(seconds: 20));
       if (!mounted) return;
       setState(() {
         _conversations = results[0] as List<Conversation>;
@@ -1777,29 +1789,18 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           pinned: pinned ?? current.pinned,
           muted: muted ?? current.muted,
           archived: archived ?? current.archived,
+          clearedAt: current.clearedAt,
         ),
       };
     });
-    try {
-      await MessagingService.setConversationFlags(
-        c.id,
-        pinned: pinned,
-        muted: muted,
-        archived: archived,
-      );
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppColors.red,
-            content: Text(
-              'Could not update. Try again.',
-              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
-            ),
-          ),
-        );
-      }
-    }
+    // Saved on the phone at once and sent when there's a connection —
+    // it never fails from the member's point of view (1 Nov 2026).
+    await ChatSync.setFlags(
+      c.id,
+      pinned: pinned,
+      muted: muted,
+      archived: archived,
+    );
   }
 
   Future<void> _openConversationActions(Conversation c) async {

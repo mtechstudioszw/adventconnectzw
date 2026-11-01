@@ -23,6 +23,7 @@ import 'services/music_download_service.dart';
 import 'services/music_player_service.dart';
 import 'config/platform_flags.dart';
 import 'services/billing/billing_service.dart';
+import 'services/chat_sync_service.dart';
 import 'services/premium_service.dart';
 import 'services/usage_analytics.dart';
 import 'services/maintenance_service.dart';
@@ -173,6 +174,8 @@ Future<void> _initBackgroundServices() async {
 
   // Outbox flusher needs Hive from Phase 1 above. Fire and forget.
   unawaited(MessagingService.startOutboxFlusher());
+  // Offline reactions / pins / stars / chat flags (1 Nov 2026).
+  unawaited(ChatSync.start());
 
   // Feature-usage tracking. This is the data source behind the admin
   // console's "which features are used and which are ignored" — before

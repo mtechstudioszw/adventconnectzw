@@ -68,7 +68,9 @@ class CacheService {
 
   /// Chat/inbox caches are read "stale" for offline, so they outlive the
   /// default TTL too, just by less.
-  static const Duration _chatMaxAge = Duration(days: 7);
+  /// Chats and the inbox stay readable offline for a year, like WhatsApp
+  /// keeps them (was 7 days, 1 Nov 2026). Text is small; this is a few MB.
+  static const Duration _chatMaxAge = Duration(days: 365);
 
   /// True for offline-first Library payloads: downloaded Bible chapters,
   /// Sabbath School quarterlies / lessons / days, and the language list that
@@ -101,7 +103,15 @@ class CacheService {
         if (_isLibraryContent(key)) {
           limit = _libraryMaxAge;
         } else if (key == 'inbox' ||
+            // inbox_v1 is the real chat-list key; matching only 'inbox'
+            // let start-up prune it after 24 h, so the chat list went
+            // blank offline the next day (fixed 1 Nov 2026).
+            key.startsWith('inbox') ||
             key.startsWith('chat:') ||
+            // Offline chat state: pins/mutes, reactions, stars.
+            key.startsWith('conv_states') ||
+            key.startsWith('reactions:') ||
+            key.startsWith('stars:') ||
             // The Home feed opens from this offline (29 Oct 2026).
             key == 'home_feed') {
           limit = _chatMaxAge;

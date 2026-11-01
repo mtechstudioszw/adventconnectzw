@@ -1149,6 +1149,10 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                 decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  filled: false,
                   hintText: 'Search people, groups, messages',
                   hintStyle: AppTextStyles.bodyMedium.copyWith(
                     color: palette.textMuted,
@@ -1231,7 +1235,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           _SearchSectionLabel(label: 'Chats and groups'),
           for (final c in nameHits)
             Padding(
-              padding: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.only(bottom: 2),
               child: _ConversationTile(
                 key: ValueKey('search-${c.id}'),
                 conversation: c,
@@ -1730,9 +1734,19 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           // Slimmer gutters so the inbox flows edge-to-edge like
           // WhatsApp instead of sitting inside a boxed column.
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, 32),
+          padding: const EdgeInsets.fromLTRB(6, 4, 6, 32),
           itemCount: list.length + (banner == null ? 0 : 1),
-          separatorBuilder: (context, index) => const SizedBox(height: 10),
+          // Flat rows with a hairline, the way a chat list reads best —
+          // one card per chat fitted six to a screen and read as a feed.
+          separatorBuilder: (context, index) => (banner != null && index == 0)
+              ? const SizedBox(height: 4)
+              : Divider(
+                  height: 1,
+                  thickness: 0.5,
+                  indent: 82,
+                  endIndent: 12,
+                  color: context.palette.divider.withValues(alpha: 0.6),
+                ),
           itemBuilder: (context, i) {
             if (banner != null && i == 0) return banner;
             final c = list[i - (banner == null ? 0 : 1)];
@@ -2813,29 +2827,16 @@ class _ConversationTile extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           onLongPress: onLongPress,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           child: Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.fromLTRB(10, 11, 10, 11),
             decoration: BoxDecoration(
-              // Strong, obvious tint + border when multi-selected so it's
-              // clear which chats are picked.
+              // Flat on the ambient field; an obvious tint when
+              // multi-selected so it's clear which chats are picked.
               color: selected
-                  ? Color.alphaBlend(
-                      AppColors.primaryBlue.withValues(alpha: 0.16),
-                      context.palette.card,
-                    )
-                  : context.palette.card,
-              border: selected
-                  ? Border.all(color: AppColors.primaryBlue, width: 1.6)
-                  : null,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+                  ? AppColors.primaryBlue.withValues(alpha: 0.16)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
               children: [
@@ -2864,7 +2865,7 @@ class _ConversationTile extends StatelessWidget {
                               color: AppColors.primaryBlue,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: context.palette.card,
+                                color: context.palette.scaffoldBg,
                                 width: 2,
                               ),
                             ),
@@ -2891,7 +2892,7 @@ class _ConversationTile extends StatelessWidget {
                               color: AppColors.successGreen,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: context.palette.card,
+                                color: context.palette.scaffoldBg,
                                 width: 2,
                               ),
                             ),
@@ -2909,68 +2910,78 @@ class _ConversationTile extends StatelessWidget {
                       Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              conversation.otherUserName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.titleMedium.copyWith(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                              ),
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    conversation.otherUserName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTextStyles.titleMedium.copyWith(
+                                      fontWeight: unread
+                                          ? FontWeight.w700
+                                          : FontWeight.w600,
+                                      fontSize: 15.5,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 3),
+                                // Church channels carry the gold tick whether or
+                                // not the row's "other user" is a verified
+                                // account — the channel IS the church speaking.
+                                if (conversation.otherUserIsVerified ||
+                                    conversation.isChurchGroup)
+                                  const VerifiedTick(size: 15),
+                                // Group size, in the name row where it reads as
+                                // part of the identity rather than as metadata.
+                                if (memberCount != null &&
+                                    conversation.isGroup) ...[
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    '$memberCount',
+                                    style: AppTextStyles.labelSmall.copyWith(
+                                      color: context.palette.textMuted,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                                if (conversation.isBusiness) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 7,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryBlue.withValues(
+                                        alpha: 0.10,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'BUSINESS',
+                                      style: AppTextStyles.labelSmall.copyWith(
+                                        color: AppColors.primaryBlue,
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.6,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                if (muted) ...[
+                                  const SizedBox(width: 6),
+                                  Icon(
+                                    Icons.volume_off_outlined,
+                                    size: 14,
+                                    color: context.palette.textMuted,
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
-                          // Church channels carry the gold tick whether or
-                          // not the row's "other user" is a verified
-                          // account — the channel IS the church speaking.
-                          if (conversation.otherUserIsVerified ||
-                              conversation.isChurchGroup)
-                            const VerifiedTick(size: 15),
-                          // Group size, in the name row where it reads as
-                          // part of the identity rather than as metadata.
-                          if (memberCount != null && conversation.isGroup) ...[
-                            const SizedBox(width: 5),
-                            Text(
-                              '$memberCount',
-                              style: AppTextStyles.labelSmall.copyWith(
-                                color: context.palette.textMuted,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                          if (conversation.isBusiness) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryBlue.withValues(
-                                  alpha: 0.10,
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                'BUSINESS',
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: AppColors.primaryBlue,
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.6,
-                                ),
-                              ),
-                            ),
-                          ],
-                          if (muted) ...[
-                            const SizedBox(width: 6),
-                            Icon(
-                              Icons.volume_off_outlined,
-                              size: 14,
-                              color: context.palette.textMuted,
-                            ),
-                          ],
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           Text(
                             _shortTime(conversation.lastMessageAt),
                             style: AppTextStyles.labelSmall.copyWith(
@@ -3003,141 +3014,149 @@ class _ConversationTile extends StatelessWidget {
                           return _TypingPreview(kind: kind);
                         },
                         child: Row(
-                        children: [
-                          // Tick on the last message, but ONLY when the
-                          // viewer sent it (patch_075 surfaces its real
-                          // delivered/read state): ✓ sent, ✓✓ delivered,
-                          // ✓✓ blue read (blue only in 1:1, like in-chat).
-                          // Never on a placeholder ("Say hello") or a reaction
-                          // preview — those aren't messages the viewer sent.
-                          if (isLastFromMe &&
-                              draft == null &&
-                              !conversation.isSelfChat &&
-                              reactionPreview == null &&
-                              !previewCleared &&
-                              conversation.lastMessage.isNotEmpty) ...[
-                            Icon(
-                              (conversation.lastDelivered ||
-                                      conversation.lastRead)
-                                  ? Icons.done_all
-                                  : Icons.done,
-                              size: 14,
-                              color:
-                                  (conversation.lastRead &&
-                                      !conversation.isGroup)
-                                  ? AppColors.primaryBlue
-                                  : context.palette.textMuted,
-                            ),
-                            const SizedBox(width: 4),
-                          ],
-                          // Type glyph — 📢 for a church announcement, a mic
-                          // for a voice note, a bookmark for your own notes.
-                          if (glyph != null &&
-                              draft == null &&
-                              !previewCleared) ...[
-                            Icon(glyph.icon, size: 13, color: glyph.color),
-                            const SizedBox(width: 4),
-                          ],
-                          Expanded(
-                            child: draft != null
-                                ? RichText(
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    text: TextSpan(
-                                      style: previewStyle,
-                                      children: [
-                                        TextSpan(
-                                          text: 'Draft: ',
-                                          style: previewStyle.copyWith(
-                                            color: AppColors.successGreen,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        TextSpan(text: draft),
-                                      ],
-                                    ),
-                                  )
-                                : (reactionPreview != null && !previewCleared)
-                                ? Text(
-                                    _reactionPreviewLabel(reactionPreview!),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: previewStyle,
-                                  )
-                                : (previewCleared ||
-                                      conversation.lastMessage.isEmpty)
-                                ? Text(
-                                    conversation.isChurchChannel
-                                        ? 'Church announcements appear here'
-                                        : conversation.isSelfChat
-                                        ? 'Notes and links you save yourself'
-                                        : 'Say hello',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: previewStyle,
-                                  )
-                                : RichText(
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    text: TextSpan(
-                                      style: previewStyle,
-                                      children: [
-                                        if (speaker != null)
+                          children: [
+                            // Tick on the last message, but ONLY when the
+                            // viewer sent it (patch_075 surfaces its real
+                            // delivered/read state): ✓ sent, ✓✓ delivered,
+                            // ✓✓ blue read (blue only in 1:1, like in-chat).
+                            // Never on a placeholder ("Say hello") or a reaction
+                            // preview — those aren't messages the viewer sent.
+                            if (isLastFromMe &&
+                                draft == null &&
+                                !conversation.isSelfChat &&
+                                reactionPreview == null &&
+                                !previewCleared &&
+                                conversation.lastMessage.isNotEmpty) ...[
+                              Icon(
+                                (conversation.lastDelivered ||
+                                        conversation.lastRead)
+                                    ? Icons.done_all
+                                    : Icons.done,
+                                size: 14,
+                                color:
+                                    (conversation.lastRead &&
+                                        !conversation.isGroup)
+                                    ? AppColors.primaryBlue
+                                    : context.palette.textMuted,
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                            // Type glyph — 📢 for a church announcement, a mic
+                            // for a voice note, a bookmark for your own notes.
+                            if (glyph != null &&
+                                draft == null &&
+                                !previewCleared) ...[
+                              Icon(glyph.icon, size: 13, color: glyph.color),
+                              const SizedBox(width: 4),
+                            ],
+                            Expanded(
+                              child: draft != null
+                                  ? RichText(
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      text: TextSpan(
+                                        style: previewStyle,
+                                        children: [
                                           TextSpan(
-                                            text: '$speaker: ',
+                                            text: 'Draft: ',
                                             style: previewStyle.copyWith(
-                                              color: AppColors.primaryBlue,
+                                              color: AppColors.successGreen,
                                               fontWeight: FontWeight.w700,
                                             ),
                                           ),
-                                        TextSpan(
-                                          text: isLastFromMe
-                                              ? _selfSystemLabel(
-                                                  _previewText(
+                                          TextSpan(text: draft),
+                                        ],
+                                      ),
+                                    )
+                                  : (reactionPreview != null && !previewCleared)
+                                  ? Text(
+                                      _reactionPreviewLabel(reactionPreview!),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: previewStyle,
+                                    )
+                                  : (previewCleared ||
+                                        conversation.lastMessage.isEmpty)
+                                  ? Text(
+                                      conversation.isChurchChannel
+                                          ? 'Church announcements appear here'
+                                          : conversation.isSelfChat
+                                          ? 'Notes and links you save yourself'
+                                          : 'Say hello',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: previewStyle,
+                                    )
+                                  : RichText(
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      text: TextSpan(
+                                        style: previewStyle,
+                                        children: [
+                                          if (speaker != null)
+                                            TextSpan(
+                                              text: '$speaker: ',
+                                              style: previewStyle.copyWith(
+                                                color: AppColors.primaryBlue,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          TextSpan(
+                                            text: isLastFromMe
+                                                ? _selfSystemLabel(
+                                                    _previewText(
+                                                      conversation.lastMessage,
+                                                    ),
+                                                  )
+                                                : _previewText(
                                                     conversation.lastMessage,
                                                   ),
-                                                )
-                                              : _previewText(
-                                                  conversation.lastMessage,
-                                                ),
-                                        ),
-                                      ],
+                                          ),
+                                        ],
+                                      ),
                                     ),
+                            ),
+                            if (unread) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                constraints: const BoxConstraints(
+                                  minWidth: 20,
+                                  minHeight: 20,
+                                ),
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: muted
+                                      ? context.palette.textMuted
+                                      : AppColors.primaryBlue,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  conversation.unreadCount > 99
+                                      ? '99+'
+                                      : '${conversation.unreadCount}',
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    color: AppColors.white,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
                                   ),
-                          ),
-                          if (unread) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                gradient: AppColors.primaryGradient,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                '${conversation.unreadCount}',
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: AppColors.white,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
-                            ),
-                          ],
-                          if (pinned) ...[
-                            const SizedBox(width: 6),
-                            Transform.rotate(
-                              angle: 0.785398, // 45° — WhatsApp pin look
-                              child: Icon(
-                                Icons.push_pin,
-                                size: 14,
-                                color: context.palette.textMuted,
+                            ],
+                            if (pinned) ...[
+                              const SizedBox(width: 6),
+                              Transform.rotate(
+                                angle: 0.785398, // 45° — WhatsApp pin look
+                                child: Icon(
+                                  Icons.push_pin,
+                                  size: 14,
+                                  color: context.palette.textMuted,
+                                ),
                               ),
-                            ),
+                            ],
                           ],
-                        ],
                         ),
                       ),
                     ],

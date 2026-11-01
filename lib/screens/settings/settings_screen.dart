@@ -622,6 +622,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(vertical: 13),
             border: InputBorder.none,
+            filled: false,
             enabledBorder: InputBorder.none,
             focusedBorder: InputBorder.none,
           ),

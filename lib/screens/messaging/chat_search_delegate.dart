@@ -59,6 +59,10 @@ class ChatSearchDelegate extends SearchDelegate<void> {
       inputDecorationTheme: InputDecorationTheme(
         hintStyle: TextStyle(color: onSurface.withValues(alpha: 0.5)),
         border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        disabledBorder: InputBorder.none,
+        filled: false,
       ),
       textTheme: base.textTheme.copyWith(
         titleLarge: AppTextStyles.titleMedium.copyWith(color: onSurface),

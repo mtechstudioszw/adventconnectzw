@@ -150,9 +150,7 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   Future<void> _onAvatarTap(String? photoUrl) async {
@@ -189,7 +187,8 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
       } catch (_) {
         if (mounted) {
           messenger.showSnackBar(
-              const SnackBar(content: Text('Could not unblock.')));
+            const SnackBar(content: Text('Could not unblock.')),
+          );
         }
       }
       return;
@@ -206,8 +205,9 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.red),
             onPressed: () => Navigator.pop(ctx, true),
@@ -224,8 +224,9 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
       messenger.showSnackBar(SnackBar(content: Text('$name blocked.')));
     } catch (_) {
       if (mounted) {
-        messenger
-            .showSnackBar(const SnackBar(content: Text('Could not block.')));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Could not block.')),
+        );
       }
     }
   }
@@ -270,20 +271,70 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
     final presence = (!_isFriend || unavailable)
         ? null
         : isOnline
-            ? 'Online'
-            : (_lastSeen != null
-                ? 'Last seen ${PresenceService.formatLastSeen(_lastSeen!)}'
-                : 'Offline');
+        ? 'Online'
+        : (_lastSeen != null
+              ? 'Last seen ${PresenceService.formatLastSeen(_lastSeen!)}'
+              : 'Offline');
+
+    final me = AuthService.currentUser?.id;
+    final isMe = me != null && me == widget.userId;
+    final username = unavailable ? null : _profile?.username;
+    final church = unavailable ? null : _profile?.churchName?.trim();
+    final city = unavailable ? null : _profile?.city?.trim();
+    final palette = context.palette;
+
+    final quick = <Widget>[
+      if (widget.conversationId == null && !isMe && !unavailable)
+        _QuickAction(
+          icon: Icons.chat_bubble_outline_rounded,
+          label: 'Message',
+          primary: true,
+          onTap: _loading ? null : () => _openChat(name),
+        ),
+      _QuickAction(
+        icon: Icons.person_outline_rounded,
+        label: 'Profile',
+        primary: widget.conversationId != null || isMe,
+        onTap: _loading
+            ? null
+            : () {
+                Navigator.of(context).pop();
+                context.pushNamed(
+                  'user_profile',
+                  pathParameters: {'userId': widget.userId},
+                );
+              },
+      ),
+      if (widget.conversationId != null)
+        _QuickAction(
+          icon: _muted
+              ? Icons.notifications_off_outlined
+              : Icons.notifications_none_rounded,
+          label: _muted ? 'Unmute' : 'Mute',
+          onTap: _toggleMute,
+        ),
+      if (!isMe)
+        _QuickAction(
+          icon: Icons.group_add_outlined,
+          label: 'Group',
+          onTap: () {
+            Navigator.of(context).pop();
+            // Pre-select this contact in the create-group picker.
+            context.pushNamed('create_group', extra: widget.userId);
+          },
+        ),
+    ];
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.62,
+      initialChildSize: 0.66,
       minChildSize: 0.4,
-      maxChildSize: 0.92,
+      maxChildSize: 0.94,
       expand: false,
       builder: (ctx, controller) => Container(
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: context.palette.sheet,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          color: palette.sheet,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: SingleChildScrollView(
           controller: controller,
@@ -291,258 +342,230 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 10, bottom: 14),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: context.palette.divider,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
+              // Cover band with the avatar riding over its bottom edge.
               SizedBox(
-                height: 120,
-                child: (coverUrl ?? '').isNotEmpty
-                    ? GestureDetector(
-                        onTap: () => FullImageViewer.show(context, coverUrl),
-                        child: CachedImage(
-                          coverUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                            color:
-                                AppColors.primaryBlue.withValues(alpha: 0.08),
+                height: 186,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      height: 128,
+                      child: _CoverBand(
+                        coverUrl: coverUrl,
+                        onTap: (coverUrl ?? '').isEmpty
+                            ? null
+                            : () => FullImageViewer.show(context, coverUrl),
+                      ),
+                    ),
+                    // Grab handle, on the cover so it reads on a photo.
+                    Positioned(
+                      top: 10,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.white.withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.18),
+                                blurRadius: 4,
+                              ),
+                            ],
                           ),
                         ),
-                      )
-                    : Container(
-                        color: AppColors.primaryBlue.withValues(alpha: 0.08),
                       ),
-              ),
-              const SizedBox(height: 12),
-              Center(
-                child: GestureDetector(
-                  onTap: () => _onAvatarTap(photoUrl),
-                  child: _StoryRingAvatar(
-                    name: name,
-                    photoUrl: photoUrl,
-                    hasStory: _hasStory,
-                    allViewed: _allViewed,
-                  ),
-                ),
-              ),
-              if (_hasStory) ...[
-                const SizedBox(height: 6),
-                Center(
-                  child: Text(
-                    _allViewed ? 'Tap to view story' : 'New story · tap to view',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: _allViewed
-                          ? context.palette.textMuted
-                          : AppColors.successGreen,
-                      fontWeight: FontWeight.w600,
                     ),
-                  ),
+                    Positioned(
+                      top: 76,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: GestureDetector(
+                          onTap: () => _onAvatarTap(photoUrl),
+                          child: _StoryRingAvatar(
+                            name: name,
+                            photoUrl: photoUrl,
+                            hasStory: _hasStory,
+                            allViewed: _allViewed,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-              const SizedBox(height: 14),
+              ),
+              const SizedBox(height: 10),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Flexible(
                           child: Text(
                             name,
                             textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: AppTextStyles.titleLarge.copyWith(
-                              color: context.palette.text,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 20,
+                              color: palette.text,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 21,
+                              height: 1.2,
                             ),
                           ),
                         ),
-                        if (_profile?.showsVerifiedTick == true)
+                        if (_profile?.showsVerifiedTick == true) ...[
+                          const SizedBox(width: 4),
                           const VerifiedTick(size: 18),
+                        ],
                       ],
                     ),
-                    // The whole row disappears for non-friends rather than
+                    if ((username ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '@$username',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: palette.textMuted,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                    ],
+                    // The whole line disappears for non-friends rather than
                     // degrading to "Offline" — which would still be a
                     // statement about where they are.
                     if (presence != null) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (isOnline) ...[
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: AppColors.successGreen,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                          ],
-                          Text(
-                            presence,
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: context.palette.textMuted,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 10),
+                      _PresencePill(text: presence, online: isOnline),
+                    ],
+                    if (_hasStory) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _allViewed
+                            ? 'Tap the photo to see their story'
+                            : 'New story · tap the photo',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: _allViewed
+                              ? palette.textMuted
+                              : AppColors.primaryBlue,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ],
                 ),
               ),
-              if (bio.isNotEmpty) ...[
-                const SizedBox(height: 18),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: context.palette.cardMuted,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Text(
-                      bio,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: context.palette.text,
-                        height: 1.4,
-                      ),
+              const SizedBox(height: 18),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    for (var i = 0; i < quick.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 10),
+                      Expanded(child: quick[i]),
+                    ],
+                  ],
+                ),
+              ),
+              if (bio.isNotEmpty ||
+                  (church ?? '').isNotEmpty ||
+                  (city ?? '').isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _SheetCard(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (bio.isNotEmpty)
+                          Text(
+                            bio,
+                            maxLines: 5,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: palette.text,
+                              height: 1.45,
+                            ),
+                          ),
+                        if (bio.isNotEmpty &&
+                            ((church ?? '').isNotEmpty ||
+                                (city ?? '').isNotEmpty))
+                          const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if ((church ?? '').isNotEmpty)
+                              _InfoChip(
+                                icon: Icons.church_outlined,
+                                text: church!,
+                              ),
+                            if ((city ?? '').isNotEmpty)
+                              _InfoChip(
+                                icon: Icons.place_outlined,
+                                text: city!,
+                              ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ],
-              const SizedBox(height: 18),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: FilledButton.icon(
-                  onPressed: _loading
-                      ? null
-                      : () {
+              if (!isMe) ...[
+                const SizedBox(height: 12),
+                _SheetCard(
+                  child: Column(
+                    children: [
+                      _ActionRow(
+                        icon: Icons.flag_outlined,
+                        label: 'Report $name',
+                        onTap: () {
                           Navigator.of(context).pop();
-                          context.pushNamed(
-                            'user_profile',
-                            pathParameters: {'userId': widget.userId},
+                          showReportSheet(
+                            context,
+                            contentType: 'user',
+                            contentId: widget.userId,
+                            contentLabel: name,
                           );
                         },
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primaryBlue,
-                    foregroundColor: AppColors.white,
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  icon: const Icon(Icons.person_outline, size: 18),
-                  label: const Text('View profile'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              // Quick actions.
-              if (widget.conversationId != null)
-                _ActionRow(
-                  icon: _muted
-                      ? Icons.notifications_off
-                      : Icons.notifications_none,
-                  label: _muted ? 'Unmute notifications' : 'Mute notifications',
-                  onTap: _toggleMute,
-                ),
-              _ActionRow(
-                icon: Icons.group_add_outlined,
-                label: 'Create group with $name',
-                onTap: () {
-                  Navigator.of(context).pop();
-                  // Pre-select this contact in the create-group picker.
-                  context.pushNamed('create_group', extra: widget.userId);
-                },
-              ),
-              _ActionRow(
-                icon: Icons.flag_outlined,
-                label: 'Report',
-                onTap: () {
-                  Navigator.of(context).pop();
-                  showReportSheet(
-                    context,
-                    contentType: 'user',
-                    contentId: widget.userId,
-                    contentLabel: name,
-                  );
-                },
-              ),
-              if (widget.conversationId != null)
-                _ActionRow(
-                  icon: Icons.cleaning_services_outlined,
-                  label: 'Clear chat',
-                  onTap: () async {
-                    final nav = Navigator.of(context);
-                    final messenger = ScaffoldMessenger.of(context);
-                    final ok = await showDialog<bool>(
-                      context: context,
-                      builder: (dctx) => AlertDialog(
-                        title: const Text('Clear chat?'),
-                        content: const Text(
-                          'Messages will be hidden for you only.',
-                        ),
-                        actions: [
-                          TextButton(
-                              onPressed: () => Navigator.pop(dctx, false),
-                              child: const Text('Cancel')),
-                          FilledButton(
-                            style: FilledButton.styleFrom(
-                                backgroundColor: AppColors.red),
-                            onPressed: () => Navigator.pop(dctx, true),
-                            child: const Text('Clear'),
-                          ),
-                        ],
                       ),
-                    );
-                    if (ok != true || _busy) return;
-                    _busy = true;
-                    try {
-                      await MessagingService.clearConversation(
-                          widget.conversationId!);
-                      if (!mounted) return;
-                      nav.pop('cleared'); // tell the chat to refresh
-                      messenger.showSnackBar(
-                          const SnackBar(content: Text('Chat cleared.')));
-                    } catch (_) {
-                      if (mounted) {
-                        messenger.showSnackBar(const SnackBar(
-                            content: Text('Could not clear chat.')));
-                      }
-                    } finally {
-                      _busy = false;
-                    }
-                  },
+                      if (widget.conversationId != null) ...[
+                        const _RowDivider(),
+                        _ActionRow(
+                          icon: Icons.cleaning_services_outlined,
+                          label: 'Clear chat',
+                          onTap: _clearChat,
+                        ),
+                      ],
+                      const _RowDivider(),
+                      _ActionRow(
+                        icon: _blockedByMe
+                            ? Icons.lock_open_rounded
+                            : Icons.block_rounded,
+                        label: _blockedByMe ? 'Unblock $name' : 'Block $name',
+                        danger: !_blockedByMe,
+                        onTap: () => _toggleBlock(name),
+                      ),
+                    ],
+                  ),
                 ),
-              _ActionRow(
-                icon: _blockedByMe ? Icons.lock_open : Icons.block,
-                label: _blockedByMe ? 'Unblock' : 'Block',
-                danger: !_blockedByMe,
-                onTap: () => _toggleBlock(name),
-              ),
+              ],
+              const SizedBox(height: 8),
               // The founder asked for the encryption note here as well as
-              // in the thread. This is the sheet a member opens when they
-              // are deciding whether to trust someone, which is exactly
-              // when "who else can read this" is the live question.
-              // Shown whether or not encryption is on. It used to be gated
-              // on `isEncryptionOn`, which meant that while encryption
-              // ships dark this sheet said NOTHING about privacy at all —
-              // and "nothing" is the one thing a member deciding whether
-              // to trust someone cannot act on. The copy tells the truth
-              // either way; only the security code needs real encryption.
-              if (!unavailable)
+              // in the thread: this is the sheet a member opens when they
+              // are deciding whether to trust someone. Shown whether or not
+              // encryption is on — the copy tells the truth either way;
+              // only the security code needs real encryption.
+              if (!unavailable && !isMe)
                 _EncryptionFooter(
                   otherName: name,
                   encrypted: E2eeService.isEncryptionOn,
@@ -555,6 +578,262 @@ class _ChatContactSheetState extends State<_ChatContactSheet> {
       ),
     );
   }
+
+  Future<void> _openChat(String name) async {
+    final nav = Navigator.of(context);
+    final router = GoRouter.of(context);
+    try {
+      final convo = await MessagingService.createConversation(
+        otherUserId: widget.userId,
+        otherUserName: name,
+        source: 'direct',
+      ).timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      nav.pop();
+      router.pushNamed('chat', pathParameters: {'id': convo.id}, extra: convo);
+    } catch (_) {
+      _toast("Couldn't open the chat. Check your connection.");
+    }
+  }
+
+  Future<void> _clearChat() async {
+    final nav = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        title: const Text('Clear chat?'),
+        content: const Text('Messages will be hidden for you only.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+            onPressed: () => Navigator.pop(dctx, true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || _busy) return;
+    _busy = true;
+    try {
+      await MessagingService.clearConversation(widget.conversationId!);
+      if (!mounted) return;
+      nav.pop('cleared'); // tell the chat to refresh
+      messenger.showSnackBar(const SnackBar(content: Text('Chat cleared.')));
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Could not clear chat.')),
+        );
+      }
+    } finally {
+      _busy = false;
+    }
+  }
+}
+
+/// The band behind the avatar: their cover photo, or — with none — a calm
+/// blue wash. Never a navy slab (CLAUDE.md: headers are flat).
+class _CoverBand extends StatelessWidget {
+  const _CoverBand({required this.coverUrl, this.onTap});
+  final String? coverUrl;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final wash = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.primaryBlue.withValues(alpha: 0.22),
+            AppColors.primaryBlue.withValues(alpha: 0.06),
+          ],
+        ),
+      ),
+      child: const SizedBox.expand(),
+    );
+    if ((coverUrl ?? '').isEmpty) return wash;
+    return GestureDetector(
+      onTap: onTap,
+      child: CachedImage(
+        coverUrl!,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => wash,
+      ),
+    );
+  }
+}
+
+class _PresencePill extends StatelessWidget {
+  const _PresencePill({required this.text, required this.online});
+  final String text;
+  final bool online;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        color: online
+            ? AppColors.successGreen.withValues(alpha: 0.12)
+            : palette.chipBg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (online) ...[
+            Container(
+              width: 7,
+              height: 7,
+              decoration: const BoxDecoration(
+                color: AppColors.successGreen,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            text,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: online ? AppColors.successGreen : palette.textMuted,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One round quick action: Message / Profile / Mute / Group.
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.primary = false,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            gradient: primary ? AppColors.primaryGradient : null,
+            color: primary ? null : palette.chipBg,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 22,
+                color: primary ? AppColors.white : AppColors.primaryBlue,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: primary ? AppColors.white : palette.text,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: palette.chipBg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: AppColors.primaryBlue),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: palette.text,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A rounded group, the way Settings groups rows.
+class _SheetCard extends StatelessWidget {
+  const _SheetCard({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: context.palette.cardMuted,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _RowDivider extends StatelessWidget {
+  const _RowDivider();
+  @override
+  Widget build(BuildContext context) => Divider(
+    height: 1,
+    thickness: 0.6,
+    indent: 52,
+    color: context.palette.divider,
+  );
 }
 
 /// The encryption block: what is (and is not) encrypted, this pair's
@@ -610,11 +889,10 @@ class _EncryptionFooter extends StatelessWidget {
                     children: [
                       TextSpan(
                         text: encrypted
-                            ? 'Text messages are end-to-end encrypted — '
-                                  'nobody outside this chat, not even '
-                                  'Adventist Super App, can read them. Photos '
-                                  'and voice notes are not end-to-end '
-                                  'encrypted and are stored on our servers. '
+                            ? 'Messages, photos and voice notes are '
+                                  'end-to-end encrypted — nobody outside this '
+                                  'chat, not even Adventist Super App, can '
+                                  'see them. '
                             : 'Messages here are private between you and '
                                   '$first. ',
                       ),
@@ -749,15 +1027,31 @@ class _ActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = danger ? AppColors.red : AppColors.primaryBlue;
-    return ListTile(
+    final color = danger ? AppColors.red : context.palette.text;
+    return InkWell(
       onTap: onTap,
-      leading: Icon(icon, color: color),
-      title: Text(
-        label,
-        style: AppTextStyles.bodyMedium.copyWith(
-          color: danger ? AppColors.red : context.palette.text,
-          fontWeight: FontWeight.w600,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 21,
+              color: danger ? AppColors.red : context.palette.textMuted,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -780,18 +1074,21 @@ class _StoryRingAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final parts =
-        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     final initials = parts.isEmpty
         ? '?'
         : parts.length == 1
-            ? parts.first.substring(0, 1).toUpperCase()
-            : (parts.first.substring(0, 1) + parts.last.substring(0, 1))
-                .toUpperCase();
+        ? parts.first.substring(0, 1).toUpperCase()
+        : (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+              .toUpperCase();
     final hasPhoto = (photoUrl ?? '').trim().isNotEmpty;
     final ringColor = !hasStory
         ? Colors.transparent
-        : (allViewed ? context.palette.divider : AppColors.successGreen);
+        : (allViewed ? context.palette.divider : AppColors.primaryBlue);
 
     return Container(
       width: 104,
@@ -799,10 +1096,7 @@ class _StoryRingAvatar extends StatelessWidget {
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(
-          color: ringColor,
-          width: hasStory ? 3 : 0,
-        ),
+        border: Border.all(color: ringColor, width: hasStory ? 3 : 0),
       ),
       // No `alignment` here on purpose — it would wrap the child in an
       // Align and hand it LOOSE constraints, leaving the photo floating
@@ -829,11 +1123,11 @@ class _StoryRingAvatar extends StatelessWidget {
   }
 
   Widget _initials(String initials) => Text(
-        initials,
-        style: AppTextStyles.titleLarge.copyWith(
-          color: AppColors.white,
-          fontWeight: FontWeight.w800,
-          fontSize: 30,
-        ),
-      );
+    initials,
+    style: AppTextStyles.titleLarge.copyWith(
+      color: AppColors.white,
+      fontWeight: FontWeight.w800,
+      fontSize: 30,
+    ),
+  );
 }

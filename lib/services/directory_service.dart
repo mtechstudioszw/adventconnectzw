@@ -226,6 +226,13 @@ class DirectoryService {
   /// the people who can be messaged. The caller filters out existing friends
   /// + self. Used by New chat → "Find people" so the user can browse EVERYONE
   /// who isn't already a friend, alphabetically (not just a few suggestions).
+  /// The embedded `churches(name)` of a profiles row, if any.
+  static String? _churchName(Map<String, dynamic> row) {
+    final c = row['churches'];
+    if (c is Map && c['name'] is String) return c['name'] as String;
+    return null;
+  }
+
   static Future<List<MemberDirectoryEntry>> fetchAllDiscoverableProfiles({
     int limit = 500,
   }) async {
@@ -233,7 +240,7 @@ class DirectoryService {
     try {
       var q = _client
           .from('profiles')
-          .select('id, full_name, profile_photo_url, province, city, bio, is_verified, is_verified_admin')
+          .select('id, full_name, profile_photo_url, province, city, bio, is_verified, is_verified_admin, churches!profiles_church_id_fkey(name)')
           .eq('is_discoverable', true)
           .eq('is_banned', false);
       if (user != null) q = q.neq('id', user.id);
@@ -249,6 +256,7 @@ class DirectoryService {
                 profilePhotoUrl: row['profile_photo_url'] as String?,
                 province: row['province'] as String?,
                 city: row['city'] as String?,
+                churchName: _churchName(row),
                 bio: row['bio'] as String?,
                 isVerified: row['is_verified'] == true,
               ))
@@ -377,7 +385,7 @@ class DirectoryService {
       final user = _client.auth.currentUser;
       var q = _client
           .from('profiles')
-          .select('id, full_name, profile_photo_url, province, city, bio, is_verified, is_verified_admin');
+          .select('id, full_name, profile_photo_url, province, city, bio, is_verified, is_verified_admin, churches!profiles_church_id_fkey(name)');
       filters.forEach((column, value) {
         q = q.eq(column, value);
       });
@@ -397,6 +405,7 @@ class DirectoryService {
                 profilePhotoUrl: row['profile_photo_url'] as String?,
                 province: row['province'] as String?,
                 city: row['city'] as String?,
+                churchName: _churchName(row),
                 bio: row['bio'] as String?,
                 isVerified: row['is_verified'] == true,
               ))

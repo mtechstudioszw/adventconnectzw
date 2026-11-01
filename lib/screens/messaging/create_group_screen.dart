@@ -93,9 +93,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       _results = query.isEmpty
           ? _friends
           : _friends
-              .where((m) =>
-                  (m.fullName ?? '').toLowerCase().contains(query))
-              .toList();
+                .where((m) => (m.fullName ?? '').toLowerCase().contains(query))
+                .toList();
     });
   }
 
@@ -217,6 +216,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                               decoration: InputDecoration(
                                 isDense: true,
                                 border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                disabledBorder: InputBorder.none,
+                                filled: false,
+                                contentPadding: EdgeInsets.zero,
+                                counterText: '',
                                 hintText: 'Group name',
                                 hintStyle: AppTextStyles.titleMedium.copyWith(
                                   color: palette.textMuted,
@@ -235,10 +240,18 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         textCapitalization: TextCapitalization.sentences,
                         maxLines: 2,
                         minLines: 1,
-                        style: AppTextStyles.bodyMedium.copyWith(fontSize: 13.5),
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          fontSize: 13.5,
+                        ),
                         decoration: InputDecoration(
                           isDense: true,
                           border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          filled: false,
+                          contentPadding: EdgeInsets.zero,
+                          counterText: '',
                           hintText: 'What is this group for? (optional)',
                           hintStyle: AppTextStyles.bodyMedium.copyWith(
                             color: palette.textMuted,
@@ -303,15 +316,39 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                 else if (_results.isEmpty)
                   _buildPeopleEmptyState(context)
                 else
-                  for (final m in _results)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _PersonPickTile(
-                        member: m,
-                        selected: _selected.containsKey(m.userId),
-                        onTap: () => _toggle(m),
-                      ),
+                  // One grouped list, like the New chat friends list.
+                  Container(
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: palette.card,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 14,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < _results.length; i++) ...[
+                          if (i > 0)
+                            Divider(
+                              height: 1,
+                              thickness: 0.6,
+                              indent: 68,
+                              color: palette.divider,
+                            ),
+                          _PersonPickTile(
+                            member: _results[i],
+                            selected: _selected.containsKey(_results[i].userId),
+                            onTap: () => _toggle(_results[i]),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -376,7 +413,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   /// requirement up front and stays disabled until it's met.
   Widget _buildCreateBar(BuildContext context) {
     final palette = context.palette;
-    final ready = _nameController.text.trim().isNotEmpty && _selected.isNotEmpty;
+    final ready =
+        _nameController.text.trim().isNotEmpty && _selected.isNotEmpty;
     final hint = _nameController.text.trim().isEmpty
         ? 'Name the group to continue'
         : _selected.isEmpty
@@ -449,6 +487,10 @@ class _SearchField extends StatelessWidget {
               decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                filled: false,
                 hintText: 'Search your friends',
                 hintStyle: AppTextStyles.bodyMedium.copyWith(
                   color: palette.textMuted,
@@ -499,11 +541,11 @@ class _GroupIconPicker extends StatelessWidget {
                 ),
               )
             : (photoUrl == null || photoUrl!.isEmpty)
-                ? const Icon(
-                    Icons.add_a_photo_outlined,
-                    color: AppColors.primaryBlue,
-                  )
-                : CachedImage(photoUrl!, fit: BoxFit.cover),
+            ? const Icon(
+                Icons.add_a_photo_outlined,
+                color: AppColors.primaryBlue,
+              )
+            : CachedImage(photoUrl!, fit: BoxFit.cover),
       ),
     );
   }
@@ -524,7 +566,11 @@ class _SelectedChip extends StatelessWidget {
         children: [
           Stack(
             children: [
-              UserAvatar(photoUrl: member.profilePhotoUrl, name: name, size: 50),
+              UserAvatar(
+                photoUrl: member.profilePhotoUrl,
+                name: name,
+                size: 50,
+              ),
               Positioned(
                 right: 0,
                 top: 0,
@@ -584,26 +630,18 @@ class _PersonPickTile extends StatelessWidget {
     final church = (member.churchName ?? '').trim();
     return Pressable(
       onTap: onTap,
-      pressedScale: 0.98,
+      pressedScale: 0.99,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.all(11),
-        decoration: BoxDecoration(
-          // Selected rows tint rather than only flipping a small trailing
-          // glyph — at a glance you can see who's in without reading down
-          // the right-hand edge.
-          color: selected
-              ? Color.alphaBlend(
-                  AppColors.primaryBlue.withValues(alpha: 0.10),
-                  palette.card,
-                )
-              : palette.card,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected ? AppColors.primaryBlue : palette.divider,
-            width: selected ? 1.4 : 1,
-          ),
-        ),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        // Selected rows tint rather than only flipping a small trailing
+        // glyph — at a glance you can see who's in.
+        color: selected
+            ? Color.alphaBlend(
+                AppColors.primaryBlue.withValues(alpha: 0.10),
+                palette.card,
+              )
+            : palette.card,
         child: Row(
           children: [
             UserAvatar(photoUrl: member.profilePhotoUrl, name: name, size: 42),
@@ -618,8 +656,9 @@ class _PersonPickTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                      color: palette.text,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14.5,
                     ),
                   ),
                   if (church.isNotEmpty) ...[

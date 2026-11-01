@@ -158,6 +158,10 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
                                 decoration: InputDecoration(
                                   isDense: true,
                                   border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  disabledBorder: InputBorder.none,
+                                  filled: false,
                                   hintText: 'Add a caption…',
                                   hintStyle: AppTextStyles.bodyMedium.copyWith(
                                     color: Colors.white.withValues(alpha: 0.55),

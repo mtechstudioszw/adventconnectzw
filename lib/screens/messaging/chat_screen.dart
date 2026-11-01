@@ -4088,6 +4088,10 @@ class _ChatScreenState extends State<ChatScreen>
                       fontSize: 14.5,
                     ),
                     border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    filled: false,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 12,
@@ -5025,6 +5029,13 @@ Future<void> openMessageLink(BuildContext context, String url) async {
   } catch (_) {}
 }
 
+/// Incoming bubble fill. In dark mode `card` is within a shade of the
+/// wallpaper, so bubbles take the lifted `cardMuted` surface instead.
+Color _incomingFill(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+    ? context.palette.cardMuted
+    : context.palette.card;
+
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
@@ -5102,16 +5113,17 @@ class _MessageBubble extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           gradient: isMine ? AppColors.primaryGradient : null,
-          color: isMine ? null : context.palette.card,
+          color: isMine ? null : _incomingFill(context),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(20),
             topRight: const Radius.circular(20),
             bottomLeft: Radius.circular(isMine ? 20 : 5),
             bottomRight: Radius.circular(isMine ? 5 : 20),
           ),
-          // Hairline on incoming bubbles so they hold their edge against
-          // the wallpaper (outgoing gets definition from the gradient).
-          border: isMine
+          // Light mode: a hairline so white holds its edge on light grey.
+          // Dark mode: the lifted fill is the edge — an outline over a fill
+          // the same colour as the wallpaper read as an empty wireframe.
+          border: isMine || Theme.of(context).brightness == Brightness.dark
               ? null
               : Border.all(
                   color: context.palette.divider.withValues(alpha: 0.7),
@@ -5268,7 +5280,7 @@ class _VoiceBubble extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           gradient: isMine ? AppColors.primaryGradient : null,
-          color: isMine ? null : context.palette.card,
+          color: isMine ? null : _incomingFill(context),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),

@@ -494,6 +494,10 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                           fontSize: 14.5,
                         ),
                         border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        filled: false,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 14,
                           vertical: 10,

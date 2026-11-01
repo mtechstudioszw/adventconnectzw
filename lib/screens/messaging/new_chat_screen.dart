@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../../config/share_config.dart';
 import '../../models/member_directory_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/directory_service.dart';
@@ -72,6 +74,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
   /// user id → where we stand with them. Drives the Add/Requested/Friends
   /// control on each row without a lookup per tile.
   Map<String, _Bond> _bonds = const {};
+
   /// Rows with a request in flight, so the button can't be double-tapped.
   final Set<String> _sending = <String>{};
 
@@ -422,7 +425,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
               controller: _searchController,
               focusNode: _searchFocus,
               hint: _explore
-                  ? 'Search everyone on Advent'
+                  ? 'Search everyone by name'
                   : 'Search your friends',
               onChanged: _onSearch,
               onClear: () {
@@ -448,8 +451,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
     // The quick actions only belong on the un-searched Friends view: they are
     // "the other things you might have come here to do", and once you're
     // typing a name you have already decided.
-    final showQuickActions =
-        !_explore && _searchController.text.trim().isEmpty;
+    final showQuickActions = !_explore && _searchController.text.trim().isEmpty;
 
     // A failed load is NOT an empty directory. Show the failure and a way
     // to re-run it; the search field, the Friends/Find-people toggle and
@@ -469,49 +471,105 @@ class _NewChatScreenState extends State<NewChatScreen> {
     return ValueListenableBuilder<Set<String>>(
       valueListenable: PresenceService.onChange,
       builder: (context, online, _) {
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 28),
-          itemCount: _results.length + (showQuickActions ? 1 : 0) + 1,
-          itemBuilder: (context, rawIndex) {
-            if (showQuickActions && rawIndex == 0) return _quickActions();
-            final i = rawIndex - (showQuickActions ? 1 : 0);
-            if (i == _results.length) {
-              return _results.isEmpty
-                  ? _buildEmptyState(context)
-                  : const SizedBox(height: 8);
-            }
-            final m = _results[i];
-            final name = (m.fullName ?? '').trim().isEmpty
-                ? 'Member'
-                : m.fullName!.trim();
-            final tile = Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _PersonCard(
-                name: name,
-                photoUrl: m.profilePhotoUrl,
-                church: m.churchName,
-                verified: m.isVerified,
-                // Presence is for FRIENDS only. This used to light up for
-                // anyone in the Explore list, so browsing strangers
-                // broadcast who was at their phone right now to someone
-                // they have no relationship with — and "Online now" on a
-                // person you've never met reads as surveillance, not a
-                // feature. A pending request doesn't count either;
-                // accepting is what grants it.
-                online: (_bonds[m.userId] == _Bond.friends) &&
-                    online.contains(m.userId),
-                bond: _bonds[m.userId] ?? _Bond.none,
-                busy: _sending.contains(m.userId),
-                // In Friends mode the bond is a given, so the trailing
-                // control would only ever say "Friends" — noise on every row.
-                showBond: _explore,
-                onTap: () => _onTapUser(m),
-                onAdd: () => _sendRequest(m),
+        final searching = _searchController.text.trim().isNotEmpty;
+        _PersonData data(MemberDirectoryEntry m) {
+          final name = (m.fullName ?? '').trim().isEmpty
+              ? 'Member'
+              : m.fullName!.trim();
+          return _PersonData(
+            name: name,
+            photoUrl: m.profilePhotoUrl,
+            church: m.churchName,
+            city: m.city,
+            verified: m.isVerified,
+            // Presence is for FRIENDS only. Lighting it up for strangers in
+            // Find people broadcast who was at their phone to someone they
+            // have no relationship with. Accepting a request grants it.
+            online:
+                (_bonds[m.userId] == _Bond.friends) &&
+                online.contains(m.userId),
+            bond: _bonds[m.userId] ?? _Bond.none,
+            busy: _sending.contains(m.userId),
+            onTap: () => _onTapUser(m),
+            onAdd: () => _sendRequest(m),
+          );
+        }
+
+        if (_explore) {
+          // Find people: a grid of cards, the way you browse faces.
+          return CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: _SectionLabel(
+                  searching ? 'Results' : 'People you may know',
+                ),
               ),
-            );
-            if (i >= 10) return tile;
-            return StaggeredReveal(index: i, rise: 16, child: tile);
-          },
+              if (_results.isEmpty)
+                SliverToBoxAdapter(child: _buildEmptyState(context))
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+                  sliver: SliverGrid(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          mainAxisExtent: 206,
+                        ),
+                    delegate: SliverChildBuilderDelegate((context, i) {
+                      final card = _PeopleCard(person: data(_results[i]));
+                      if (i >= 8) return card;
+                      return StaggeredReveal(index: i, rise: 16, child: card);
+                    }, childCount: _results.length),
+                  ),
+                ),
+            ],
+          );
+        }
+
+        // My friends: one grouped list, like a contact book.
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+          children: [
+            if (showQuickActions) _quickActions(),
+            if (_results.isEmpty)
+              _buildEmptyState(context)
+            else ...[
+              _SectionLabel(
+                searching ? 'Matches' : 'Friends · ${_results.length}',
+                padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+              ),
+              Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: context.palette.card,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < _results.length; i++) ...[
+                      if (i > 0)
+                        Divider(
+                          height: 1,
+                          thickness: 0.6,
+                          indent: 76,
+                          color: context.palette.divider,
+                        ),
+                      _FriendRow(person: data(_results[i])),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ],
         );
       },
     );
@@ -522,32 +580,46 @@ class _NewChatScreenState extends State<NewChatScreen> {
   /// by mistake was a dead end.
   Widget _quickActions() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Row(
         children: [
-          _QuickAction(
-            icon: Icons.group_add_rounded,
-            label: 'New group',
-            subtitle: 'Start a group with your friends',
-            onTap: () => context.pushNamed('create_group'),
+          Expanded(
+            child: _QuickAction(
+              icon: Icons.group_add_rounded,
+              label: 'New group',
+              onTap: () => context.pushNamed('create_group'),
+            ),
           ),
-          const SizedBox(height: 8),
-          _QuickAction(
-            icon: Icons.bookmark_outline,
-            label: 'Notes to self',
-            subtitle: 'Save links, verses and reminders',
-            onTap: _openSelfChat,
+          const SizedBox(width: 10),
+          Expanded(
+            child: _QuickAction(
+              icon: Icons.bookmark_outline_rounded,
+              label: 'Notes to self',
+              onTap: _openSelfChat,
+            ),
           ),
-          const SizedBox(height: 8),
-          _QuickAction(
-            icon: Icons.person_search_rounded,
-            label: 'Find people',
-            subtitle: 'Discover members across Advent',
-            onTap: () => _setExplore(true),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _QuickAction(
+              icon: Icons.ios_share_rounded,
+              label: 'Invite',
+              onTap: _invite,
+            ),
           ),
         ],
       ),
     );
+  }
+
+  /// Share the store link: a friend who isn't here yet can't be found.
+  Future<void> _invite() async {
+    try {
+      await Share.share(
+        'Join me on Adventist Super App — chat, Bible, hymns and our church '
+        'family in one place: $appDownloadUrl',
+        subject: 'Adventist Super App',
+      );
+    } catch (_) {}
   }
 
   /// Re-runs whichever load failed, without leaving the screen.
@@ -571,12 +643,10 @@ class _NewChatScreenState extends State<NewChatScreen> {
   Widget _buildEmptyState(BuildContext context) {
     final searching = _searchController.text.trim().isNotEmpty;
     final message = _explore
-        ? (searching
-              ? 'No one matches that name.'
-              : 'No members to show yet.')
+        ? (searching ? 'No one matches that name.' : 'No members to show yet.')
         : searching
         ? 'No friends match that name. Try “Find people” to search everyone.'
-        : 'No friends yet. Tap “Find people” to discover members on Advent.';
+        : 'No friends yet. Tap “Find people” to meet members of your church family.';
     return Center(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(28, 40, 28, 28),
@@ -666,6 +736,10 @@ class _SearchField extends StatelessWidget {
               decoration: InputDecoration(
                 isDense: true,
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                filled: false,
                 hintText: hint,
                 hintStyle: AppTextStyles.bodyMedium.copyWith(
                   color: palette.textMuted,
@@ -694,13 +768,11 @@ class _QuickAction extends StatelessWidget {
   const _QuickAction({
     required this.icon,
     required this.label,
-    required this.subtitle,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
-  final String subtitle;
   final VoidCallback onTap;
 
   @override
@@ -708,100 +780,9 @@ class _QuickAction extends StatelessWidget {
     final palette = context.palette;
     return Pressable(
       onTap: onTap,
-      pressedScale: 0.98,
+      pressedScale: 0.96,
       child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: palette.card,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: AppColors.primaryBlue.withValues(alpha: 0.16),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: AppColors.primaryBlue.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: Icon(icon, color: AppColors.primaryBlue, size: 21),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    label,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: palette.textMuted,
-                      fontSize: 11.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right, color: palette.textMuted, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// One person, as a card rather than a ListTile.
-///
-/// Carries the three things that decide whether you message somebody in a
-/// faith community: who they are, whether you share a congregation, and
-/// whether they're reachable right now.
-class _PersonCard extends StatelessWidget {
-  const _PersonCard({
-    required this.name,
-    required this.photoUrl,
-    required this.church,
-    required this.verified,
-    required this.online,
-    required this.bond,
-    required this.busy,
-    required this.showBond,
-    required this.onTap,
-    required this.onAdd,
-  });
-
-  final String name;
-  final String? photoUrl;
-  final String? church;
-  final bool verified;
-  final bool online;
-  final _Bond bond;
-  final bool busy;
-  final bool showBond;
-  final VoidCallback onTap;
-  final VoidCallback onAdd;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final churchName = (church ?? '').trim();
-    return Pressable(
-      onTap: onTap,
-      pressedScale: 0.98,
-      child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
         decoration: BoxDecoration(
           color: palette.card,
           borderRadius: BorderRadius.circular(18),
@@ -813,28 +794,117 @@ class _PersonCard extends StatelessWidget {
             ),
           ],
         ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: AppColors.primaryBlue, size: 21),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: palette.text,
+                fontWeight: FontWeight.w600,
+                fontSize: 12.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(
+    this.text, {
+    this.padding = const EdgeInsets.fromLTRB(20, 6, 20, 10),
+  });
+  final String text;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: padding,
+    child: Text(
+      text.toUpperCase(),
+      style: AppTextStyles.labelSmall.copyWith(
+        color: context.palette.textMuted,
+        fontWeight: FontWeight.w700,
+        fontSize: 11,
+        letterSpacing: 1.1,
+      ),
+    ),
+  );
+}
+
+/// What one person row/card needs, gathered once.
+class _PersonData {
+  const _PersonData({
+    required this.name,
+    required this.photoUrl,
+    required this.church,
+    this.city,
+    required this.verified,
+    required this.online,
+    required this.bond,
+    required this.busy,
+    required this.onTap,
+    required this.onAdd,
+  });
+  final String name;
+  final String? photoUrl;
+  final String? church;
+  final String? city;
+  final bool verified;
+  final bool online;
+  final _Bond bond;
+  final bool busy;
+  final VoidCallback onTap;
+  final VoidCallback onAdd;
+
+  String get churchName => (church ?? '').trim();
+
+  /// Church, else town, else a neutral line.
+  String get where {
+    if (churchName.isNotEmpty) return churchName;
+    final c = (city ?? '').trim();
+    return c.isNotEmpty ? c : 'Church family';
+  }
+}
+
+/// One friend in the grouped list: tap anywhere to open the chat.
+class _FriendRow extends StatelessWidget {
+  const _FriendRow({required this.person});
+  final _PersonData person;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final p = person;
+    return InkWell(
+      onTap: p.onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
         child: Row(
           children: [
-            Stack(
-              children: [
-                _Avatar(name: name, photoUrl: photoUrl, size: 46),
-                if (online)
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 13,
-                      height: 13,
-                      decoration: BoxDecoration(
-                        color: AppColors.successGreen,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: palette.card, width: 2.2),
-                      ),
-                    ),
-                  ),
-              ],
+            _OnlineAvatar(
+              name: p.name,
+              photoUrl: p.photoUrl,
+              online: p.online,
+              size: 48,
+              ring: palette.card,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -844,41 +914,181 @@ class _PersonCard extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Text(
-                          name,
+                          p.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.bodyMedium.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
+                            color: palette.text,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14.5,
                           ),
                         ),
                       ),
-                      if (verified) const VerifiedTick(size: 14),
+                      if (p.verified) ...[
+                        const SizedBox(width: 3),
+                        const VerifiedTick(size: 14),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 1),
                   Text(
-                    churchName.isNotEmpty
-                        ? churchName
-                        : online
+                    p.online
                         ? 'Online now'
-                        : 'Adventist Super App member',
+                        : (p.churchName.isNotEmpty
+                              ? p.churchName
+                              : 'Tap to chat'),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: palette.textMuted,
-                      fontSize: 11.5,
+                      color: p.online
+                          ? AppColors.successGreen
+                          : palette.textMuted,
+                      fontSize: 12,
+                      fontWeight: p.online ? FontWeight.w600 : FontWeight.w400,
                     ),
                   ),
                 ],
               ),
             ),
-            if (showBond) ...[
-              const SizedBox(width: 8),
-              _BondButton(bond: bond, busy: busy, onAdd: onAdd),
-            ],
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withValues(alpha: 0.10),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.chat_bubble_outline_rounded,
+                size: 17,
+                color: AppColors.primaryBlue,
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// A person in Find people: a card with a face, their church, and one
+/// clear action.
+class _PeopleCard extends StatelessWidget {
+  const _PeopleCard({required this.person});
+  final _PersonData person;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final p = person;
+    return Pressable(
+      onTap: p.onTap,
+      pressedScale: 0.97,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            _OnlineAvatar(
+              name: p.name,
+              photoUrl: p.photoUrl,
+              online: p.online,
+              size: 68,
+              ring: palette.card,
+            ),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    p.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: palette.text,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                if (p.verified) ...[
+                  const SizedBox(width: 3),
+                  const VerifiedTick(size: 13),
+                ],
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              p.where,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: palette.textMuted,
+                fontSize: 11.5,
+              ),
+            ),
+            const Spacer(),
+            SizedBox(
+              width: double.infinity,
+              child: _BondButton(bond: p.bond, busy: p.busy, onAdd: p.onAdd),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OnlineAvatar extends StatelessWidget {
+  const _OnlineAvatar({
+    required this.name,
+    required this.photoUrl,
+    required this.online,
+    required this.size,
+    required this.ring,
+  });
+  final String name;
+  final String? photoUrl;
+  final bool online;
+  final double size;
+  final Color ring;
+
+  @override
+  Widget build(BuildContext context) {
+    final dot = size * 0.28;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        children: [
+          _Avatar(name: name, photoUrl: photoUrl, size: size),
+          if (online)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                width: dot,
+                height: dot,
+                decoration: BoxDecoration(
+                  color: AppColors.successGreen,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ring, width: 2.4),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -905,8 +1115,7 @@ class _BondButton extends StatelessWidget {
     final palette = context.palette;
     if (busy) {
       return const SizedBox(
-        width: 34,
-        height: 34,
+        height: 36,
         child: Center(
           child: SizedBox(
             width: 16,
@@ -925,10 +1134,11 @@ class _BondButton extends StatelessWidget {
           onTap: onAdd,
           pressedScale: 0.9,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -936,7 +1146,7 @@ class _BondButton extends StatelessWidget {
                 const Icon(Icons.add, size: 14, color: AppColors.white),
                 const SizedBox(width: 4),
                 Text(
-                  'Add',
+                  'Add friend',
                   style: AppTextStyles.labelSmall.copyWith(
                     color: AppColors.white,
                     fontWeight: FontWeight.w700,
@@ -965,10 +1175,11 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      alignment: Alignment.center,
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(AppRadius.pill),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.28)),
       ),
       child: Text(

@@ -570,6 +570,10 @@ paused until redesigned (topic push, not a row per member); Pro plan
 - Plans only (owner: don't build yet): docs/CALLS_PLAN.md (calls +
   story encryption). 35 calls were ever attempted; none connected.
 
+**Calls restored (Android only, `kHideCalls` on iOS)** — see the top of
+docs/CALLS_PLAN.md for the root cause and the owner steps (TURN key,
+Play full-screen-intent declaration, two-phone test).
+
 **Patches to run in the SQL editor, in this order** (all unapplied):
 
 1. `patch_296_group_safety.sql` — URGENT. Any member could post into any

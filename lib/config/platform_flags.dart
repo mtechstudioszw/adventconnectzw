@@ -53,3 +53,10 @@ bool get kHideAds => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 /// false here.
 bool get kHideAdventAi =>
     !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+/// Voice calling is Android-only for now (1 Nov 2026). The iPhone build
+/// has never been compiled with CallKit/PushKit, and the VoIP + audio
+/// background modes were removed after App Review (Guideline 2.5.4).
+/// Shipping a call button that cannot ring an iPhone would be a broken
+/// feature in front of the reviewer. Every call entry point checks this.
+bool get kHideCalls => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;

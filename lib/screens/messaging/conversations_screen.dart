@@ -16,6 +16,7 @@ import '../../widgets/advent_ai_mark.dart';
 import '../../widgets/church_group_avatar.dart';
 import '../../services/presence_service.dart';
 import '../../services/typing_signal.dart';
+import '../../services/calls/missed_call_badge.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -202,6 +203,10 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     }
     ConversationsScreen._requestsAsked.addListener(_showRequestsTab);
     _bootstrap();
+    // The Calls button lives in this header, so this is where its dot
+    // has to be right. Unawaited — a missed-call count must never hold
+    // up the inbox.
+    unawaited(MissedCallBadge.refresh());
     _startActivityWatcher();
     // Local inbox changes (delete-for-me preview floor) emit no realtime
     // event, so listen for them explicitly and rebuild — otherwise a message
@@ -1044,6 +1049,59 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                 ),
               ),
               const Spacer(),
+              // Call log. WhatsApp puts this behind a Calls TAB; this
+              // screen has no TabBar (Requests is a boolean view swap,
+              // not a tab), so a header button is the idiom that already
+              // exists here rather than a restructure of a 1,600-line
+              // screen for one destination.
+              //
+              // It sits OUTSIDE the overflow menu on purpose: a missed
+              // call is something you go looking for, and burying it two
+              // taps deep is how people conclude the app has no call
+              // history at all.
+              // The red dot is the only thing that tells a member a
+              // call was missed once the system notification has been
+              // swiped away (founder, 25 Aug 2026). Counted by
+              // MissedCallBadge; INCOMING unanswered calls only.
+              if (!kHideCalls)
+                IconButton(
+                  icon: ValueListenableBuilder<int>(
+                    valueListenable: MissedCallBadge.count,
+                    builder: (context, missed, icon) => Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        icon!,
+                        if (missed > 0)
+                          Positioned(
+                            right: -1,
+                            top: -1,
+                            child: Container(
+                              width: 9,
+                              height: 9,
+                              decoration: BoxDecoration(
+                                color: AppColors.red,
+                                shape: BoxShape.circle,
+                                // Rings against the header so the dot
+                                // stays legible in both themes without
+                                // needing a colour of its own.
+                                border: Border.all(
+                                  color: context.palette.scaffoldBg,
+                                  width: 1.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.call_outlined,
+                      color: context.palette.text,
+                    ),
+                  ),
+                  tooltip: 'Calls',
+                  splashRadius: 22,
+                  onPressed: () => context.pushNamed('calls'),
+                ),
               // The person-search circle button was removed (founder, Aug).
               // The inline field directly below already searches people,
               // groups and messages, so the icon sat on top of the same job.

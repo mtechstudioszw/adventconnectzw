@@ -1,4 +1,48 @@
-# Calls — the plan (no code yet)
+# Calls — status and plan
+
+## UPDATE 1 Nov 2026 (later): calling is BUILT again — Android first
+
+Owner: "implement the call system until it's finished". Done as follows:
+
+- **Restored, not rewritten.** The full client deleted in commit 1ec0043
+  is back, about 7,000 lines plus 144 tests: CallService, the mesh WebRTC
+  transport, signalling, CallKit bridge, call screen, call history and
+  the admin metrics. It was written against this exact backend, so
+  restoring it was safer than rewriting.
+- **Root cause of "no call ever connected", fixed.**
+  - Accepting on the lock screen with the app closed launched the app,
+    but the plugin's accept event fired before Dart was listening, and
+    it was lost.
+  - The app then saw the call still "ringing" and rang a second time.
+    The caller gave up, and the call was logged callee-missed /
+    caller-cancelled. That was 32 of the 35 real attempts.
+  - The fix: on start, `CallKitBridge.acceptedCallIds()` reads the
+    native `isAccepted` flag (which the Dart wrapper drops) and joins
+    the call straight away.
+- **Android manifest fixed.** The phone-call and microphone
+  foreground-service permissions were being *removed*. On Android 14+
+  that kills the call service, so the phone cannot ring or keep the
+  microphone. They are restored, and the service is narrowed to
+  phoneCall|microphone.
+- **iPhone: hidden (`kHideCalls`).** CallKit/PushKit has never been
+  compiled for iOS, and the VoIP/audio background modes were removed
+  after App Review. Turn it on later, together with an APNs VoIP key.
+
+Owner steps before members use it:
+1. **TURN (needed on mobile data).**
+   - Cloudflare dashboard → Realtime → TURN → create a key.
+   - Set the Supabase secrets `CLOUDFLARE_TURN_KEY_ID` and
+     `CLOUDFLARE_TURN_API_TOKEN`.
+   - No redeploy is needed; `call-ice-servers` reads them on each call.
+2. **Play Console → App content → Full-screen intent:** declare
+   "calling".
+3. **Two-phone test:** follow the checklist in §8 of
+   docs/CALLING_SETUP.md, especially calling a phone whose app is fully
+   closed.
+
+---
+
+# Original plan (written before the build)
 
 Owner, 1 Nov 2026: *"don't build it yet … just organize it … talk about it."*
 This is that. Nothing here has been built. `docs/CALLING_SETUP.md` is the

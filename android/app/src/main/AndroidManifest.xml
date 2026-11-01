@@ -31,13 +31,22 @@
     <!-- Camera (image_picker / photos) -->
     <uses-permission android:name="android.permission.CAMERA"/>
 
-    <!-- REMOVED: Calling system & associated foreground service permissions -->
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"
-        tools:node="remove"/>
-    <uses-permission
-        android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"
-        tools:node="remove"/>
+    <!-- ===== Audio calling (restored 1 Nov 2026) =========================
+         flutter_webrtc + flutter_callkit_incoming. RECORD_AUDIO is declared
+         above. Android 14+ refuses to start a foreground service whose type
+         has no matching permission — with these removed, the call service
+         died at startForeground() and the phone could not ring. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"/>
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS"/>
+    <!-- Lock-screen incoming-call UI; without it a call is a banner that
+         slides away. Declare it in Play Console (calling app). -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <!-- Audio only: the plugin's camera service type is never used and would
+         need a Play declaration we can't justify. Removed together with the
+         service type below — the two must change together. -->
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_CAMERA"
         tools:node="remove"/>
@@ -49,6 +58,18 @@
         android:allowBackup="false"
         android:fullBackupContent="false"
         tools:replace="android:allowBackup">
+        <!-- flutter_callkit_incoming's call service, narrowed to
+             phoneCall|microphone (no camera). Other attributes copied from
+             the plugin manifest; stopWithTask=false keeps a live call
+             running after the app is swiped away. -->
+        <service
+            android:name="com.hiennv.flutter_callkit_incoming.CallkitNotificationService"
+            android:enabled="true"
+            android:exported="true"
+            android:stopWithTask="false"
+            android:foregroundServiceType="phoneCall|microphone"
+            android:permission="${applicationId}.PERMISSION_CALL"
+            tools:replace="android:foregroundServiceType"/>
         
         <activity
             android:name=".MainActivity"

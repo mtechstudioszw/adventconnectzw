@@ -33,6 +33,7 @@ import 'services/typing_signal.dart';
 import 'services/session_reset.dart';
 import 'services/library_reminders.dart';
 import 'services/sabbath_service.dart';
+import 'services/calls/call_service.dart';
 import 'services/push_service.dart';
 import 'services/theme_service.dart';
 import 'theme/app_text_styles.dart';
@@ -347,6 +348,32 @@ Future<void> _initBackgroundServices() async {
     AnalyticsService.markReady();
     await PushService.initialize();
 
+    // Calling. AFTER PushService.initialize() on purpose: CallService
+    // registers this handset's FCM token for call pushes, from the same
+    // FirebaseMessaging instance PushService has just set up. Not awaited
+    // — nobody waits on call setup to reach their inbox. It also asks the
+    // server which call we are in, so one that survived a force-quit is
+    // rejoined rather than left as a ghost.
+    if (!kHideCalls) unawaited(CallService.initialize());
+
+    // The only place a call screen is opened: a push, a Realtime invite, a
+    // lock-screen accept and a recovered call all arrive here.
+    CallService.onShowCallScreen.listen((signal) {
+      try {
+        if (signal.startsWith('callback:')) {
+          // "Call back" on a missed call opens the call log; it never dials
+          // by itself (an accidental tap must not place a call).
+          appRouter.pushNamed('calls');
+          return;
+        }
+        final location = appRouter.routerDelegate.currentConfiguration.uri.path;
+        if (location == '/call') return;
+        appRouter.pushNamed('call');
+      } catch (e, st) {
+        debugPrint('Opening the call screen failed: $e\n$st');
+      }
+    });
+
     PushService.onMessageTap.listen((msg) {
       final type = (msg.data['reference_type'] ?? '').toString();
       final id = (msg.data['reference_id'] ?? '').toString();
@@ -632,6 +659,11 @@ class _AdventConnectAppState extends State<AdventConnectApp>
       unawaited(MessagingService.markAllIncomingDelivered());
       // Rejoin presence (online again + heartbeat resumes).
       if (AuthService.isSignedIn) unawaited(PresenceService.start());
+      // Ask the server what call we are actually in (killed mid-call, or a
+      // call swept as stale while the phone was in a pocket).
+      if (AuthService.isSignedIn && !kHideCalls) {
+        unawaited(CallService.recoverActiveCall());
+      }
       // Re-read premium on every return. This is what makes a
       // cancellation, refund or expiry that happened server-side while
       // the app was backgrounded take effect without a relaunch — and it

@@ -9,6 +9,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_bootstrap.dart';
 import 'e2ee/e2ee_envelope.dart';
+import 'calls/call_service.dart';
+import 'calls/callkit_bridge.dart';
 import 'e2ee/e2ee_service.dart';
 import 'e2ee/media_crypto.dart';
 import 'messaging_service.dart';
@@ -19,6 +21,11 @@ import 'notification_service.dart';
 /// because Flutter spawns it in a separate isolate.
 @pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
+  // CALLS FIRST, before the `notification != null` bail-out and before
+  // anything touches Supabase: the caller is hearing a ring tone right
+  // now. handleCallPushInBackground only raises the system call UI.
+  if (await handleCallPushInBackground(message)) return;
+
   // When notify-fcm sends a chat push DATA-ONLY (no `notification` block),
   // the system won't render it — so we render it here in the background
   // isolate WITH the inline Reply action + the sender's photo. Pushes that
@@ -497,6 +504,22 @@ class PushService {
   }
 
   static Future<void> _handleForegroundMessage(RemoteMessage message) async {
+    // A call arriving while the app is OPEN still comes by push: the
+    // callee hasn't joined the call's channel yet. Route it to the call
+    // stack — a call is never a chat banner.
+    if ('${message.data['type'] ?? ''}' == 'call') {
+      final callId = '${message.data['call_id'] ?? ''}';
+      final action = '${message.data['action'] ?? 'ring'}';
+      if (callId.isNotEmpty) {
+        if (action == 'cancel') {
+          unawaited(CallKitBridge.reportEnded(callId));
+        } else {
+          unawaited(CallService.presentIncoming(callId));
+        }
+      }
+      return;
+    }
+
     // Even before we render the banner, optimistically mark the
     // conversation as delivered. notify-fcm (patch_032's webhook
     // pipeline) puts the conversation id in reference_id when the

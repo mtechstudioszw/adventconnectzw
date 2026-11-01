@@ -1,3 +1,4 @@
+import '../../config/platform_flags.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/countries.dart';
@@ -18,6 +19,7 @@ import '../../services/user_profile_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/calls/call_action.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/post_card.dart';
 import '../../widgets/home/post_image_viewer.dart';
@@ -582,6 +584,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
+  /// Ring this member (call_start re-checks everything server-side).
+  Future<void> _startCall() async {
+    final profile = _profile;
+    if (profile == null) return;
+    await CallActions.callUser(
+      context,
+      userId: widget.userId,
+      displayName: profile.fullName.trim().isEmpty
+          ? 'Member'
+          : profile.fullName.trim(),
+      photoUrl: profile.profilePhotoUrl,
+    );
+  }
+
   Future<void> _openChat() async {
     final profile = _profile;
     if (profile == null) return;
@@ -891,6 +907,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         label: 'Message',
         onTap: _openChat,
       ),
+      // Voice call. Shown to everyone on purpose: call_reachability decides
+      // server-side and answers every refusal with one identical sentence,
+      // so hiding the button for some cases would leak which one applies.
+      if (!kHideCalls)
+        ProfileActionButton.icon(
+          icon: Icons.call_outlined,
+          label: 'Call',
+          onTap: _startCall,
+        ),
       // Their QR card, to share their profile (owner, 29 Oct 2026).
       ProfileActionButton.icon(
         icon: Icons.qr_code_2_rounded,

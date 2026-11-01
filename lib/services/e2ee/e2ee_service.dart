@@ -253,7 +253,12 @@ class E2eeService {
               )
               as int;
     } catch (_) {
-      remaining = 0;
+      // Could not ask (offline, a timeout, the server overloaded). Do NOT
+      // assume zero and upload another batch: that is how some devices
+      // piled up 2,000-3,900 unused prekeys — one extra batch for every
+      // launch the count failed (found 1 Nov 2026, 117,000 surplus rows).
+      // Try again next launch instead.
+      return;
     }
     if (remaining >= _prekeyLowWater) return;
 

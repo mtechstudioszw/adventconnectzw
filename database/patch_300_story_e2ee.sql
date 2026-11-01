@@ -1,6 +1,6 @@
 -- =====================================================================
 --  PATCH 300 — end-to-end encrypted stories
---  STATUS: not yet applied. Needs patch_298 first (same E2EE family).
+--  STATUS: APPLIED 1 Nov 2026 (by Claude via the Supabase connector)
 --
 --  Stories are already friends-only (policy stories_select_active), so
 --  each one has a known audience at posting time. The app now:

@@ -1,6 +1,6 @@
 -- =====================================================================
 --  PATCH 296 — group chat security fixes + "only admins can send"
---  STATUS: not yet applied
+--  STATUS: APPLIED 1 Nov 2026 (by Claude via the Supabase connector)
 --
 --  Found auditing groups on the live database, 1 Nov 2026:
 --

@@ -1,6 +1,6 @@
 -- =====================================================================
 --  PATCH 294 — keep ciphertext out of notifications and inbox previews
---  STATUS: not yet applied
+--  STATUS: APPLIED 1 Nov 2026 (by Claude via the Supabase connector)
 --
 --  Needed BEFORE end-to-end encryption is switched on for everyone
 --  (patch_295). Checked on the live database 1 Nov 2026:

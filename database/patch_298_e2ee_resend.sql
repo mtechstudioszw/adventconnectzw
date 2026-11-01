@@ -1,6 +1,6 @@
 -- =====================================================================
 --  PATCH 298 — new encrypted messages always open ("retry receipts")
---  STATUS: not yet applied. Run AFTER patch_294, BEFORE patch_295.
+--  STATUS: APPLIED 1 Nov 2026 (by Claude via the Supabase connector)
 --
 --  Owner, 1 Nov 2026: "leave it as 'waiting for this message' — it's
 --  fine for old messages, but for new ones don't."

@@ -1,6 +1,6 @@
 -- =====================================================================
 --  PATCH 293 — a message sent twice by a retry is stored once
---  STATUS: not yet applied
+--  STATUS: APPLIED 1 Nov 2026 (by Claude via the Supabase connector)
 --
 --  1 Nov 2026, offline chat (owner: "when you send a message [offline] it
 --  drafts that message, waiting for internet. Like WhatsApp").

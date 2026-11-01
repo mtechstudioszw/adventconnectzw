@@ -1,6 +1,6 @@
 -- =====================================================================
 --  PATCH 301 — private storage for end-to-end encrypted chat backups
---  STATUS: not yet applied.
+--  STATUS: APPLIED 1 Nov 2026 (by Claude via the Supabase connector)
 --
 --  The app seals each member's readable chat history with a key derived
 --  from a password only they know (ChatBackupService), and uploads the

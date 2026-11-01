@@ -10,8 +10,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 ///   user id. Other clients receive presence sync events whenever
 ///   someone joins or leaves, and read [isOnline] / [onlineUsers] /
 ///   [onChange] to render online indicators.
-/// - **Last seen**: a heartbeat updates `profiles.last_active_at`
-///   every 30s while the app is in the foreground. When a user is
+/// - **Last seen**: `profiles.last_active_at` is written when the app
+///   opens or returns, when it goes to the background, and every 5
+///   minutes in between. When a user is
 ///   offline, callers display `last seen X ago` derived from this
 ///   column via [fetchLastSeen].
 ///
@@ -23,7 +24,13 @@ class PresenceService {
 
   static final SupabaseClient _client = Supabase.instance.client;
   static const _channelName = 'online_users';
-  static const _heartbeatInterval = Duration(seconds: 30);
+  // 5 minutes, not 30 s (1 Nov 2026). The green dot comes from the
+  // realtime channel, not this column — this only feeds "last seen", and
+  // [start]/[stop] write it on open, return and background, so it stays
+  // exact where it matters. Every 30 s it was ~173,000 profile writes
+  // (each firing 7 BEFORE UPDATE triggers) and the largest single load
+  // in the 30 Oct 2026 outage on the Nano database.
+  static const _heartbeatInterval = Duration(minutes: 5);
   // How often we check that the realtime socket is still actually up.
   // Presence only pushes events on join/leave, so a socket that dies
   // without emitting a close leaves the last roster frozen and every
@@ -186,6 +193,8 @@ class PresenceService {
     });
     _channel = channel;
 
+    // Opening or returning to the app is "active now".
+    unawaited(_touchLastActive());
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(
       _heartbeatInterval,
@@ -217,6 +226,9 @@ class PresenceService {
   /// sign-out so a stale "online" row doesn't linger for other
   /// clients after the user has actually left.
   static Future<void> stop({bool clearRoster = true}) async {
+    // Going to the background (or signing out): stamp "last seen" now, so
+    // the slower heartbeat never makes it lag behind the real moment.
+    if (_heartbeatTimer != null) unawaited(_touchLastActive());
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
     _watchdogTimer?.cancel();
@@ -372,8 +384,8 @@ class PresenceService {
           .update({'last_active_at': DateTime.now().toUtc().toIso8601String()})
           .eq('id', me.id);
     } catch (_) {
-      // best-effort — a missed heartbeat just means "last seen" lags
-      // by 30s; not worth surfacing to the user.
+      // best-effort — a missed heartbeat just means "last seen" lags a
+      // little; not worth surfacing to the user.
     }
   }
 }

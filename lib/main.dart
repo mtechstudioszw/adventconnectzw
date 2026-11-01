@@ -463,7 +463,8 @@ class _AdventConnectAppState extends State<AdventConnectApp>
   // the account's ban flag on a short interval + immediately on resume and slam
   // the lockout screen the moment it flips. Fails open, so a network blip never
   // locks out a good user.
-  static const _banPollInterval = Duration(seconds: 30);
+  // 2 minutes, not 30 s (1 Nov 2026) — also re-checked on every resume.
+  static const _banPollInterval = Duration(minutes: 2);
   Timer? _banPollTimer;
   bool _banCheckInFlight = false;
 
@@ -477,7 +478,11 @@ class _AdventConnectAppState extends State<AdventConnectApp>
   // Faster than the ban poll on purpose: a ban concerns one person who is
   // being removed, maintenance concerns everyone at once and usually
   // immediately precedes a deploy.
-  static const _maintenancePollInterval = Duration(seconds: 15);
+  // 2 minutes, not 15 s (1 Nov 2026): ~264,000 maintenance_status calls
+  // fed the 30 Oct outage. Still checked at once on start and on every
+  // return to the app, and the server refuses writes during maintenance
+  // whatever the app thinks, so a slower poll loses nothing.
+  static const _maintenancePollInterval = Duration(minutes: 2);
   Timer? _maintenancePollTimer;
   bool _maintenanceCheckInFlight = false;
 

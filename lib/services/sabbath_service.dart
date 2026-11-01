@@ -84,16 +84,28 @@ class SabbathService {
     if (enabled && isSabbathNow()) {
       until = currentSabbathEnd();
     }
+    // Only write when it CHANGED (1 Nov 2026). This runs on every launch,
+    // sign-in and return to the app; writing the same two values each time
+    // was ~46,000 profile updates (7 triggers each) in the 30 Oct outage.
+    final stamp = '${user.id}|$enabled|${until?.toUtc().toIso8601String()}';
+    if (stamp == _lastSabbathSync) return;
     try {
       await client.from('profiles').update({
         'sabbath_mode_enabled': enabled,
         'sabbath_quiet_until': until?.toUtc().toIso8601String(),
       }).eq('id', user.id);
+      _lastSabbathSync = stamp;
     } catch (_) {
       // Best-effort: a failed sync means notifications aren't muted,
-      // which is the safe direction to fail in.
+      // which is the safe direction to fail in. Not remembered, so the
+      // next launch or resume tries again.
     }
   }
+
+  /// What [syncSabbathQuietWindow] last wrote successfully, this run of
+  /// the app. In memory on purpose: a cold start always writes once, so
+  /// the server can never be left with a value from another device.
+  static String? _lastSabbathSync;
 
   // -- Province coordinates ----------------------------------------------
   // Approximate centroids; ±1 minute of sunset accuracy is well within

@@ -545,6 +545,23 @@ Batch 2 items that were planned (kept for the record):
 
 ---
 
+## 4b. Outage 30 Oct 2026 (Nano database overloaded)
+
+Another agent's report (owner has the PDF): the Free/Nano database timed
+out under load. It restarted the project, slowed cron jobs 16
+(youtube-live-fast → */10) and 14 (youtube-sync-tick → */15), PAUSED
+youtube_fanout_notification() (it no longer inserts one notification row
+per member per video — the function still records the video), and deleted
+32,039 old youtube_live notification rows. No app code was changed by it.
+
+App-side follow-up (1 Nov 2026, this commit): "last seen" heartbeat 30 s →
+5 min (+ a write on open/return and on background), maintenance poll
+15 s → 2 min, ban poll 30 s → 2 min, Sabbath-mode profile write only when
+its value changed. verify-boost deployed by the owner and checked (v1,
+verify_jwt on, both files). Still open: YouTube video notifications stay
+paused until redesigned (topic push, not a row per member); Pro plan
+($25/mo) is the real fix for headroom.
+
 ## 5. Pending owner actions
 
 0. **DONE 28 Oct 2026:** patches 276, 270, 271, 272, 273, 274, 275, 277,

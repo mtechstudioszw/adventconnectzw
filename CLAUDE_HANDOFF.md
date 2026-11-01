@@ -562,6 +562,26 @@ verify_jwt on, both files). Still open: YouTube video notifications stay
 paused until redesigned (topic push, not a row per member); Pro plan
 ($25/mo) is the real fix for headroom.
 
+## 4c. 1 Nov 2026 — chat, E2EE media, groups, churches, redesigns
+
+- Offline-first chat (ChatSync, text + media outbox), E2EE for photos and
+  voice notes (MediaCrypto, wire version 2), chat/new-chat/group/mini-profile
+  redesign, Settings/Events/Prayer redesign, home-church-only churches.
+- Plans only (owner: don't build yet): docs/CALLS_PLAN.md (calls +
+  story encryption). 35 calls were ever attempted; none connected.
+
+**Patches to run in the SQL editor, in this order** (all unapplied):
+
+1. `patch_296_group_safety.sql` — URGENT. Any member could post into any
+   chat as anyone via `_group_system_message`.
+2. `patch_294_e2ee_server_previews.sql` — no ciphertext in notifications.
+3. `patch_297_home_church_only.sql` — members = home church.
+4. `patch_293_message_client_id_unique.sql`
+5. `patch_292_storage_cleanup.sql`, then each VACUUM FULL line on its own.
+6. `patch_208` (ss_highlights) if still wanted.
+7. `patch_295_e2ee_on_for_everyone.sql` — ONLY after the two-phone test
+   written at its top.
+
 ## 5. Pending owner actions
 
 0. **DONE 28 Oct 2026:** patches 276, 270, 271, 272, 273, 274, 275, 277,

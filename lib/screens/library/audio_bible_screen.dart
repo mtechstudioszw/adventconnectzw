@@ -240,6 +240,7 @@ class _ChapterPicker extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () async {
+          final messenger = ScaffoldMessenger.of(context);
           Navigator.of(context).pop();
           try {
             await BibleAudio.play(
@@ -248,7 +249,18 @@ class _ChapterPicker extends StatelessWidget {
               bookName: book.name,
               chapterCount: book.chapterCount,
             );
-          } catch (_) {}
+          } catch (_) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(
+                  saved
+                      ? "Couldn't play this chapter."
+                      : "Couldn't play. Check your connection, or hold the "
+                            'chapter to download it.',
+                ),
+              ),
+            );
+          }
         },
         onLongPress: openSheet,
         child: Center(

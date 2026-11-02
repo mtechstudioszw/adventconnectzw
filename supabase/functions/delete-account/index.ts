@@ -52,6 +52,10 @@ const OWNED_BUCKETS = [
   "chat_media",
   "voice_notes",
   "product_photos",
+  // patch_301 (Nov 2026): the member's password-sealed chat backup,
+  // chat_backups/<user-id>/backup.bin. Missed when backups shipped, so
+  // "Delete account" left it behind.
+  "chat_backups",
 ];
 
 /// Remove everything under `<userId>/` in one bucket. Best-effort by

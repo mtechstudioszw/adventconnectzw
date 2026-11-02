@@ -43,8 +43,7 @@ class AuthScreen extends StatefulWidget {
 
 enum _Stage { email, login, signup }
 
-class _AuthScreenState extends State<AuthScreen>
-    with TickerProviderStateMixin {
+class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -85,9 +84,10 @@ class _AuthScreenState extends State<AuthScreen>
       duration: const Duration(milliseconds: 480),
     )..forward();
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 16, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOutCubic),
-    );
+    _slide = Tween<double>(
+      begin: 16,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOutCubic));
     _birthDate = widget.birthDate;
     _loadStoredBirthDate();
     WidgetsBinding.instance.addPostFrameCallback(
@@ -194,7 +194,8 @@ class _AuthScreenState extends State<AuthScreen>
     if (exists == null && providers == null) {
       setState(() {
         _checking = false;
-        _error = 'Couldn\'t verify this email right now. '
+        _error =
+            'Couldn\'t verify this email right now. '
             'Try Continue with Google above, or try again in a minute.';
       });
       HapticFeedback.heavyImpact();
@@ -251,7 +252,8 @@ class _AuthScreenState extends State<AuthScreen>
         _emailController.text.trim(),
       );
       if (!mounted) return;
-      final isGoogleOnly = providers != null &&
+      final isGoogleOnly =
+          providers != null &&
           providers.contains('google') &&
           !providers.contains('email');
       if (isGoogleOnly) {
@@ -324,8 +326,10 @@ class _AuthScreenState extends State<AuthScreen>
     setState(() => _error = null);
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (!_acceptedTerms) {
-      setState(() => _error =
-          'Please accept the Terms & Conditions to create your account.');
+      setState(
+        () => _error =
+            'Please accept the Terms & Conditions to create your account.',
+      );
       return;
     }
     final birthDate = _birthDate ?? await AuthService.getStoredBirthDate();
@@ -335,8 +339,10 @@ class _AuthScreenState extends State<AuthScreen>
       return;
     }
     if (!AuthService.meetsMinimumAge(birthDate)) {
-      setState(() => _error =
-          'You must be at least 16 years old to create an account.');
+      setState(
+        () =>
+            _error = 'You must be at least 16 years old to create an account.',
+      );
       return;
     }
     setState(() {
@@ -372,7 +378,8 @@ class _AuthScreenState extends State<AuthScreen>
         _emailController.text.trim(),
       );
       if (!mounted) return;
-      final isGoogleOnly = providers != null &&
+      final isGoogleOnly =
+          providers != null &&
           providers.contains('google') &&
           !providers.contains('email');
       if (isGoogleOnly) {
@@ -445,13 +452,14 @@ class _AuthScreenState extends State<AuthScreen>
       });
       return;
     }
-    final age = _ageInYears(dob);
-    if (age < 13) {
+    // Same 16+ rule as email sign-up and the Privacy Policy (2 Nov 2026:
+    // Google/Apple sign-in used to let 13-year-olds in).
+    if (!AuthService.meetsMinimumAge(dob)) {
       await AuthService.signOut();
       if (!mounted) return;
       setState(() {
         _googleBusy = false;
-        _error = 'You must be at least 13 to use Adventist Super App.';
+        _error = 'You must be at least 16 to use Adventist Super App.';
       });
       return;
     }
@@ -501,12 +509,12 @@ class _AuthScreenState extends State<AuthScreen>
       });
       return;
     }
-    if (_ageInYears(dob) < 13) {
+    if (!AuthService.meetsMinimumAge(dob)) {
       await AuthService.signOut();
       if (!mounted) return;
       setState(() {
         _appleBusy = false;
-        _error = 'You must be at least 13 to use Adventist Super App.';
+        _error = 'You must be at least 16 to use Adventist Super App.';
       });
       return;
     }
@@ -529,16 +537,6 @@ class _AuthScreenState extends State<AuthScreen>
       confirmText: 'Continue',
       builder: brandPickerBuilder,
     );
-  }
-
-  int _ageInYears(DateTime dob) {
-    final now = DateTime.now();
-    var age = now.year - dob.year;
-    if (now.month < dob.month ||
-        (now.month == dob.month && now.day < dob.day)) {
-      age -= 1;
-    }
-    return age;
   }
 
   void _changeEmail() {
@@ -784,10 +782,7 @@ class _AuthScreenState extends State<AuthScreen>
       key: const ValueKey('stage-login'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _EmailRow(
-          email: _emailController.text.trim(),
-          onEdit: _changeEmail,
-        ),
+        _EmailRow(email: _emailController.text.trim(), onEdit: _changeEmail),
         const SizedBox(height: 14),
         _GlowField(
           controller: _passwordController,
@@ -807,9 +802,8 @@ class _AuthScreenState extends State<AuthScreen>
               color: context.palette.textMuted,
               size: 20,
             ),
-            onPressed: () => setState(
-              () => _obscurePassword = !_obscurePassword,
-            ),
+            onPressed: () =>
+                setState(() => _obscurePassword = !_obscurePassword),
           ),
         ),
         Align(
@@ -834,8 +828,11 @@ class _AuthScreenState extends State<AuthScreen>
           child: TextButton.icon(
             onPressed: () =>
                 showSupportSheet(context, topic: 'Sign-in problem'),
-            icon: Icon(Icons.help_outline,
-                size: 16, color: AppColors.textMuted),
+            icon: Icon(
+              Icons.help_outline,
+              size: 16,
+              color: AppColors.textMuted,
+            ),
             label: Text(
               'Having trouble? Contact support',
               style: AppTextStyles.bodySmall.copyWith(
@@ -854,10 +851,7 @@ class _AuthScreenState extends State<AuthScreen>
       key: const ValueKey('stage-signup'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _EmailRow(
-          email: _emailController.text.trim(),
-          onEdit: _changeEmail,
-        ),
+        _EmailRow(email: _emailController.text.trim(), onEdit: _changeEmail),
         const SizedBox(height: 14),
         _GlowField(
           controller: _nameController,
@@ -896,9 +890,8 @@ class _AuthScreenState extends State<AuthScreen>
               color: context.palette.textMuted,
               size: 20,
             ),
-            onPressed: () => setState(
-              () => _obscurePassword = !_obscurePassword,
-            ),
+            onPressed: () =>
+                setState(() => _obscurePassword = !_obscurePassword),
           ),
         ),
         const SizedBox(height: 14),
@@ -918,16 +911,11 @@ class _AuthScreenState extends State<AuthScreen>
               color: context.palette.textMuted,
               size: 20,
             ),
-            onPressed: () => setState(
-              () => _obscureConfirm = !_obscureConfirm,
-            ),
+            onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
           ),
         ),
         const SizedBox(height: 14),
-        _BirthDateField(
-          birthDate: _birthDate,
-          onTap: _pickBirthDate,
-        ),
+        _BirthDateField(birthDate: _birthDate, onTap: _pickBirthDate),
         const SizedBox(height: 14),
         _TermsCheckbox(
           value: _acceptedTerms,
@@ -949,8 +937,18 @@ class _BirthDateField extends StatelessWidget {
   final VoidCallback onTap;
 
   static const _months = <String>[
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   @override
@@ -969,9 +967,7 @@ class _BirthDateField extends StatelessWidget {
           decoration: BoxDecoration(
             color: context.palette.card,
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: context.palette.divider,
-            ),
+            border: Border.all(color: context.palette.divider),
           ),
           child: Row(
             children: [
@@ -991,8 +987,7 @@ class _BirthDateField extends StatelessWidget {
                     color: hasDate
                         ? context.palette.text
                         : context.palette.textMuted,
-                    fontWeight:
-                        hasDate ? FontWeight.w600 : FontWeight.w400,
+                    fontWeight: hasDate ? FontWeight.w600 : FontWeight.w400,
                   ),
                 ),
               ),
@@ -1032,10 +1027,7 @@ class _LogoMark extends StatelessWidget {
         ),
         child: Padding(
           padding: const EdgeInsets.all(10),
-          child: Image.asset(
-            'assets/icon/logo.png',
-            fit: BoxFit.contain,
-          ),
+          child: Image.asset('assets/icon/logo.png', fit: BoxFit.contain),
         ),
       ),
     );
@@ -1048,10 +1040,7 @@ class _OrDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final line = Expanded(
-      child: Container(
-        height: 1,
-        color: context.palette.divider,
-      ),
+      child: Container(height: 1, color: context.palette.divider),
     );
     return Row(
       children: [
@@ -1095,9 +1084,7 @@ class _GoogleButton extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: context.palette.divider,
-              ),
+              border: Border.all(color: context.palette.divider),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.04),
@@ -1301,24 +1288,24 @@ class _GlowFieldState extends State<_GlowField> {
               size: 20,
             ),
           ),
-          prefixIconConstraints:
-              const BoxConstraints(minWidth: 48, minHeight: 48),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 48,
+            minHeight: 48,
+          ),
           suffixIcon: widget.suffix,
           filled: true,
           fillColor: context.palette.inputFill,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 18,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(22),
-            borderSide: BorderSide(
-              color: context.palette.divider,
-            ),
+            borderSide: BorderSide(color: context.palette.divider),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(22),
-            borderSide: BorderSide(
-              color: context.palette.divider,
-            ),
+            borderSide: BorderSide(color: context.palette.divider),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(22),
@@ -1358,9 +1345,7 @@ class _EmailRow extends StatelessWidget {
           decoration: BoxDecoration(
             color: context.palette.cardMuted,
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: context.palette.divider,
-            ),
+            border: Border.all(color: context.palette.divider),
           ),
           child: Row(
             children: [
@@ -1461,11 +1446,7 @@ class _TermsCheckboxState extends State<_TermsCheckbox> {
               // Check glyph sits on primaryBlue when value=true — keep white.
               // TODO(dark-mode): const Icon — stays white on primaryBlue fill.
               child: widget.value
-                  ? const Icon(
-                      Icons.check,
-                      size: 14,
-                      color: AppColors.white,
-                    )
+                  ? const Icon(Icons.check, size: 14, color: AppColors.white)
                   : null,
             ),
           ),
@@ -1665,7 +1646,6 @@ class _LegalLineState extends State<_LegalLine> {
   }
 }
 
-
 /// Bottom sheet shown when the user types an email tied only to a
 /// Google account. Gives them two ways forward: tap Google (the
 /// historical happy path) or verify with an emailed 6-digit code
@@ -1689,8 +1669,7 @@ class _GoogleLinkSheet extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: context.palette.sheet,
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: SafeArea(
@@ -1932,8 +1911,7 @@ class _OtpLinkSheetState extends State<_OtpLinkSheet> {
       child: Container(
         decoration: BoxDecoration(
           color: context.palette.sheet,
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: SafeArea(
@@ -1959,9 +1937,7 @@ class _OtpLinkSheetState extends State<_OtpLinkSheet> {
                 const SizedBox(height: 10),
                 Text(
                   _error!,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.red,
-                  ),
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.red),
                 ),
               ],
             ],
@@ -2008,9 +1984,7 @@ class _OtpLinkSheetState extends State<_OtpLinkSheet> {
         decoration: InputDecoration(
           hintText: '000000',
           counterText: '',
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
           contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),
       ),
@@ -2027,8 +2001,8 @@ class _OtpLinkSheetState extends State<_OtpLinkSheet> {
           _resending
               ? 'Sending…'
               : _resendCooldown > 0
-                  ? 'Resend in ${_resendCooldown}s'
-                  : 'Didn\'t get it? Resend code',
+              ? 'Resend in ${_resendCooldown}s'
+              : 'Didn\'t get it? Resend code',
           style: AppTextStyles.bodyMedium.copyWith(
             color: AppColors.primaryBlue,
             fontWeight: FontWeight.w600,
@@ -2105,16 +2079,13 @@ class _OtpLinkSheetState extends State<_OtpLinkSheet> {
         autocorrect: false,
         decoration: InputDecoration(
           labelText: 'New password (at least 8 characters)',
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
           suffixIcon: IconButton(
             icon: Icon(
               _obscurePassword ? Icons.visibility : Icons.visibility_off,
             ),
-            onPressed: () => setState(
-              () => _obscurePassword = !_obscurePassword,
-            ),
+            onPressed: () =>
+                setState(() => _obscurePassword = !_obscurePassword),
           ),
         ),
       ),

@@ -243,7 +243,7 @@ engine to other screens without the owner's say-so.
 
 \- \*\*Auth tokens:\*\* ALWAYS use flutter\_secure\_storage — NEVER SharedPreferences
 
-\- \*\*Supabase region:\*\* Africa (Cape Town) — already set, never change
+\- **Supabase region:** EU (Frankfurt, eu-central-1) — verified against the live project 2 Nov 2026 (this line used to say Cape Town, which was wrong). Never change
 
 \- \*\*Dependency versions:\*\* Use EXACT versions from pubspec.yaml — NEVER "latest"
 

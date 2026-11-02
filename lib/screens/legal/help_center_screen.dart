@@ -215,13 +215,13 @@ class HelpCenterScreen extends StatelessWidget {
         // Hidden on iOS: no paid features there, and Guideline 2.3.10
         // forbids naming another store.
         if (!kHidePayments)
-        LegalSection(
-          title: 'Premium',
-          body:
-              'An optional subscription that removes ads and unlocks extra '
-              'features. Manage or cancel it any time through Google Play — '
-              'the app never handles your card.',
-        ),
+          LegalSection(
+            title: 'Premium',
+            body:
+                'An optional subscription that removes ads and unlocks extra '
+                'features. Manage or cancel it any time through Google Play — '
+                'the app never handles your card.',
+          ),
         LegalSection(
           title: 'Getting help',
           body: 'If something here did not answer your question:',

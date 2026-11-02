@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../services/e2ee/e2ee_service.dart';
 import 'widgets/legal_layout.dart';
 
+/// Privacy Policy, in-app. A MIRROR of the published page
+/// (`legal-site/privacy.html`, live at mtechstudioszw.github.io/adventconnect-legal),
+/// generated from it on 2 Nov 2026 so the wording cannot drift. Change the
+/// published page first, then re-mirror; `lastUpdated` carries its date.
 class PrivacyScreen extends StatelessWidget {
   const PrivacyScreen({super.key});
 
@@ -11,122 +14,173 @@ class PrivacyScreen extends StatelessWidget {
       kicker: 'LEGAL',
       title: 'Privacy Policy',
       subtitle: 'What we collect, why we collect it, and how we look after it.',
-      lastUpdated: '29 October 2026',
+      lastUpdated: '2 November 2026',
       intro:
-          'Your privacy matters to us. This policy explains the personal information Adventist Super App collects when you use the app, how we use it, and the choices you have. We aim to keep this clear and honest — if anything is unclear please reach out and we\'ll explain.',
+          'Plain answers to what the App collects, who can see it, and what you can do about it.',
       sections: [
         LegalSection(
-          title: 'Information We Collect',
+          title: 'Who we are',
           body:
-              'We collect the minimum information needed to give you a useful, safe community experience. This includes:',
+              'Adventist Super App (the "App") is operated by Tanatswa Michael Mikuwa, an independent developer based in Zimbabwe. Contact: tanatswamichaelmikuwa@gmail.com. This policy explains what the App collects, why, who can see it, and what you can do about it. We have tried to write it plainly, including the limits of what we promise.',
+        ),
+        LegalSection(
+          title: 'What we collect',
+          body: '',
           bullets: [
-            'Account details: email address, full name and date of birth.',
-            'Profile data you choose to add: bio, home church and photo.',
-            'Content you create: prayers, listings, messages, RSVPs.',
-            'Usage data: which screens you visit and how the app is performing.',
-            'Device data: operating system and app version, used for diagnostics.',
-            'A push-notification token, so we can deliver the alerts you opt into.',
-            'Location, only when you ask for it — to find churches near you or set your Sabbath times. It is used on your phone and is not stored on our servers.',
-            'Photos and voice notes you choose to post or send.',
-            'If you apply for the gold verified tick (Android version): your legal name, a photo of your ID and a selfie. Only our review team can see them, and they are deleted as soon as a decision is made.',
-            'If you buy Premium or a boost (Android version): Google Play takes the payment. We receive only a purchase token to confirm it — never your card details.',
+            'Account data: email, full name, username, date of birth, profile and cover photo, bio, country and home church.',
+            'Content you create: posts, comments, prayer requests, stories, events, marketplace listings and orders, job posts and applications, Pages you run, and your messages, photos and voice notes in chats.',
+            'Encryption keys: to make end-to-end encryption work, your phone uploads its public keys. Your private keys never leave your phone.',
+            'Call records: who called whom, when, how long it lasted and how it ended (see section 6). Never the audio.',
+            'Device data: a push-notification token (Firebase Cloud Messaging on Android; Apple Push Notification service on iPhone, including a separate token for incoming calls).',
+            'Location: only when you ask for it ("Near me" churches, or working out Sabbath times). It is used on your phone and not stored on our servers. We never track you in the background.',
+            'Gold tick verification (Android): if you apply, your legal name, a photo of your ID and a selfie, kept in private storage only our review team can open, and deleted as soon as a decision is made.',
+            'Purchases (Android): if you buy Premium or a boost, Google Play takes the payment; we receive only a purchase token to confirm it.',
+            'Diagnostics: crash reports (Firebase Crashlytics) and basic in-app usage events so we can find bugs and see which features are used.',
           ],
         ),
         LegalSection(
-          title: 'How We Use Your Information',
-          body:
-              'We use your information to operate the app and improve your experience.',
+          title: 'What we don\'t collect',
+          body: '',
           bullets: [
-            'Provide core features such as sign-in, messaging and prayer requests.',
-            'Send notifications you have opted into (events, prayers, messages).',
-            'Detect abuse, spam and security threats.',
-            'Improve the app based on aggregated, non-personal usage trends.',
+            'Your contacts list.',
+            'Photos or files other than the ones you choose to send or upload.',
+            'Background location.',
+            'Microphone input, except while you record a voice note or are on a call. Camera input, except when you take a photo.',
+            'Card or wallet details. Payments are handled by Google Play or, for donations, by the payment provider you choose; we never see them.',
+            'What you say to the reading voice: "Listen" for Ellen G. White books uses your phone\'s own text-to-speech, on the phone.',
           ],
         ),
         LegalSection(
-          title: 'Data Sharing',
-          body:
-              'We do not sell your personal information — ever. We share data only with the trusted infrastructure providers we need to run the app:',
+          title: 'How we use it',
+          body: '',
           bullets: [
-            // Region verified against the live project, 29 Oct 2026:
-            // eu-central-1 (Frankfurt). It used to say Cape Town.
-            'Supabase (Frankfurt, Germany — EU region) hosts our database and authentication.',
-            // Apple Guideline 5.1.2(i): disclose data shared with a
-            // third-party AI. The app also asks before the first message.
-            'Google (Gemini), only if you use Advent AI and agree first: the messages you type to Advent AI are sent to Google to generate its answers. Don\'t include personal or sensitive details in them.',
-            'Google Firebase delivers push notifications to your device.',
-            'Appodeal and its advertising partners show ads in the Android version to members without Premium, and may use your device\'s advertising ID. The iPhone app shows no ads.',
-            'Crash and analytics tools that receive anonymised diagnostic data.',
-            'Authorities, only when required by law and with proper legal process.',
+            'To sign you in and keep your account secure.',
+            'To show your content to the people you chose (section 5).',
+            'To deliver messages, calls and the notifications you turned on.',
+            'To find churches and events near you, and to show your church\'s announcements.',
+            'To enforce limits (for example daily call minutes and posting limits), prevent spam and investigate reports.',
+            'To fix crashes and improve the App.',
           ],
         ),
         LegalSection(
-          title: 'Data Security',
+          title: 'Ads',
           body:
-              'We protect your data with industry-standard safeguards. Auth tokens are kept in your device\'s own encrypted secure storage. All traffic between the app and our servers is encrypted in transit. Sensitive operations are protected at the database level with row-level security.',
+              'We do not sell your data. The Android version shows ads, through Appodeal and its advertising partners, which may use your device\'s advertising ID; Premium members see no ads. The iPhone app shows no ads.',
         ),
-        // SYNCED FROM THE PUBLISHED POLICY, NOT NEWLY DRAFTED.
-        //
-        // The live policy at mtechstudioszw.github.io/adventconnect-legal —
-        // the URL Google Play links to from the store listing — already
-        // discloses this in its "Who can access your data" and "Encryption
-        // model" sections. This in-app screen did NOT: it listed messages
-        // under content we collect and stopped there, with zero mention of
-        // administrator access or the absence of end-to-end encryption.
-        //
-        // So the copy most members will actually read was materially weaker
-        // than the one Play links to, while carrying a LATER "last updated"
-        // date — which made the weaker text look like the current one. The
-        // wording below is lifted from the published policy rather than
-        // paraphrased, so the two cannot drift apart in meaning.
         LegalSection(
-          title: 'Who Can Access Your Data',
-          body:
-              'It is important to us that you know exactly who can see what:',
+          title: 'Who can see what',
+          body: '',
           bullets: [
-            'You — your own data, and content shared with you. This is enforced at the database level with row-level security, not just in the app.',
-            'Other members — only what you make visible under the app\'s visibility rules, such as public versus friends-only posts, or public versus anonymous prayers.',
-            'Church admins — cannot read your private chats.',
-            E2eeService.isEncryptionOn
-                ? 'Our servers and administrators — private and group chats are end-to-end encrypted: messages, photos and voice notes are stored only as encrypted data that we cannot read. Church announcement channels are not encrypted. When you report a message, your app sends us a readable copy of that message so it can be reviewed. Other stored data (profiles, posts, prayers) can be accessed by authorised administrators through a privileged database credential.'
-                : 'Our servers and administrators — backend functions use a privileged database credential that can read stored data. This means authorised administrators can technically access stored content, including messages. Messaging is not end-to-end encrypted, and messages are stored on our servers in readable form.',
+            'Public posts, events, prayers, listings, job posts and Pages are visible to signed-in members, and some (events, listings, jobs) can be opened from a share link.',
+            'Friends-only posts and stories are visible only to your accepted friends.',
+            'Church-only prayers are visible to members whose home church is the same as yours.',
+            'Anonymous prayers hide your name from everyone.',
+            'Private profile: you can limit who sees your profile, who can follow you (off by default) and who can message you, in Settings → Privacy.',
+            'Chats are visible only to the people in them. Church admins cannot read private chats.',
+            'Church admins can see the list of members whose home church is their church (name and photo), so they can serve their congregation.',
           ],
         ),
         LegalSection(
-          title: 'Your Rights',
+          title: 'Encryption, calls and backups',
           body:
-              'You are in control of your data. From Settings you can:',
+              'Chats. Private and group chats — messages, photos and voice notes — are end-to-end encrypted on current versions of the App: they are sealed on your phone and can only be opened on the phones of the people in the chat. Our servers store them only in a form we cannot read. Encryption is being switched on for all members during November 2026. Honest exceptions:',
           bullets: [
-            'Edit or update your profile information at any time.',
-            'Request a copy of your data by emailing adventconnectzw@gmail.com.',
-            'Delete your account, which removes your profile and posts.',
-            'Adjust or revoke notification preferences at any time.',
+            'Church announcement channels are not encrypted — they are broadcasts.',
+            'Messages sent before encryption was on for both of you, or to or from an older version of the App, are stored readably.',
+            'If you report a message, your phone sends us a readable copy of that one message so it can be reviewed.',
+            'We still see who you chat with and when (but not what you say), because we have to deliver the messages.',
+            'Notifications for encrypted messages say only "New message", "Photo" or "Voice note" — never the text.',
           ],
         ),
         LegalSection(
-          title: 'Children\'s Privacy',
+          title: 'Stories',
           body:
-              'Adventist Super App is for members aged 16 and older. We do not knowingly collect personal information from anyone under 16. If you believe a younger person has registered, please contact us so we can remove the account. Members aged 16–17 are encouraged to use the app with the involvement of a parent or guardian.',
+              'Friends-only stories are end-to-end encrypted in the same way. Public stories are meant for everyone and are not. Stories disappear after 24 hours.',
         ),
         LegalSection(
-          title: 'Data Protection and Your Rights',
+          title: 'Voice calls',
           body:
-              'The app is operated from Zimbabwe, and we process personal information in accordance with the Cyber and Data Protection Act [Chapter 12:07] of Zimbabwe. Wherever you live, you have the right to access, correct, export or object to the processing of your personal information, to withdraw consent, and to ask us to delete your account and data. If you are in a country with its own data-protection law — such as the GDPR in the UK and the European Economic Area, or comparable laws elsewhere — those rights apply to you in addition, and you may lodge a complaint with your local data protection authority.',
+              'Your microphone is used only while a call is in progress. Call audio travels directly between the phones and is encrypted from one phone to the other; on current versions the two phones also check each other\'s keys over the encrypted chat, so not even our server can step into the middle. When a network blocks a direct connection, the encrypted audio passes through a relay run by Cloudflare, which cannot listen to it. We never record calls. An incoming call may appear on your lock screen through your phone\'s calling screen.',
         ),
         LegalSection(
-          title: 'Data Retention',
+          title: 'Chat backup',
           body:
-              'We keep your personal information only for as long as your account is active or as long as we need it to run the app. When you delete your account, your profile and posts are removed promptly. A small amount of data may be retained briefly where the law, security or fraud-prevention requires it, and is then deleted. Messages you have already sent to other members may remain visible to those recipients.',
+              'If you turn on Settings → Chat backup, your phone seals your chat history with a password you choose and stores the sealed file in a private folder on our servers. We never see the password and cannot open the backup. If you forget the password, the backup cannot be recovered — by you or by us.',
         ),
         LegalSection(
-          title: 'Changes to this Policy',
+          title: 'Everything else',
           body:
-              'We may update this Privacy Policy from time to time. Material changes will be highlighted in the app and the "Last updated" date above will reflect the most recent revision.',
+              'Everything else — profiles, posts, prayers, listings — is protected by access rules but is not end-to-end encrypted, and can be accessed by authorised administrators when needed, for example to act on a report.',
         ),
         LegalSection(
-          title: 'Contact Us',
+          title: 'Other services we use',
+          body: '',
+          bullets: [
+            'Supabase — database, sign-in, file storage and server functions, hosted in the EU (Frankfurt, Germany).',
+            'Google Firebase — push notifications (Android) and crash reports.',
+            'Apple — push notifications and incoming-call alerts on iPhone; Sign in with Apple if you use it.',
+            'Cloudflare — call relay when a direct connection fails (encrypted audio only).',
+            'Google Play — payments for Premium and boosts (Android).',
+            'Appodeal and its partners — ads on Android for members without Premium.',
+            'Google Gemini — only if you choose to use Advent AI and agree first. What you type to it is sent to Google to produce the answer; please don\'t include personal or sensitive details.',
+            'bible.helloao.org — the narrated English Bible is streamed or downloaded from this free Bible service, which therefore sees your device\'s network address, as any website does. Downloaded chapters are kept on your phone.',
+            'YouTube — videos in Watch are played from YouTube under Google\'s terms.',
+          ],
+        ),
+        LegalSection(
+          title: 'How long we keep it',
+          body: '',
+          bullets: [
+            'Your account and content: until you delete them or your account.',
+            'Stories: 24 hours.',
+            'Messages: until you or the other person deletes them, or the account is deleted.',
+            'Detailed call logs: 30 days. Your call history list stays until your account is deleted.',
+            'Encrypted copies kept so a message can be re-sent to a new phone: at most 30 days.',
+            'Usage events: 120 days. Crash reports: 90 days.',
+            'Old notifications are cleared automatically.',
+            'Verification documents: deleted when a decision is made.',
+          ],
+        ),
+        LegalSection(
+          title: 'Deleting your account',
           body:
-              'For privacy questions or to exercise your rights, email adventconnectzw@gmail.com. We aim to respond within seven working days.',
+              'Settings → Delete account removes your profile, your content, your uploaded photos and voice notes, your chat backup and your sign-in. Messages you sent stay encrypted on the other person\'s phone, as with any messaging app. Some data may remain in our service providers\' backups until they age out, typically within 30 days.',
+        ),
+        LegalSection(
+          title: 'Age',
+          body:
+              'You must be at least 16 to use the App, and sign-up checks your date of birth. We do not knowingly collect information from anyone younger. If you believe someone under 16 has an account, contact us and we will remove it. Members aged 16–17 are encouraged to use the App with a parent or guardian\'s involvement.',
+        ),
+        LegalSection(
+          title: 'Security',
+          body:
+              'Sign-in tokens are kept in encrypted storage on your phone (Android Keystore / iOS Keychain). Everything travels over HTTPS. Database rules check every request so you can only read and change what you\'re allowed to. No system is perfectly secure; if we learn of a breach that affects you, we will tell you.',
+        ),
+        LegalSection(
+          title: 'Your rights',
+          body: '',
+          bullets: [
+            'Edit or delete your posts, prayers, messages, listings and events.',
+            'Change who can see your profile, follow you and message you.',
+            'Turn any kind of notification off in Settings.',
+            'Delete your account.',
+            'Ask for a copy of your data, or for a correction, by emailing tanatswamichaelmikuwa@gmail.com. We can\'t give you encrypted messages, because we can\'t read them.',
+          ],
+        ),
+        LegalSection(
+          title: 'Data-protection law',
+          body:
+              'We handle personal information in line with Zimbabwe\'s Cyber and Data Protection Act [Chapter 12:07]. Wherever you live you may ask to access, correct, export or delete your data, object to how we use it, or withdraw consent. If you are covered by another data-protection law, such as the GDPR in the EU/EEA and UK, those rights also apply, and you may complain to your local data-protection authority.',
+        ),
+        LegalSection(
+          title: 'Changes',
+          body:
+              'We will update this page and its date when our practices change, and tell you inside the App about important changes.',
+        ),
+        LegalSection(
+          title: 'Contact',
+          body:
+              'Privacy questions: tanatswamichaelmikuwa@gmail.com or WhatsApp +263 778 092 494.',
         ),
       ],
     );

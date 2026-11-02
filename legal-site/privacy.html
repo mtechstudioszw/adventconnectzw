@@ -33,132 +33,195 @@
 <header><div class="wrap">
   <div class="kicker">ADVENTIST SUPER APP</div>
   <h1>Privacy Policy</h1>
-  <div class="sub">Last updated: 10 June 2026 · Effective on first use of the app</div>
+  <div class="sub">Last updated: 2 November 2026 · Effective on first use of the app</div>
 </div></header>
 <main class="wrap">
+      <h2>1. Who we are</h2>
+      <p>
+        Adventist Super App (the "App") is operated by Tanatswa Michael Mikuwa,
+        an independent developer based in Zimbabwe. Contact:
+        <a href="mailto:tanatswamichaelmikuwa@gmail.com">tanatswamichaelmikuwa@gmail.com</a>.
+        This policy explains what the App collects, why, who can see it, and
+        what you can do about it. We have tried to write it plainly, including
+        the limits of what we promise.
+      </p>
 
-<p>This Privacy Policy explains what information Adventist Super App ("the App", "we", "us") collects, how it is stored, who it is shared with, and the level of access different parties have. The App is operated by <strong>Tanatswa Michael Mikuwa</strong>, an independent developer based in Zimbabwe. Contact: <a href="mailto:tanatswamichaelmikuwa@gmail.com">tanatswamichaelmikuwa@gmail.com</a>. It describes the application <strong>as implemented in its source code</strong>. Where behaviour could not be determined from the code, it is marked <strong>"To be confirmed"</strong> and listed in <a href="#questions">Section 13</a>.</p>
+      <h2>2. What we collect</h2>
+      <ul>
+        <li><strong>Account data</strong>: email, full name, username, date of birth, profile and cover photo, bio, country and home church.</li>
+        <li><strong>Content you create</strong>: posts, comments, prayer requests, stories, events, marketplace listings and orders, job posts and applications, Pages you run, and your messages, photos and voice notes in chats.</li>
+        <li><strong>Encryption keys</strong>: to make end-to-end encryption work, your phone uploads its <em>public</em> keys. Your private keys never leave your phone.</li>
+        <li><strong>Call records</strong>: who called whom, when, how long it lasted and how it ended (see section 6). Never the audio.</li>
+        <li><strong>Device data</strong>: a push-notification token (Firebase Cloud Messaging on Android; Apple Push Notification service on iPhone, including a separate token for incoming calls).</li>
+        <li><strong>Location</strong>: only when you ask for it ("Near me" churches, or working out Sabbath times). It is used on your phone and not stored on our servers. We never track you in the background.</li>
+        <li><strong>Gold tick verification (Android)</strong>: if you apply, your legal name, a photo of your ID and a selfie, kept in private storage only our review team can open, and deleted as soon as a decision is made.</li>
+        <li><strong>Purchases (Android)</strong>: if you buy Premium or a boost, Google Play takes the payment; we receive only a purchase token to confirm it.</li>
+        <li><strong>Diagnostics</strong>: crash reports (Firebase Crashlytics) and basic in-app usage events so we can find bugs and see which features are used.</li>
+      </ul>
 
-<div class="flag"><b>Important — messaging is not end-to-end encrypted.</b> Messages, images and voice notes you send are stored on our servers in readable form and are protected by access controls, not end-to-end encryption. See <a href="#encryption">Section 8</a>.</div>
+      <h2>3. What we don't collect</h2>
+      <ul>
+        <li>Your contacts list.</li>
+        <li>Photos or files other than the ones you choose to send or upload.</li>
+        <li>Background location.</li>
+        <li>Microphone input, except while you record a voice note or are on a call. Camera input, except when you take a photo.</li>
+        <li>Card or wallet details. Payments are handled by Google Play or, for donations, by the payment provider you choose; we never see them.</li>
+        <li>What you say to the reading voice: "Listen" for Ellen G. White books uses your phone's own text-to-speech, on the phone.</li>
+      </ul>
 
-<h2>1. Who provides the service / data processors</h2>
-<p>The App is built on the following providers, which process and store data on our behalf:</p>
-<ul>
-  <li><strong>Supabase</strong> — database (PostgreSQL), authentication, file storage, realtime, and server functions. The substantive data described below is stored on Supabase infrastructure in <strong>Ireland (EU region)</strong>.</li>
-  <li><strong>Google / Firebase</strong> — Firebase Cloud Messaging (push notifications), Firebase Analytics (usage events), Firebase Crashlytics (crash diagnostics), and Google Sign-In (optional login).</li>
-  <li><strong>Apple</strong> — "Sign in with Apple" (iOS only; only where enabled).</li>
-</ul>
-<p>The code contains <strong>no advertising SDKs</strong> and <strong>no payment processing</strong> inside the App.</p>
+      <h2>4. How we use it</h2>
+      <ul>
+        <li>To sign you in and keep your account secure.</li>
+        <li>To show your content to the people you chose (section 5).</li>
+        <li>To deliver messages, calls and the notifications you turned on.</li>
+        <li>To find churches and events near you, and to show your church's announcements.</li>
+        <li>To enforce limits (for example daily call minutes and posting limits), prevent spam and investigate reports.</li>
+        <li>To fix crashes and improve the App.</li>
+      </ul>
+      <p>
+        We do not sell your data. The Android version shows ads, through
+        Appodeal and its advertising partners, which may use your device's
+        advertising ID; Premium members see no ads. The iPhone app shows no ads.
+      </p>
 
-<h2>2. Information we collect</h2>
-<h3>2.1 Account &amp; identity</h3>
-<ul>
-  <li>Email address and password (passwords are handled and hashed by Supabase Auth — we never store them in readable form), <em>or</em> a Google / Apple sign-in identifier if you use social login.</li>
-  <li>Full name and username.</li>
-  <li>Date of birth (used to derive your age; see 2.7).</li>
-  <li>Profile photo and cover photo.</li>
-  <li>Short bio / "about" text.</li>
-  <li>Home church, and your province and city (as you enter them).</li>
-</ul>
-<h3>2.2 Content you create</h3>
-<ul>
-  <li>Feed posts (text and/or photo).</li>
-  <li>Stories (photo with optional caption; automatically expire ~24 hours after posting).</li>
-  <li>Prayer requests (text; marked public or anonymous).</li>
-  <li>Marketplace listings (title, price, description, photos) and job posts.</li>
-  <li>Events you create (and RSVPs you make).</li>
-  <li>Comments, likes/reactions, and friend connections.</li>
-  <li>Churches you follow, and — if you apply to manage a congregation — your church-admin application, which includes an appointment-letter file and the applicant name and phone number you provide.</li>
-</ul>
-<h3>2.3 Messages</h3>
-<ul>
-  <li>One-to-one and group chat messages: text, images, and voice-note audio.</li>
-  <li>Message reactions, edits, "forwarded" flags, replies, and read / delivery receipts.</li>
-  <li>Messages you "star" (saved for yourself).</li>
-</ul>
-<h3>2.4 Device &amp; technical data</h3>
-<ul>
-  <li>A Firebase Cloud Messaging push token, stored on your profile so we can deliver notifications.</li>
-  <li>Network connectivity state (online/offline), used on-device.</li>
-  <li>Locally cached content (recent feed, inbox, messages) stored on your device.</li>
-</ul>
-<h3>2.5 Usage analytics (Firebase Analytics)</h3>
-<p>We log a limited set of events, associated with your user identifier: screen views, and the events <code>church_followed</code>, <code>message_sent</code> (a source label only — <strong>no message content</strong>), <code>prayer_posted</code> (visibility setting), <code>marketplace_contact</code>, <code>event_rsvp</code>, <code>church_claimed</code>, <code>job_posted</code>, and <code>seller_applied</code>. Standard Firebase Analytics device/app metadata also applies.</p>
-<h3>2.6 Crash diagnostics (Firebase Crashlytics)</h3>
-<p>When the App crashes, Crashlytics collects a crash stack trace, device and operating-system information, and your user identifier.</p>
-<h3>2.7 Date of birth &amp; age</h3>
-<p>Your date of birth is stored in your device's secure storage and used to compute your age. Whether your age is shown to other users is controlled by your "Show age" privacy setting.</p>
-<h3>2.8 Location</h3>
-<p>With your permission, the App requests your precise (GPS) location <strong>only</strong> to sort nearby churches by distance. Per the source code, the distance is computed <strong>on your device</strong>; your coordinates are <strong>not transmitted to or stored on our servers</strong>.</p>
-<h3>2.9 Reports</h3>
-<p>If you report content (a message, group, post, listing, profile, etc.), we record the content type, its identifier, the reason, and that you submitted it, for moderation.</p>
+      <h2>5. Who can see what</h2>
+      <ul>
+        <li><strong>Public</strong> posts, events, prayers, listings, job posts and Pages are visible to signed-in members, and some (events, listings, jobs) can be opened from a share link.</li>
+        <li><strong>Friends-only</strong> posts and stories are visible only to your accepted friends.</li>
+        <li><strong>Church-only</strong> prayers are visible to members whose home church is the same as yours.</li>
+        <li><strong>Anonymous</strong> prayers hide your name from everyone.</li>
+        <li><strong>Private profile</strong>: you can limit who sees your profile, who can follow you (off by default) and who can message you, in Settings → Privacy.</li>
+        <li><strong>Chats</strong> are visible only to the people in them. Church admins cannot read private chats.</li>
+        <li><strong>Church admins</strong> can see the list of members whose home church is their church (name and photo), so they can serve their congregation.</li>
+      </ul>
 
-<h2>3. Permissions the App requests</h2>
-<table>
-  <tr><th>Permission</th><th>Why</th></tr>
-  <tr><td>Camera</td><td>Take photos for posts, listings, stories, profile, chat.</td></tr>
-  <tr><td>Photos / media</td><td>Choose existing images to upload; save received images.</td></tr>
-  <tr><td>Microphone</td><td>Record voice notes in chat.</td></tr>
-  <tr><td>Location (precise/approximate)</td><td>Sort nearby churches by distance (on-device only).</td></tr>
-  <tr><td>Notifications</td><td>Deliver push notifications.</td></tr>
-  <tr><td>Biometric</td><td>Optional app lock (Face/fingerprint), handled by the OS.</td></tr>
-</table>
+      <h2>6. Encryption, calls and backups</h2>
+      <p>
+        <strong>Chats.</strong> Private and group chats — messages, photos and
+        voice notes — are end-to-end encrypted on current versions of the App:
+        they are sealed on your phone and can only be opened on the phones of
+        the people in the chat. Our servers store them only in a form we cannot
+        read. Encryption is being switched on for all members during November
+        2026. Honest exceptions:
+      </p>
+      <ul>
+        <li>Church announcement channels are not encrypted — they are broadcasts.</li>
+        <li>Messages sent before encryption was on for both of you, or to or from an older version of the App, are stored readably.</li>
+        <li>If you <em>report</em> a message, your phone sends us a readable copy of that one message so it can be reviewed.</li>
+        <li>We still see who you chat with and when (but not what you say), because we have to deliver the messages.</li>
+        <li>Notifications for encrypted messages say only "New message", "Photo" or "Voice note" — never the text.</li>
+      </ul>
+      <p>
+        <strong>Stories.</strong> Friends-only stories are end-to-end encrypted
+        in the same way. Public stories are meant for everyone and are not.
+        Stories disappear after 24 hours.
+      </p>
+      <p>
+        <strong>Voice calls.</strong> Your microphone is used only while a call
+        is in progress. Call audio travels directly between the phones and is
+        encrypted from one phone to the other; on current versions the two
+        phones also check each other's keys over the encrypted chat, so not
+        even our server can step into the middle. When a network blocks a
+        direct connection, the encrypted audio passes through a relay run by
+        Cloudflare, which cannot listen to it. We never record calls. An
+        incoming call may appear on your lock screen through your phone's
+        calling screen.
+      </p>
+      <p>
+        <strong>Chat backup.</strong> If you turn on Settings → Chat backup, your
+        phone seals your chat history with a password you choose and stores
+        the sealed file in a private folder on our servers. We never see the
+        password and cannot open the backup. If you forget the password, the
+        backup cannot be recovered — by you or by us.
+      </p>
+      <p>
+        Everything else — profiles, posts, prayers, listings — is protected by
+        access rules but is not end-to-end encrypted, and can be accessed by
+        authorised administrators when needed, for example to act on a report.
+      </p>
 
-<h2>4. Where data is stored</h2>
-<ul>
-  <li><strong>On Supabase</strong> (PostgreSQL + file Storage): all account, profile, content, messaging and media data. Some image buckets are publicly readable by design (profile photos, post photos, story photos, product photos, event flyers); chat images and voice notes are kept in <strong>private</strong> buckets accessible only via short-lived signed URLs to permitted participants.</li>
-  <li><strong>On your device</strong>: authentication tokens (in the operating-system secure keychain via <code>flutter_secure_storage</code>), your date of birth, and a local cache of recent content/media.</li>
-</ul>
+      <h2>7. Other services we use</h2>
+      <ul>
+        <li><strong>Supabase</strong> — database, sign-in, file storage and server functions, hosted in the EU (Frankfurt, Germany).</li>
+        <li><strong>Google Firebase</strong> — push notifications (Android) and crash reports.</li>
+        <li><strong>Apple</strong> — push notifications and incoming-call alerts on iPhone; Sign in with Apple if you use it.</li>
+        <li><strong>Cloudflare</strong> — call relay when a direct connection fails (encrypted audio only).</li>
+        <li><strong>Google Play</strong> — payments for Premium and boosts (Android).</li>
+        <li><strong>Appodeal</strong> and its partners — ads on Android for members without Premium.</li>
+        <li><strong>Google Gemini</strong> — only if you choose to use Advent AI and agree first. What you type to it is sent to Google to produce the answer; please don't include personal or sensitive details.</li>
+        <li><strong>bible.helloao.org</strong> — the narrated English Bible is streamed or downloaded from this free Bible service, which therefore sees your device's network address, as any website does. Downloaded chapters are kept on your phone.</li>
+        <li><strong>YouTube</strong> — videos in Watch are played from YouTube under Google's terms.</li>
+      </ul>
 
-<h2>5. Data shared with third parties</h2>
-<table>
-  <tr><th>Recipient</th><th>What</th><th>Purpose</th></tr>
-  <tr><td>Supabase</td><td>All stored data (Section 4)</td><td>Hosting / processing on our behalf</td></tr>
-  <tr><td>Google (Firebase Cloud Messaging)</td><td>Your push token and the notification title &amp; body. For a chat message the notification includes the sender's name and a short snippet of the message text.</td><td>Delivering push notifications</td></tr>
-  <tr><td>Google (Firebase Analytics)</td><td>Usage events (2.5) + user identifier. <strong>No message content.</strong></td><td>Product analytics</td></tr>
-  <tr><td>Google (Crashlytics)</td><td>Crash + device data + user identifier</td><td>Stability / debugging</td></tr>
-  <tr><td>Google / Apple Sign-In</td><td>Authentication identifiers</td><td>Login (only if you use it)</td></tr>
-</table>
-<p>We do <strong>not</strong> sell your personal data, and the code contains no advertising or data-broker SDKs.</p>
-<div class="flag"><b>Note on notifications:</b> because push notifications for chat include the sender's name and a snippet of the message text, that snippet transits Google's Cloud Messaging service to reach your device.</div>
+      <h2>8. How long we keep it</h2>
+      <ul>
+        <li>Your account and content: until you delete them or your account.</li>
+        <li>Stories: 24 hours.</li>
+        <li>Messages: until you or the other person deletes them, or the account is deleted.</li>
+        <li>Detailed call logs: 30 days. Your call history list stays until your account is deleted.</li>
+        <li>Encrypted copies kept so a message can be re-sent to a new phone: at most 30 days.</li>
+        <li>Usage events: 120 days. Crash reports: 90 days.</li>
+        <li>Old notifications are cleared automatically.</li>
+        <li>Verification documents: deleted when a decision is made.</li>
+      </ul>
 
-<h2>6. Who can access your data (access levels)</h2>
-<ul>
-  <li><strong>You</strong> — your own data and content shared with you, enforced by database Row-Level Security.</li>
-  <li><strong>Other users</strong> — only what you make visible according to the App's visibility rules (e.g., public vs friends-only posts, public vs anonymous prayers, church membership).</li>
-  <li><strong>Our servers / administrators</strong> — backend functions and administration use a privileged database credential that can read stored data. This means authorised administrators can technically access stored content, <strong>including messages</strong> (messaging is not end-to-end encrypted). A super-admin role exists for moderation: reviewing reports, banning accounts, sending broadcast notices, and approving church-admin / seller / news submissions.</li>
-</ul>
+      <h2>9. Deleting your account</h2>
+      <p>
+        Settings → Delete account removes your profile, your content, your
+        uploaded photos and voice notes, your chat backup and your sign-in.
+        Messages you sent stay encrypted on the other person's phone, as with
+        any messaging app. Some data may remain in our service providers'
+        backups until they age out, typically within 30 days.
+      </p>
 
-<h2>7. Blocking</h2>
-<p>If you block another user, that user can no longer see your profile, posts, stories or prayers, and their messages to you are not delivered.</p>
+      <h2>10. Age</h2>
+      <p>
+        You must be at least 16 to use the App, and sign-up checks your date
+        of birth. We do not knowingly collect information from anyone younger.
+        If you believe someone under 16 has an account, contact us and we will
+        remove it. Members aged 16–17 are encouraged to use the App with a
+        parent or guardian's involvement.
+      </p>
 
-<h2 id="encryption">8. Encryption model</h2>
-<ul>
-  <li><strong>In transit:</strong> connections to Supabase and Google services use TLS/HTTPS.</li>
-  <li><strong>Authentication tokens:</strong> stored in your device's secure keychain.</li>
-  <li><strong>Messages &amp; media:</strong> <strong>NOT end-to-end encrypted.</strong> They are stored server-side in readable form and protected by access controls (Row-Level Security), not by end-to-end encryption. Administrators with database access can read them, and the server reads message content to generate push-notification previews and to support moderation.</li>
-  <li><strong>At rest:</strong> data is hosted by Supabase in Ireland (EU); provider-level encryption-at-rest applies per Supabase's platform.</li>
-</ul>
+      <h2>11. Security</h2>
+      <p>
+        Sign-in tokens are kept in encrypted storage on your phone (Android
+        Keystore / iOS Keychain). Everything travels over HTTPS. Database rules
+        check every request so you can only read and change what you're allowed
+        to. No system is perfectly secure; if we learn of a breach that affects
+        you, we will tell you.
+      </p>
 
-<h2>9. Data retention</h2>
-<ul>
-  <li>Stories and their photos are deleted automatically (rows daily; photo files within ~48 hours of expiry).</li>
-  <li>Notifications are pruned automatically (read ones after ~45 days, all after ~90 days); resolved reports after ~60 days.</li>
-  <li>Other content remains until you delete it or delete your account.</li>
-</ul>
+      <h2>12. Your rights</h2>
+      <ul>
+        <li>Edit or delete your posts, prayers, messages, listings and events.</li>
+        <li>Change who can see your profile, follow you and message you.</li>
+        <li>Turn any kind of notification off in Settings.</li>
+        <li>Delete your account.</li>
+        <li>Ask for a copy of your data, or for a correction, by emailing
+          <a href="mailto:tanatswamichaelmikuwa@gmail.com">tanatswamichaelmikuwa@gmail.com</a>.
+          We can't give you encrypted messages, because we can't read them.</li>
+      </ul>
+      <p>
+        We handle personal information in line with Zimbabwe's Cyber and Data
+        Protection Act [Chapter 12:07]. Wherever you live you may ask to access,
+        correct, export or delete your data, object to how we use it, or
+        withdraw consent. If you are covered by another data-protection law,
+        such as the GDPR in the EU/EEA and UK, those rights also apply, and you
+        may complain to your local data-protection authority.
+      </p>
 
-<h2>10. Deleting your account</h2>
-<p>You can request account deletion from within the App (Settings) or via our account-deletion page: <a href="delete-account.html">Delete my account</a>. The exact scope of what is deleted versus retained is listed for confirmation in Section 13.</p>
+      <h2>13. Changes</h2>
+      <p>
+        We will update this page and its date when our practices change, and
+        tell you inside the App about important changes.
+      </p>
 
-<h2>11. Children</h2>
-<p>The App collects date of birth. The minimum age of use is listed for confirmation in Section 13.</p>
-
-<h2>12. Your rights &amp; choices</h2>
-<p>You may, at any time: access and update your profile information in the App; control whether your age is shown; block other users; delete your own content; and delete your account (Section 10). Subject to applicable law (including Zimbabwe's Cyber and Data Protection Act, and the EU GDPR where it applies given our Ireland/EU hosting), you may also request access to, correction of, or erasure of your personal data, object to certain processing, or request a copy of your data, by emailing <a href="mailto:tanatswamichaelmikuwa@gmail.com">tanatswamichaelmikuwa@gmail.com</a>. You can disable notification, location, camera, microphone and photo permissions in your device settings at any time.</p>
-
-<h2>13. Changes to this policy</h2>
-<p>We may update this policy as the App changes. Material changes will be reflected by the "Last updated" date above.</p>
-
+      <h2>14. Contact</h2>
+      <p>
+        Privacy questions: <a href="mailto:tanatswamichaelmikuwa@gmail.com">tanatswamichaelmikuwa@gmail.com</a>
+        or WhatsApp <strong>+263 778 092 494</strong>.
+      </p>
 </main>
 <footer>Adventist Super App · Operated by Tanatswa Michael Mikuwa, Zimbabwe · tanatswamichaelmikuwa@gmail.com</footer>
 </body>

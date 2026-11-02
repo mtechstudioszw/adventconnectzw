@@ -59,9 +59,10 @@ class _LegalLayoutState extends State<LegalLayout>
       duration: const Duration(milliseconds: 500),
     )..forward();
     _fade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
-    _slide = Tween<double>(begin: 12, end: 0).animate(
-      CurvedAnimation(parent: _entrance, curve: Curves.easeOut),
-    );
+    _slide = Tween<double>(
+      begin: 12,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOut));
   }
 
   @override
@@ -150,11 +151,7 @@ class _LegalLayoutState extends State<LegalLayout>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.update,
-            color: AppColors.primaryBlue,
-            size: 16,
-          ),
+          const Icon(Icons.update, color: AppColors.primaryBlue, size: 16),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
@@ -185,11 +182,7 @@ class _LegalLayoutState extends State<LegalLayout>
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.gavel,
-            color: AppColors.goldAccent,
-            size: 18,
-          ),
+          const Icon(Icons.gavel, color: AppColors.goldAccent, size: 18),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -264,16 +257,10 @@ class _LegalLayoutState extends State<LegalLayout>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (var i = 0; i < widget.sections.length; i++) ...[
-            _SectionBlock(
-              index: i + 1,
-              section: widget.sections[i],
-            ),
+            _SectionBlock(index: i + 1, section: widget.sections[i]),
             if (i != widget.sections.length - 1) ...[
               const SizedBox(height: 18),
-               Divider(
-                height: 1,
-                color: AppColors.divider,
-              ),
+              Divider(height: 1, color: AppColors.divider),
               const SizedBox(height: 18),
             ],
           ],
@@ -369,4 +356,3 @@ class _SectionBlock extends StatelessWidget {
     );
   }
 }
-

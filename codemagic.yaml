@@ -1,0 +1,48 @@
+# Codemagic — iPhone build check (2 Nov 2026).
+#
+# GitHub Actions minutes ran out, and iPhone apps can only be built on a
+# Mac. Codemagic gives personal accounts 500 free Mac minutes a month,
+# separate from GitHub. This mirrors the "Unsigned iOS validation" job in
+# .github/workflows/ios-build.yml: it proves the iPhone app compiles, it
+# does not sign or upload anything.
+#
+# Started by hand (Codemagic → this app → Start new build), not on every
+# push: one build is ~15-20 minutes, so automatic builds would use the
+# free month up in a few days. Tests are not re-run here to save minutes;
+# they run locally before every push.
+
+workflows:
+  ios-unsigned:
+    name: iOS build check (unsigned)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: 3.41.9
+      xcode: latest
+      cocoapods: default
+    cache:
+      cache_paths:
+        - $HOME/Library/Caches/CocoaPods
+        - $FLUTTER_ROOT/.pub-cache
+    scripts:
+      - name: Versions
+        script: |
+          sw_vers
+          xcodebuild -version
+          flutter --version
+      - name: Dart packages
+        script: flutter pub get
+      - name: CocoaPods
+        script: |
+          cd ios
+          pod install --repo-update
+      - name: Analyze
+        script: flutter analyze --no-fatal-infos
+      - name: Build the iPhone app (no signing)
+        script: |
+          flutter build ios --release --no-codesign \
+            --build-number="${BUILD_NUMBER:-1}" \
+            --dart-define=GIT_SHA="${CM_COMMIT:-codemagic}"
+    artifacts:
+      - build/ios/iphoneos/Runner.app
+      - ios/Podfile.lock

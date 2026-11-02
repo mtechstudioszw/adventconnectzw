@@ -4,13 +4,18 @@ Last updated 2 Nov 2026. In order of importance. Tick them off as you go.
 
 ---
 
+## 0. Android builds to Play internal testing — SET UP (2 Nov 2026)
+
+GitHub → Actions → **Build AAB (Play Store)** → Run workflow → Run.
+It builds, tests and uploads to Internal testing by itself (~30 min).
+
 ## 1. Database patches — DONE (2 Nov 2026)
 
 297, 292, 299 and the VACUUM lines are applied and verified. The
 database went from 396 MB to 333 MB and now prunes itself nightly. Only
 patch 295 is left (step 4).
 
-## 2. Check the iPhone build (when GitHub minutes reset)
+## 2. Check the iPhone build (iPhone, after App Store approval)
 
 The iPhone build now runs only when you start it, because Mac minutes cost
 10× on GitHub.
@@ -31,7 +36,7 @@ The Android build is already checked: it passed on 2 Nov with every change.
 - [ ] **Play Console → App content → Full-screen intent**: declare
   "calling". Also declare the **phone-call foreground service** if Play
   asks.
-- [ ] **iPhone calls: APNs VoIP key.**
+- [ ] **iPhone calls: APNs VoIP key.** iPhone only: after App Store approval.
   1. Apple Developer → **Keys → +**, tick Apple Push Notifications.
   2. Put the key in the `call-push` secrets. See `docs/CALLING_SETUP.md`.
 - [ ] **Two-phone test** (`docs/CALLING_SETUP.md` §8). Include calling a
@@ -54,12 +59,10 @@ Google blocked the old key.
 
 ## 6. Stores
 
-- [ ] **App Store resubmission**: checklist and review message in
+- [ ] **App Store resubmission** (iPhone): checklist and review message in
   `docs/APP_REVIEW_NOTES.md`. Age Rating → None.
 - [ ] **Rotate App Store Connect API key `5DP8YVY728`** if the repo was ever
   public (it is in old commits).
-- [ ] **Deploy `verify-boost`**: Supabase dashboard, add `play.ts`
-  beside `index.ts`, Verify JWT **on**.
 
 ## 7. Housekeeping
 

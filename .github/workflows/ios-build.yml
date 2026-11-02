@@ -1,10 +1,10 @@
 name: iOS build and release validation
 
+# Manual only (2 Nov 2026). Mac minutes cost 10x on GitHub: running this
+# on every push to main used up the whole month's free minutes in about
+# ten pushes. Start it from Actions -> "iOS build and release validation"
+# -> Run workflow, once per batch of changes.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
       signed_build:

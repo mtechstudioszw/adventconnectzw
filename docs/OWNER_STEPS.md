@@ -4,35 +4,22 @@ Last updated 2 Nov 2026. In order of importance. Tick them off as you go.
 
 ---
 
-## 1. Free database space (do this week) — patch 292
+## 1. Database patches — DONE (2 Nov 2026)
 
-The database is at **396 MB of the free plan's 500 MB** and grew 4 MB in
-a day. When it fills, the app stops saving posts and messages.
+297, 292, 299 and the VACUUM lines are applied and verified. The
+database went from 396 MB to 333 MB and now prunes itself nightly. Only
+patch 295 is left (step 4).
 
-1. Open https://claude.ai/artifact/LFRgJx7bKVqR4aqksgJsHr
-2. Supabase → your project → **SQL Editor → New query**.
-3. Copy each patch, paste it, press **Run**, one at a time, in this order:
-   - [ ] **Patch 297**: churches count home-church members only
-   - [ ] **Patch 292**: frees space and keeps it free every night
-   - [ ] **Patch 299**: nightly clean-up of re-send tables (needs 292 first)
-   - [ ] **VACUUM lines**: run each line on its own, last. They hand the
-     space back.
-4. Then tell Claude **"check patches"**. It confirms each one and reports
-   the new size.
+## 2. Check the iPhone build (when GitHub minutes reset)
 
-## 2. Check the iPhone build — Codemagic (free)
+The iPhone build now runs only when you start it, because Mac minutes cost
+10× on GitHub.
 
-GitHub Actions minutes are used up, and iPhone apps only build on a Mac.
+1. GitHub → **Actions** → **iOS build and release validation**.
+2. Click **Run workflow**, leave both boxes unticked, then **Run**.
+3. If it goes red, tell Claude.
 
-1. Go to **codemagic.io**, then **Sign up with GitHub**.
-2. Click **Add application**, pick `adventconnectzw`, choose **Flutter App**,
-   then **codemagic.yaml**.
-3. Click **Start new build**, then **"iOS build check (unsigned)"**.
-4. Wait about 15–20 minutes. If it fails, send Claude the error or a
-   screenshot.
-
-There are 500 free minutes a month, enough for about 25 builds. Start one
-only after a batch of changes.
+The Android build is already checked: it passed on 2 Nov with every change.
 
 ## 3. Make calls work
 

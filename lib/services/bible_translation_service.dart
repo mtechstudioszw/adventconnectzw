@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 import '../models/bible_translation.dart';
 import 'cache_service.dart';
@@ -95,6 +96,10 @@ class BibleTranslationService {
   }) async {
     if (translation.isBundled) return null;
     if (!translation.hasBook(bookIndex)) return null;
+
+    // Shipped inside the app (Shona): no network, no cache.
+    final asset = translation.assetPath;
+    if (asset != null) return _fromAsset(asset, bookIndex, chapter);
 
     final key = _cacheKey(translation.id, bookIndex, chapter);
     final cached = CacheService.readStringStale(key);
@@ -199,16 +204,60 @@ class BibleTranslationService {
     return buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
+  // ---- translations bundled as an asset (Shona) ----------------------
+
+  static final Map<String, Future<Map<String, dynamic>>> _assets = {};
+
+  /// Loads and parses a bundled translation once (4 MB of JSON, parsed off
+  /// the UI thread), then serves every chapter from memory.
+  static Future<TranslatedChapter?> _fromAsset(
+    String asset,
+    int bookIndex,
+    int chapter,
+  ) async {
+    final code = BibleTranslations.codeFor(bookIndex);
+    if (code == null) return null;
+    try {
+      final doc = await (_assets[asset] ??= _loadAsset(asset));
+      final chapters = (doc['books'] as Map)[code] as List?;
+      if (chapters == null || chapter < 0 || chapter >= chapters.length) {
+        return null;
+      }
+      final c = chapters[chapter] as Map;
+      return TranslatedChapter(
+        verses: [for (final v in c['v'] as List) v.toString()],
+        headings: ((c['h'] as Map?) ?? const {}).map(
+          (k, v) => MapEntry(int.tryParse(k.toString()) ?? 0, v.toString()),
+        ),
+      );
+    } catch (e) {
+      _assets.remove(asset);
+      debugPrint('BibleTranslationService asset $asset failed: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>> _loadAsset(String asset) async {
+    final raw = await rootBundle.loadString(asset);
+    return compute(_decodeJson, raw);
+  }
+
+  @visibleForTesting
+  static void debugResetAssets() => _assets.clear();
+
   /// True when this chapter is already readable offline.
   static bool isChapterCached(
     BibleTranslation translation,
     int bookIndex,
     int chapter,
   ) {
-    if (translation.isBundled) return true;
+    if (translation.isOffline) return true;
     return CacheService.readStringStale(
           _cacheKey(translation.id, bookIndex, chapter),
         ) !=
         null;
   }
 }
+
+Map<String, dynamic> _decodeJson(String raw) =>
+    jsonDecode(raw) as Map<String, dynamic>;

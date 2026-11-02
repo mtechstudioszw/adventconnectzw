@@ -3,16 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'music_tab.dart';
 import '../../models/bible_translation.dart';
 import '../../models/devotion_model.dart';
-import '../../models/library_item_model.dart';
+import '../../services/bible_audio_service.dart';
 import '../../services/bible_prefs_service.dart';
 import '../../services/bible_service.dart';
 import '../../services/memory_verse_service.dart';
 import '../../services/bible_translation_service.dart';
 import '../../services/devotion_service.dart';
-import '../../services/music_player_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
@@ -20,8 +18,9 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/motion/brand_spinner.dart';
 import '../../widgets/motion/pressable.dart';
 import 'widgets/translation_picker.dart';
+import 'widgets/bible_listen_sheet.dart';
+import 'audio_bible_screen.dart';
 import '../../widgets/verse_share_card.dart';
-import '../../config/platform_flags.dart';
 
 /// Library → Bible tab. Bundled offline KJV with a full modern reader:
 /// verse-of-the-day, reading streak, fast book/chapter picking, swipe between
@@ -140,8 +139,9 @@ class _BibleTabState extends State<BibleTab>
           return Center(
             child: Text(
               'Bible unavailable.',
-              style:
-                  AppTextStyles.bodyMedium.copyWith(color: palette.textMuted),
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: palette.textMuted,
+              ),
             ),
           );
         }
@@ -150,10 +150,12 @@ class _BibleTabState extends State<BibleTab>
         final searching = query.isNotEmpty;
         final shown = searching
             ? books
-                .where((b) =>
-                    b.name.toLowerCase().contains(query) ||
-                    b.abbrev.toLowerCase().contains(query))
-                .toList()
+                  .where(
+                    (b) =>
+                        b.name.toLowerCase().contains(query) ||
+                        b.abbrev.toLowerCase().contains(query),
+                  )
+                  .toList()
             : books.where((b) => b.isOldTestament != _showNt).toList();
 
         return CustomScrollView(
@@ -174,8 +176,7 @@ class _BibleTabState extends State<BibleTab>
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
               sliver: SliverGrid.builder(
-                gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 3,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
@@ -307,16 +308,14 @@ class _BibleTabState extends State<BibleTab>
               ),
             ),
           ),
-          // Audio Bible plays through the music player — hidden on iOS
-          // (kHideMusic).
-          if (!kHideMusic) const SizedBox(width: 10),
-          if (!kHideMusic) Expanded(
+          const SizedBox(width: 10),
+          Expanded(
             child: _ToolButton(
               icon: Icons.headset_rounded,
               label: 'Audio',
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => const AudioBibleScreen(),
+                  builder: (_) => AudioBibleBooksScreen(books: books),
                 ),
               ),
             ),
@@ -338,8 +337,11 @@ class _BibleTabState extends State<BibleTab>
         decoration: InputDecoration(
           hintText: 'Jump to a book…',
           hintStyle: TextStyle(color: palette.textMuted),
-          prefixIcon:
-              Icon(Icons.menu_book_rounded, color: palette.textMuted, size: 20),
+          prefixIcon: Icon(
+            Icons.menu_book_rounded,
+            color: palette.textMuted,
+            size: 20,
+          ),
           suffixIcon: _bookQuery.isEmpty
               ? null
               : IconButton(
@@ -398,16 +400,15 @@ class _BibleTabState extends State<BibleTab>
                     padding: const EdgeInsets.symmetric(vertical: 9),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      gradient:
-                          _showNt == isNt ? AppColors.primaryGradient : null,
+                      gradient: _showNt == isNt
+                          ? AppColors.primaryGradient
+                          : null,
                       borderRadius: BorderRadius.circular(11),
                     ),
                     child: Text(
                       label,
                       style: AppTextStyles.labelMedium.copyWith(
-                        color: _showNt == isNt
-                            ? AppColors.white
-                            : palette.text,
+                        color: _showNt == isNt ? AppColors.white : palette.text,
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
                       ),
@@ -552,8 +553,11 @@ class _VerseOfDayCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.wb_sunny_rounded,
-                    color: AppColors.goldAccent, size: 16),
+                const Icon(
+                  Icons.wb_sunny_rounded,
+                  color: AppColors.goldAccent,
+                  size: 16,
+                ),
                 const SizedBox(width: 7),
                 Text(
                   'VERSE OF THE DAY',
@@ -568,7 +572,9 @@ class _VerseOfDayCard extends StatelessWidget {
                 if (streak > 0)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.goldAccent.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(8),
@@ -576,8 +582,11 @@ class _VerseOfDayCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.local_fire_department_rounded,
-                            color: AppColors.goldAccent, size: 13),
+                        const Icon(
+                          Icons.local_fire_department_rounded,
+                          color: AppColors.goldAccent,
+                          size: 13,
+                        ),
                         const SizedBox(width: 3),
                         Text(
                           '$streak day${streak == 1 ? '' : 's'}',
@@ -823,8 +832,11 @@ class _ContinueCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios,
-                      color: AppColors.white, size: 14),
+                  const Icon(
+                    Icons.arrow_forward_ios,
+                    color: AppColors.white,
+                    size: 14,
+                  ),
                 ],
               ),
             ),
@@ -862,14 +874,16 @@ class _ChapterGridSheet extends StatelessWidget {
               children: [
                 Text(
                   book.name,
-                  style: AppTextStyles.titleMedium
-                      .copyWith(fontWeight: FontWeight.w800),
+                  style: AppTextStyles.titleMedium.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const Spacer(),
                 Text(
                   '${book.chapterCount} chapters',
-                  style: AppTextStyles.labelSmall
-                      .copyWith(color: palette.textMuted),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: palette.textMuted,
+                  ),
                 ),
               ],
             ),
@@ -913,8 +927,7 @@ class _ChapterGridSheet extends StatelessWidget {
                         '${i + 1}',
                         style: AppTextStyles.titleMedium.copyWith(
                           fontWeight: FontWeight.w700,
-                          color:
-                              isLast ? AppColors.primaryBlue : palette.text,
+                          color: isLast ? AppColors.primaryBlue : palette.text,
                         ),
                       ),
                     ),
@@ -943,9 +956,9 @@ class _ChapterRef {
 }
 
 List<_ChapterRef> _buildChapterIndex(List<BibleBook> books) => [
-      for (var b = 0; b < books.length; b++)
-        for (var c = 0; c < books[b].chapterCount; c++) _ChapterRef(b, c),
-    ];
+  for (var b = 0; b < books.length; b++)
+    for (var c = 0; c < books[b].chapterCount; c++) _ChapterRef(b, c),
+];
 
 class BibleReaderScreen extends StatefulWidget {
   const BibleReaderScreen({
@@ -1068,25 +1081,25 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
     final theme = BiblePrefsService.readingTheme();
     return switch (theme) {
       BibleReadingTheme.light => (
-          bg: const Color(0xFFFFFFFF),
-          fg: const Color(0xFF1A1A2E),
-          muted: const Color(0x991A1A2E),
-        ),
+        bg: const Color(0xFFFFFFFF),
+        fg: const Color(0xFF1A1A2E),
+        muted: const Color(0x991A1A2E),
+      ),
       BibleReadingTheme.sepia => (
-          bg: const Color(0xFFF7F1E3),
-          fg: const Color(0xFF3A3222),
-          muted: const Color(0x993A3222),
-        ),
+        bg: const Color(0xFFF7F1E3),
+        fg: const Color(0xFF3A3222),
+        muted: const Color(0x993A3222),
+      ),
       BibleReadingTheme.dark => (
-          bg: const Color(0xFF12100E),
-          fg: const Color(0xFFF2E7D0),
-          muted: const Color(0x99F2E7D0),
-        ),
+        bg: const Color(0xFF12100E),
+        fg: const Color(0xFFF2E7D0),
+        muted: const Color(0x99F2E7D0),
+      ),
       BibleReadingTheme.system => (
-          bg: context.palette.scaffoldBg,
-          fg: context.palette.text,
-          muted: context.palette.textMuted,
-        ),
+        bg: context.palette.scaffoldBg,
+        fg: context.palette.text,
+        muted: context.palette.textMuted,
+      ),
     };
   }
 
@@ -1119,8 +1132,10 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
                   children: [
                     Text(
                       '${book.name} ${ref.chapter + 1}',
-                      style: AppTextStyles.appBarTitleFlat
-                          .copyWith(fontSize: 18, color: paper.fg),
+                      style: AppTextStyles.appBarTitleFlat.copyWith(
+                        fontSize: 18,
+                        color: paper.fg,
+                      ),
                     ),
                     const SizedBox(width: 4),
                     Icon(Icons.expand_more_rounded, color: paper.fg, size: 20),
@@ -1163,21 +1178,18 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
               translation: BibleTranslationService.current,
               // Selection only applies to the visible chapter.
               selected: page == _page ? _selected : const {},
-              scrollToVerse:
-                  page == _page ? widget.scrollToVerse : null,
+              scrollToVerse: page == _page ? widget.scrollToVerse : null,
               onToggleVerse: (v) => setState(() {
-                _selected.contains(v)
-                    ? _selected.remove(v)
-                    : _selected.add(v);
+                _selected.contains(v) ? _selected.remove(v) : _selected.add(v);
               }),
-              onTapEmptySpace: () =>
-                  setState(() => _immersive = !_immersive),
+              onTapEmptySpace: () => setState(() => _immersive = !_immersive),
             );
           },
         ),
       ),
-      bottomNavigationBar:
-          _selected.isEmpty ? null : _selectionBar(context, book, ref),
+      bottomNavigationBar: _selected.isEmpty
+          ? null
+          : _selectionBar(context, book, ref),
     );
   }
 
@@ -1204,10 +1216,7 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    t.accent,
-                    Color.lerp(t.accent, Colors.black, 0.35)!,
-                  ],
+                  colors: [t.accent, Color.lerp(t.accent, Colors.black, 0.35)!],
                 ),
                 borderRadius: BorderRadius.circular(11),
               ),
@@ -1250,17 +1259,20 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                for (var ci = 0;
-                    ci < BiblePrefsService.highlightColors.length;
-                    ci++)
+                for (
+                  var ci = 0;
+                  ci < BiblePrefsService.highlightColors.length;
+                  ci++
+                )
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 5),
                     child: GestureDetector(
                       onTap: () => _applyHighlight(book, ref, ci),
                       child: CircleAvatar(
                         radius: 15,
-                        backgroundColor:
-                            Color(BiblePrefsService.highlightColors[ci]),
+                        backgroundColor: Color(
+                          BiblePrefsService.highlightColors[ci],
+                        ),
                       ),
                     ),
                   ),
@@ -1271,8 +1283,11 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
                     child: CircleAvatar(
                       radius: 15,
                       backgroundColor: context.palette.cardMuted,
-                      child: Icon(Icons.format_color_reset_rounded,
-                          size: 16, color: context.palette.textMuted),
+                      child: Icon(
+                        Icons.format_color_reset_rounded,
+                        size: 16,
+                        color: context.palette.textMuted,
+                      ),
                     ),
                   ),
                 ),
@@ -1281,27 +1296,45 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
             const SizedBox(height: 4),
             Row(
               children: [
-                _barAction(context, Icons.bookmark_outline_rounded, 'Save',
-                    () => _applyBookmark(book, ref)),
+                _barAction(
+                  context,
+                  Icons.bookmark_outline_rounded,
+                  'Save',
+                  () => _applyBookmark(book, ref),
+                ),
                 _barAction(context, Icons.copy_rounded, 'Copy', () {
-                  Clipboard.setData(
-                      ClipboardData(text: '$reference\n$text'));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Copied.')),
+                  Clipboard.setData(ClipboardData(text: '$reference\n$text'));
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('Copied.')));
+                  setState(_selected.clear);
+                }),
+                _barAction(
+                  context,
+                  Icons.psychology_alt_rounded,
+                  'Memorise',
+                  () => _applyMemorise(book, ref),
+                ),
+                _barAction(
+                  context,
+                  Icons.edit_note_rounded,
+                  'Note',
+                  () => _openNoteEditor(book, ref, sorted, reference),
+                ),
+                _barAction(context, Icons.ios_share_rounded, 'Share', () {
+                  VerseShareSheet.open(
+                    context,
+                    reference: reference,
+                    text: text,
                   );
                   setState(_selected.clear);
                 }),
-                _barAction(context, Icons.psychology_alt_rounded, 'Memorise',
-                    () => _applyMemorise(book, ref)),
-                _barAction(context, Icons.edit_note_rounded, 'Note',
-                    () => _openNoteEditor(book, ref, sorted, reference)),
-                _barAction(context, Icons.ios_share_rounded, 'Share', () {
-                  VerseShareSheet.open(context,
-                      reference: reference, text: text);
-                  setState(_selected.clear);
-                }),
-                _barAction(context, Icons.close_rounded, 'Clear',
-                    () => setState(_selected.clear)),
+                _barAction(
+                  context,
+                  Icons.close_rounded,
+                  'Clear',
+                  () => setState(_selected.clear),
+                ),
               ],
             ),
           ],
@@ -1405,9 +1438,9 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
       }
     }
     HapticFeedback.lightImpact();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Saved to bookmarks.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Saved to bookmarks.')));
     setState(_selected.clear);
   }
 
@@ -1419,10 +1452,14 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
   ) async {
     if (verses.isEmpty) return;
     // A note attaches to the FIRST selected verse — that's where it shows.
-    final key =
-        BiblePrefsService.verseKey(book.index, ref.chapter, verses.first);
-    final controller =
-        TextEditingController(text: BiblePrefsService.note(key) ?? '');
+    final key = BiblePrefsService.verseKey(
+      book.index,
+      ref.chapter,
+      verses.first,
+    );
+    final controller = TextEditingController(
+      text: BiblePrefsService.note(key) ?? '',
+    );
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -1517,9 +1554,12 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Text size',
-                    style: AppTextStyles.titleSmall
-                        .copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  'Text size',
+                  style: AppTextStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 Row(
                   children: [
                     const Text('A', style: TextStyle(fontSize: 13)),
@@ -1542,9 +1582,12 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                Text('Reading theme',
-                    style: AppTextStyles.titleSmall
-                        .copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  'Reading theme',
+                  style: AppTextStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -1554,19 +1597,19 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
                         BibleReadingTheme.light,
                         'Light',
                         Color(0xFFFFFFFF),
-                        Color(0xFF1A1A2E)
+                        Color(0xFF1A1A2E),
                       ),
                       (
                         BibleReadingTheme.sepia,
                         'Sepia',
                         Color(0xFFF7F1E3),
-                        Color(0xFF3A3222)
+                        Color(0xFF3A3222),
                       ),
                       (
                         BibleReadingTheme.dark,
                         'Dark',
                         Color(0xFF12100E),
-                        Color(0xFFF2E7D0)
+                        Color(0xFFF2E7D0),
                       ),
                     ])
                       Expanded(
@@ -1585,14 +1628,14 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
                                 color: bg ?? context.palette.cardMuted,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: BiblePrefsService.readingTheme() ==
-                                          theme
+                                  color:
+                                      BiblePrefsService.readingTheme() == theme
                                       ? AppColors.primaryBlue
                                       : context.palette.divider,
                                   width:
                                       BiblePrefsService.readingTheme() == theme
-                                          ? 2
-                                          : 1,
+                                      ? 2
+                                      : 1,
                                 ),
                               ),
                               child: Text(
@@ -1667,16 +1710,28 @@ class _ChapterPageState extends State<_ChapterPage> {
   @override
   void initState() {
     super.initState();
-    if (widget.translation.isRemote) _loadRemote();
-    if (widget.scrollToVerse != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final ctx = _verseKeys[widget.scrollToVerse]?.currentContext;
-        if (ctx != null) {
-          Scrollable.ensureVisible(ctx,
-              duration: AppMotion.standard, alignment: 0.15);
-        }
-      });
+    if (widget.translation.isRemote) {
+      _loadRemote();
+    } else {
+      _scrollToTarget();
     }
+  }
+
+  /// Jump to the verse a link opened. For any translation that loads
+  /// (BSB, Shona, Greek…) this must wait until the verses exist — it used
+  /// to run on the first frame, before they did, and silently did nothing.
+  void _scrollToTarget() {
+    if (widget.scrollToVerse == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _verseKeys[widget.scrollToVerse]?.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: AppMotion.standard,
+          alignment: 0.15,
+        );
+      }
+    });
   }
 
   @override
@@ -1701,6 +1756,7 @@ class _ChapterPageState extends State<_ChapterPage> {
       _loading = false;
       _failed = chapter == null;
     });
+    if (chapter != null) _scrollToTarget();
   }
 
   /// Verses for whichever translation is active.
@@ -1728,9 +1784,9 @@ class _ChapterPageState extends State<_ChapterPage> {
         title: '${widget.book.name} is not in ${t.name}',
         body: t.coverage == TranslationCoverage.newTestament
             ? 'This is a New Testament text. Switch translation to read the '
-                'Old Testament.'
+                  'Old Testament.'
             : 'This is an Old Testament text. Switch translation to read the '
-                'New Testament.',
+                  'New Testament.',
         action: 'Change translation',
       );
     }
@@ -1743,7 +1799,8 @@ class _ChapterPageState extends State<_ChapterPage> {
       return _message(
         icon: Icons.wifi_off_rounded,
         title: 'Not downloaded yet',
-        body: '${t.name} needs a connection the first time you open a '
+        body:
+            '${t.name} needs a connection the first time you open a '
             'chapter. Once loaded it stays available offline.',
         action: 'Try again',
         onAction: _loadRemote,
@@ -1764,6 +1821,17 @@ class _ChapterPageState extends State<_ChapterPage> {
           for (var i = 0; i < verses.length; i++) ...[
             if (headings[i] != null) _sectionHeading(headings[i]!),
             _verse(context, i, verses[i]),
+          ],
+          if (t.attribution != null) ...[
+            const SizedBox(height: 22),
+            Text(
+              t.attribution!,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: widget.paper.muted,
+                fontSize: 10.5,
+                height: 1.45,
+              ),
+            ),
           ],
           const SizedBox(height: 28),
           GestureDetector(
@@ -1817,7 +1885,8 @@ class _ChapterPageState extends State<_ChapterPage> {
                 ),
               ),
             ),
-            if (!kHideMusic && (_remote?.hasAudio ?? false)) ...[
+            // English audio Bible (KJV + BSB readers), both platforms.
+            if (BibleAudio.availableFor(t)) ...[
               const SizedBox(width: 8),
               _listenButton(),
             ],
@@ -1827,66 +1896,73 @@ class _ChapterPageState extends State<_ChapterPage> {
     );
   }
 
-  /// Plays this chapter's narration through the shared music player, so it
-  /// keeps going with the screen off and shows lock-screen controls — the
-  /// same engine the Music tab uses.
+  /// The Play pill beside the chapter title. Opens the listen sheet.
   Widget _listenButton() {
-    return InkWell(
-      borderRadius: BorderRadius.circular(7),
-      onTap: _playChapterAudio,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-        decoration: BoxDecoration(
-          color: AppColors.goldAccent.withValues(alpha: 0.16),
-          borderRadius: BorderRadius.circular(7),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.headphones_rounded,
-                size: 13, color: AppColors.goldAccent),
-            const SizedBox(width: 5),
-            Text(
-              'Listen',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: AppColors.goldAccent,
-                fontWeight: FontWeight.w700,
-                fontSize: 10.5,
+    final downloaded = BibleAudio.isDownloaded(
+      widget.book.index,
+      widget.chapter,
+    );
+    return Semantics(
+      button: true,
+      label: 'Listen to this chapter',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: _openListenSheet,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.play_arrow_rounded,
+                size: 16,
+                color: AppColors.white,
               ),
-            ),
-          ],
+              const SizedBox(width: 3),
+              Text(
+                'Listen',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11.5,
+                ),
+              ),
+              if (downloaded) ...[
+                const SizedBox(width: 5),
+                const Icon(
+                  Icons.offline_pin_rounded,
+                  size: 13,
+                  color: AppColors.white,
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Future<void> _playChapterAudio() async {
-    final links = _remote?.audioLinks ?? const <String, String>{};
-    if (links.isEmpty) return;
-    // The API exposes several narrators; take the first deterministically
-    // rather than adding a picker for a feature most users tap once.
-    final url = links.values.first;
-    final reference = '${widget.book.name} ${widget.chapter + 1}';
-    final item = LibraryItem(
-      id: 'bible-audio:${widget.translation.id}:'
-          '${widget.book.index}:${widget.chapter}',
-      kind: 'audio_bible',
-      title: reference,
-      fileUrl: url,
-      author: widget.translation.name,
+  Future<void> _openListenSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.palette.sheet,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => BibleListenSheet(
+        bookIndex: widget.book.index,
+        bookName: widget.book.name,
+        chapter: widget.chapter,
+        chapters: [for (final c in widget.book.chapters) c.length],
+        translation: widget.translation,
+      ),
     );
-    try {
-      await MusicPlayerService.instance.setQueueAndPlay([item], 0);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Playing $reference')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not play this chapter: $e')),
-      );
-    }
+    if (mounted) setState(() {});
   }
 
   /// Section headings ("Jesus Teaches Nicodemus") that modern translations
@@ -1943,7 +2019,8 @@ class _ChapterPageState extends State<_ChapterPage> {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primaryBlue,
               ),
-              onPressed: onAction ??
+              onPressed:
+                  onAction ??
                   () async {
                     final chosen = await TranslationPicker.show(
                       context,
@@ -1963,7 +2040,10 @@ class _ChapterPageState extends State<_ChapterPage> {
 
   Widget _verse(BuildContext context, int i, String text) {
     final key = BiblePrefsService.verseKey(
-        widget.book.index, widget.chapter, i);
+      widget.book.index,
+      widget.chapter,
+      i,
+    );
     final hlIndex = BiblePrefsService.highlightColor(key);
     final bookmarked = BiblePrefsService.isBookmarked(key);
     final note = BiblePrefsService.note(key);
@@ -1990,9 +2070,10 @@ class _ChapterPageState extends State<_ChapterPage> {
         color: isSelected
             ? AppColors.primaryBlue.withValues(alpha: 0.18)
             : hlIndex != null
-                ? Color(BiblePrefsService.highlightColors[hlIndex])
-                    .withValues(alpha: 0.55)
-                : null,
+            ? Color(
+                BiblePrefsService.highlightColors[hlIndex],
+              ).withValues(alpha: 0.55)
+            : null,
         borderRadius: BorderRadius.circular(8),
         border: isSelected
             ? Border.all(color: AppColors.primaryBlue, width: 1.5)
@@ -2012,8 +2093,7 @@ class _ChapterPageState extends State<_ChapterPage> {
               RichText(
                 // Hebrew reads right-to-left; without this the verse number
                 // lands on the wrong side and the text is unreadable.
-                textDirection:
-                    rtl ? TextDirection.rtl : TextDirection.ltr,
+                textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
                 textAlign: rtl ? TextAlign.right : TextAlign.left,
                 text: TextSpan(
                   style: AppTextStyles.bodyLarge.copyWith(
@@ -2036,8 +2116,11 @@ class _ChapterPageState extends State<_ChapterPage> {
                         alignment: PlaceholderAlignment.middle,
                         child: Padding(
                           padding: EdgeInsets.only(left: 6),
-                          child: Icon(Icons.bookmark_rounded,
-                              size: 14, color: AppColors.goldAccent),
+                          child: Icon(
+                            Icons.bookmark_rounded,
+                            size: 14,
+                            color: AppColors.goldAccent,
+                          ),
                         ),
                       ),
                   ],
@@ -2055,14 +2138,19 @@ class _ChapterPageState extends State<_ChapterPage> {
                     borderRadius: BorderRadius.circular(9),
                     border: const Border(
                       left: BorderSide(
-                          color: AppColors.primaryBlue, width: 2.5),
+                        color: AppColors.primaryBlue,
+                        width: 2.5,
+                      ),
                     ),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.sticky_note_2_outlined,
-                          size: 13, color: AppColors.primaryBlue),
+                      const Icon(
+                        Icons.sticky_note_2_outlined,
+                        size: 13,
+                        color: AppColors.primaryBlue,
+                      ),
                       const SizedBox(width: 7),
                       Expanded(
                         child: Text(
@@ -2085,7 +2173,6 @@ class _ChapterPageState extends State<_ChapterPage> {
     );
   }
 }
-
 
 // ---------------------------------------------------------------------------
 //  Search

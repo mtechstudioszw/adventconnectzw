@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/egw_book_model.dart';
+import '../../theme/app_colors.dart';
+import '../../services/read_aloud_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/egw_highlights.dart';
 import '../../services/egw_paginator.dart';
@@ -154,6 +157,8 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
   @override
   void dispose() {
     _pager.dispose();
+    _reading = false;
+    unawaited(ReadAloud.instance.stop());
     _pageIndex.dispose();
     super.dispose();
   }
@@ -177,6 +182,67 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
   }
 
   EgwChapter get _current => widget.book.chapters[_chapter];
+
+  // ---- Read aloud (2 Nov 2026) --------------------------------------------
+
+  /// Reading the book aloud with the phone's voice, page by page.
+  bool _reading = false;
+
+  String _pageText(int i) {
+    if (i < 0 || i >= _pages.length) return '';
+    return _pages[i].blocks.map((b) => b.text).join('\n');
+  }
+
+  Future<void> _toggleReadAloud() async {
+    if (_reading) {
+      setState(() => _reading = false);
+      await ReadAloud.instance.stop();
+      return;
+    }
+    setState(() {
+      _reading = true;
+      _chromeVisible = true;
+    });
+    unawaited(_readLoop());
+  }
+
+  Future<void> _readLoop() async {
+    while (_reading && mounted) {
+      final ok = await ReadAloud.instance.speak(_pageText(_pageIndex.value));
+      if (!ok) {
+        if (mounted) {
+          setState(() => _reading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "This phone has no reading voice set up. Install one in "
+                'Settings → Text-to-speech, then try again.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      if (!_reading || !mounted) return;
+      final next = _pageIndex.value + 1;
+      if (next < _pages.length) {
+        await _pager.animateToPage(
+          next,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOut,
+        );
+        _pageIndex.value = next;
+      } else if (_chapter + 1 < widget.book.chapters.length) {
+        _goTo(_chapter + 1);
+        // Let the new chapter paginate before reading its first page.
+        await WidgetsBinding.instance.endOfFrame;
+        await WidgetsBinding.instance.endOfFrame;
+      } else {
+        if (mounted) setState(() => _reading = false);
+        return;
+      }
+    }
+  }
 
   /// Records the chapter and the words the given page opens on.
   ///
@@ -231,7 +297,8 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
   /// measured against has actually changed.
   void _repaginate(Size viewport, double scale) {
     if (viewport.width <= 0 || viewport.height <= 0) return;
-    final key = '$_chapter|${viewport.width.round()}x'
+    final key =
+        '$_chapter|${viewport.width.round()}x'
         '${viewport.height.round()}|$scale';
     if (key == _pagesKey) return;
     _pagesKey = key;
@@ -324,7 +391,8 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
 
   /// 1-based page within the chapter, clamped so the trailing
   /// end-of-chapter card does not read as "page 13 of 12".
-  int _pageNumber(int index) => (index + 1).clamp(1, math.max(1, _pages.length));
+  int _pageNumber(int index) =>
+      (index + 1).clamp(1, math.max(1, _pages.length));
 
   // ---- Build ----------------------------------------------------------------
 
@@ -390,14 +458,13 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
       builder: (context, constraints) {
         // A measured column: full-bleed text is uncomfortable on a phone
         // and unreadable on a tablet.
-        final columnWidth =
-            (constraints.maxWidth - _hPad * 2).clamp(0.0, 680.0);
+        final columnWidth = (constraints.maxWidth - _hPad * 2).clamp(
+          0.0,
+          680.0,
+        );
         final viewport = Size(
           columnWidth,
-          constraints.maxHeight -
-              _vPad * 2 -
-              _topChrome -
-              _bottomChrome,
+          constraints.maxHeight - _vPad * 2 - _topChrome - _bottomChrome,
         );
 
         _repaginate(viewport, scale);
@@ -549,9 +616,7 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
           // is how that bug gets noticed instead of silently swallowed.
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final b in page.blocks) _block(b, palette, scale),
-            ],
+            children: [for (final b in page.blocks) _block(b, palette, scale)],
           ),
         ),
       ),
@@ -838,18 +903,23 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
           break;
         }
         if (hit.start > at) {
-          out.add(TextSpan(
-            text: text.substring(at - start, hit.start - start),
-            style: style,
-          ));
+          out.add(
+            TextSpan(
+              text: text.substring(at - start, hit.start - start),
+              style: style,
+            ),
+          );
           at = hit.start;
         }
         final stop = hit.end < end ? hit.end : end;
-        out.add(TextSpan(
-          text: text.substring(at - start, stop - start),
-          style: (style ?? const TextStyle())
-              .copyWith(backgroundColor: palette.highlight),
-        ));
+        out.add(
+          TextSpan(
+            text: text.substring(at - start, stop - start),
+            style: (style ?? const TextStyle()).copyWith(
+              backgroundColor: palette.highlight,
+            ),
+          ),
+        );
         at = stop;
       }
       cursor = end;
@@ -904,8 +974,7 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
   /// enabled at all.
   Widget _quoteMenu(BuildContext context, SelectableRegionState state) {
     final selected = _selection;
-    final already =
-        EgwHighlights.has(widget.bookId, _current.id, selected);
+    final already = EgwHighlights.has(widget.bookId, _current.id, selected);
 
     final items = <ContextMenuButtonItem>[
       ...state.contextMenuButtonItems,
@@ -1026,6 +1095,16 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
               ),
             ),
             IconButton(
+              tooltip: _reading ? 'Stop reading aloud' : 'Read aloud',
+              icon: Icon(
+                _reading
+                    ? Icons.stop_circle_outlined
+                    : Icons.headphones_rounded,
+                color: _reading ? AppColors.primaryBlue : palette.text,
+              ),
+              onPressed: _toggleReadAloud,
+            ),
+            IconButton(
               tooltip: 'Contents',
               icon: Icon(Icons.list_rounded, color: palette.text),
               onPressed: _openContents,
@@ -1098,8 +1177,9 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
             ),
             IconButton(
               icon: Icon(Icons.chevron_right_rounded, color: palette.text),
-              onPressed:
-                  _chapter < total - 1 ? () => _goTo(_chapter + 1) : null,
+              onPressed: _chapter < total - 1
+                  ? () => _goTo(_chapter + 1)
+                  : null,
             ),
           ],
         ),
@@ -1486,9 +1566,7 @@ class _ReaderSettingsSheet extends StatelessWidget {
                         ? palette.accent
                         : Colors.transparent,
                   ),
-                  side: WidgetStatePropertyAll(
-                    BorderSide(color: palette.rule),
-                  ),
+                  side: WidgetStatePropertyAll(BorderSide(color: palette.rule)),
                 ),
               ),
             ],

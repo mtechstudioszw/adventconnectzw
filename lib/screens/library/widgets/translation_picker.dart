@@ -287,7 +287,7 @@ class _TranslationPickerState extends State<TranslationPicker>
                                       color: AppColors.goldAccent),
                                   const SizedBox(width: 4),
                                 ],
-                                if (t.isBundled) ...[
+                                if (t.isOffline) ...[
                                   const Icon(Icons.offline_pin_rounded,
                                       size: 12,
                                       color: AppColors.successGreen),

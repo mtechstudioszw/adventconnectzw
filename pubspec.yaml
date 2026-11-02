@@ -108,6 +108,10 @@ dependencies:
   # CallKit on iOS, full-screen incoming-call UI on Android. Exact pins
   # are the versions the call client was written against.
   flutter_webrtc: 1.6.0
+
+  # Read-aloud for EGW books (2 Nov 2026): the phone's own text-to-speech
+  # voice, offline. No narrated EGW audio exists under a licence we can use.
+  flutter_tts: 4.2.5
   flutter_callkit_incoming: 3.1.5
 
 dependency_overrides:

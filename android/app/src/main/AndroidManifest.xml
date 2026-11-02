@@ -164,6 +164,10 @@
     </application>
 
     <queries>
+        <!-- flutter_tts: Android 11+ must declare it looks for a TTS engine. -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE"/>
+        </intent>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

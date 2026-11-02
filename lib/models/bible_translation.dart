@@ -19,6 +19,8 @@ class BibleTranslation {
     this.coverage = TranslationCoverage.whole,
     this.hasAudio = false,
     this.note,
+    this.assetPath,
+    this.attribution,
   });
 
   /// API translation id, or `kjv` for the bundled asset.
@@ -56,6 +58,18 @@ class BibleTranslation {
 
   /// Short line under the name, e.g. licence or provenance.
   final String? note;
+
+  /// A whole translation shipped inside the app (1 Nov 2026: Shona), read
+  /// from this asset instead of the network — offline from first launch.
+  /// Unlike [isBundled] (the KJV's own path), chapters come back through
+  /// BibleTranslationService exactly like a downloaded translation.
+  final String? assetPath;
+
+  /// Licence credit shown at the end of every chapter, when required.
+  final String? attribution;
+
+  /// Readable with no connection at all.
+  bool get isOffline => isBundled || assetPath != null;
 
   bool get isRemote => !isBundled;
 
@@ -107,7 +121,15 @@ class BibleTranslations {
     languageLabel: 'ChiShona',
     glyph: 'S',
     accent: Color(0xFFC8A951),
-    note: 'Biblica open licence · 2017',
+    note: 'In the app · always offline',
+    // The whole Shona Bible ships with the app (owner, 2 Nov 2026: "when
+    // I switch to Shona it should already be there"). CC BY-SA 4.0 —
+    // the credit below is a licence condition, not decoration.
+    assetPath: 'assets/bible/sna_bib.json',
+    attribution:
+        'Bhaibheri Dzvene Rakasununguka MuChiShona Chanhasi 2017 © Biblica, '
+        'Inc. Used under the Creative Commons Attribution-ShareAlike 4.0 '
+        'licence.',
   );
 
   static const greekByz = BibleTranslation(

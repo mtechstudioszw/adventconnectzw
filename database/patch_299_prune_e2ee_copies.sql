@@ -1,6 +1,6 @@
 -- =====================================================================
 --  PATCH 299 — keep the re-send tables small
---  STATUS: not yet applied. Run AFTER patch_298 and patch_292.
+--  STATUS: APPLIED 2 Nov 2026 (by the owner, verified by Claude)
 --
 --  patch_298's request/copy tables only matter until the reader's phone
 --  has picked a copy up. Copies older than 30 days and fulfilled

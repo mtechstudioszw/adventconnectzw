@@ -1,6 +1,6 @@
 -- =====================================================================
 --  PATCH 297 — one church per member: the home church
---  STATUS: not yet applied
+--  STATUS: APPLIED 2 Nov 2026 (by the owner, verified by Claude)
 --
 --  Owner, 1 Nov 2026: "Remove the Follow button on churches. Members only
 --  belong to their home church… To follow another church, it must create

@@ -1,6 +1,6 @@
 -- =====================================================================
 --  PATCH 292 — free database space and keep it free
---  STATUS: not yet applied
+--  STATUS: APPLIED 2 Nov 2026 (by the owner, verified by Claude)
 --
 --  Owner, 1 Nov 2026: the Free plan's 500 MB database is at ~392 MB and
 --  there is no budget to upgrade. "Only the useful things will take up

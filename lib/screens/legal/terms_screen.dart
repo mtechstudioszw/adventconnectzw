@@ -3,8 +3,8 @@ import 'widgets/legal_layout.dart';
 
 /// Terms of Service, in-app. A MIRROR of the published page
 /// (`legal-site/terms.html`, live at mtechstudioszw.github.io/adventconnect-legal),
-/// generated from it on 2 Nov 2026 so the wording cannot drift. Change the
-/// published page first, then re-mirror; `lastUpdated` carries its date.
+/// generated from it so the wording cannot drift. Change the published page
+/// first, then re-mirror; `lastUpdated` carries its date.
 class TermsScreen extends StatelessWidget {
   const TermsScreen({super.key});
 
@@ -97,29 +97,69 @@ class TermsScreen extends StatelessWidget {
               'Scripture translations and audio are provided under their own licences: the Shona Bible is Bhaibheri Dzvene Rakasununguka MuChiShona Chanhasi 2017 © Biblica, Inc. (Creative Commons BY-SA 4.0), and English audio is the Berean Standard Bible, narrated, from bible.helloao.org. Ellen G. White books, hymns, news and videos belong to their owners. Advent AI can make mistakes — check its answers against Scripture and trusted sources.',
         ),
         LegalSection(
-          title: 'Third-party services',
+          title: 'Not professional advice, not an emergency service',
           body:
-              'The App relies on Supabase, Google (Firebase, Play, Gemini, YouTube), Apple, Cloudflare and Appodeal. Their terms also apply to the parts of the App they provide.',
+              'Posts, prayers, devotionals, Advent AI answers and anything else in the App are for encouragement and information only. They are not medical, legal, financial or professional counselling advice. Prayer requests and chats are not monitored around the clock and are not a crisis or emergency service. If you or someone else is in danger, contact your local emergency services.',
+        ),
+        LegalSection(
+          title: 'Not the official Church',
+          body:
+              'The App is independent. It is not owned, run or endorsed by the General Conference of Seventh-day Adventists or any of its divisions, unions, conferences or institutions. Church names, logos and trademarks belong to their owners and are used only to identify them.',
+        ),
+        LegalSection(
+          title: 'Copyright complaints',
+          body:
+              'If you believe something in the App infringes your copyright or other rights, email us with: what the work is, where it appears in the App, your contact details, and a statement that you own the rights (or act for the owner) and that your complaint is accurate. We will review it and remove infringing material. Members who repeatedly infringe will lose their accounts.',
+        ),
+        LegalSection(
+          title: 'Moderation',
+          body:
+              'We review reports and may remove content or limit accounts that break these Terms, but we cannot check everything members post and we are not responsible for content posted by others. We may also act on content we find ourselves, and we may share information with the authorities when the law requires it or to protect someone\'s safety.',
+        ),
+        LegalSection(
+          title: 'Third-party services and links',
+          body:
+              'The App relies on Supabase, Google (Firebase, Play, Gemini, YouTube), Apple, Cloudflare and Appodeal, and links to other websites. Their terms apply to the parts they provide, and we are not responsible for other websites or services.',
         ),
         LegalSection(
           title: 'No warranty',
           body:
-              'The App is provided "as is". We work hard to keep it running, but we don\'t guarantee that it will always be available, error-free, or that every feature will stay. Content posted by members is theirs, not ours, and we don\'t guarantee it is accurate.',
+              'The App is provided "as is" and "as available". We work hard to keep it running, but we don\'t promise that it will always be available, secure or error-free, that every feature will stay, or that content posted by members is accurate.',
         ),
         LegalSection(
           title: 'Limitation of liability',
           body:
-              'As far as the law allows, we are not liable for indirect or consequential losses from using the App, including disputes between members over sales, jobs or donations, or for lost data, including encrypted messages that can\'t be recovered.',
+              'As far as the law allows: we are not liable for indirect, incidental, special or consequential losses, or for loss of data (including encrypted messages that can\'t be recovered), profits or goodwill; we are not responsible for disputes between members over sales, jobs, donations or anything else; and our total liability to you for any claim is limited to the greater of what you paid us in the 12 months before the claim or US\$50.',
+        ),
+        LegalSection(
+          title: 'Your responsibility to us',
+          body:
+              'If someone makes a claim against us because of content you posted or because you broke these Terms or the law, you agree to cover our reasonable costs of dealing with it, as far as the law allows.',
+        ),
+        LegalSection(
+          title: 'Your legal rights still apply',
+          body:
+              'Nothing in these Terms takes away rights you have by law that cannot be excluded by agreement, such as consumer-protection rights where you live. If a law says part of these Terms can\'t apply to you, that part is limited only as much as needed and the rest still applies.',
+        ),
+        LegalSection(
+          title: 'Where the App may be used',
+          body:
+              'The App is offered worldwide, but you may not use it where that is against the law, or if you are barred from receiving services under applicable sanctions. You are responsible for following the laws that apply where you live. We may make features unavailable in some countries.',
+        ),
+        LegalSection(
+          title: 'Disputes and governing law',
+          body:
+              'If you have a complaint, please contact us first — most problems can be solved quickly, and we will try for at least 30 days before either of us goes to court. These Terms are governed by the laws of Zimbabwe, and the courts of Zimbabwe have jurisdiction, except where the law where you live gives you the right to bring a claim in your own country\'s courts.',
         ),
         LegalSection(
           title: 'Ending your use',
           body:
-              'You can stop using the App and delete your account at any time from Settings. We may suspend or close an account that seriously or repeatedly breaks these Terms; where we can, we will tell you why.',
+              'You can stop using the App and delete your account at any time from Settings. We may suspend or close an account that seriously or repeatedly breaks these Terms; where we can, we will tell you why. We may also change or stop the App, giving notice in the App where we reasonably can.',
         ),
         LegalSection(
-          title: 'Changes',
+          title: 'Changes and the whole agreement',
           body:
-              'We may update these Terms and will change the date above when we do. Important changes will be shown in the App. Using the App after a change means you accept it.',
+              'We may update these Terms and will change the date above when we do. Important changes will be shown in the App, and using the App after a change means you accept it. These Terms, the Privacy Policy and the Community Guidelines are the whole agreement between you and us about the App. If we don\'t enforce a rule straight away, we can still enforce it later. We may transfer these Terms to someone who takes over the App; your rights will not be reduced as a result.',
         ),
         LegalSection(
           title: 'Contact',

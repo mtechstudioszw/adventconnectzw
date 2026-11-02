@@ -3,8 +3,8 @@ import 'widgets/legal_layout.dart';
 
 /// Privacy Policy, in-app. A MIRROR of the published page
 /// (`legal-site/privacy.html`, live at mtechstudioszw.github.io/adventconnect-legal),
-/// generated from it on 2 Nov 2026 so the wording cannot drift. Change the
-/// published page first, then re-mirror; `lastUpdated` carries its date.
+/// generated from it so the wording cannot drift. Change the published page
+/// first, then re-mirror; `lastUpdated` carries its date.
 class PrivacyScreen extends StatelessWidget {
   const PrivacyScreen({super.key});
 
@@ -126,6 +126,31 @@ class PrivacyScreen extends StatelessWidget {
             'bible.helloao.org — the narrated English Bible is streamed or downloaded from this free Bible service, which therefore sees your device\'s network address, as any website does. Downloaded chapters are kept on your phone.',
             'YouTube — videos in Watch are played from YouTube under Google\'s terms.',
           ],
+        ),
+        LegalSection(
+          title: 'Why we\'re allowed to use it (legal bases)',
+          body: '',
+          bullets: [
+            'To provide the App you signed up for — your account, posts, chats, calls and the features you use.',
+            'Your consent — location, notifications, camera, microphone, Advent AI, chat backup and optional profile details. You can withdraw consent in Settings or your phone\'s settings at any time.',
+            'Our legitimate interests — keeping the App safe, preventing spam and abuse, fixing crashes and improving features, balanced against your rights.',
+            'Legal obligations — when the law requires us to keep or share something.',
+          ],
+        ),
+        LegalSection(
+          title: 'International transfers',
+          body:
+              'We operate from Zimbabwe, our database is in the EU (Germany), and some providers (such as Google, Apple and Cloudflare) process data in the United States and other countries. When data moves between countries we rely on our providers\' standard data-protection terms, including the European Commission\'s Standard Contractual Clauses where they apply.',
+        ),
+        LegalSection(
+          title: 'Ads and your choices (Android)',
+          body:
+              'Members without Premium may see ads from Appodeal and its partners, which can use your device\'s advertising ID to choose and measure ads. You can reset or delete your advertising ID, or opt out of personalised ads, in your phone\'s settings (Settings → Google → Ads, or Settings → Privacy → Ads). Premium removes ads. Where the law requires it, the App asks for your consent before personalised ads are shown.',
+        ),
+        LegalSection(
+          title: 'Requests from authorities',
+          body:
+              'We share information with police, courts or regulators only when the law requires it, and only what is needed. Encrypted messages and calls can\'t be handed over in readable form, because we can\'t read them.',
         ),
         LegalSection(
           title: 'How long we keep it',

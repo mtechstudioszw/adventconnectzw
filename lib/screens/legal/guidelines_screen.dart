@@ -3,8 +3,8 @@ import 'widgets/legal_layout.dart';
 
 /// Community Guidelines, in-app. A MIRROR of the published page
 /// (`legal-site/guidelines.html`, live at mtechstudioszw.github.io/adventconnect-legal),
-/// generated from it on 2 Nov 2026 so the wording cannot drift. Change the
-/// published page first, then re-mirror; `lastUpdated` carries its date.
+/// generated from it so the wording cannot drift. Change the published page
+/// first, then re-mirror; `lastUpdated` carries its date.
 class GuidelinesScreen extends StatelessWidget {
   const GuidelinesScreen({super.key});
 

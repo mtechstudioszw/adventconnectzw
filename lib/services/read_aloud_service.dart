@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 import 'cache_service.dart';
+import 'calls/call_service.dart';
+import 'music_player_service.dart';
 
 /// Reads text aloud with the phone's own voice (2 Nov 2026).
 ///
@@ -36,12 +38,29 @@ class ReadAloud {
     final tts = _tts ??= FlutterTts();
     if (!_ready) {
       _ready = true;
+      // A call always wins: stop reading the moment one starts or rings.
+      CallService.state.addListener(() {
+        if (CallService.isBusy && speaking.value) stop();
+      });
       try {
         await tts.awaitSpeakCompletion(true);
         await tts.setLanguage('en-US');
         await tts.setSpeechRate(rate);
         await tts.setPitch(1.0);
         await tts.setVolume(1.0);
+        if (defaultTargetPlatform == TargetPlatform.iOS) {
+          // iOS: the default session is silenced by the mute switch, and
+          // the plugin deactivates the session after every utterance
+          // (cutting audio between pages). Use spoken-audio playback and
+          // keep the session for the whole reading.
+          await tts.setSharedInstance(true);
+          await tts.autoStopSharedSession(false);
+          await tts.setIosAudioCategory(
+            IosTextToSpeechAudioCategory.playback,
+            const [IosTextToSpeechAudioCategoryOptions.duckOthers],
+            IosTextToSpeechAudioMode.spokenAudio,
+          );
+        }
       } catch (e) {
         debugPrint('ReadAloud setup: $e');
       }
@@ -54,7 +73,11 @@ class ReadAloud {
   Future<bool> speak(String text) async {
     final t = text.trim();
     if (t.isEmpty) return true;
+    // Never take the audio session from a live call.
+    if (CallService.isBusy) return false;
     try {
+      final music = MusicPlayerService.instance;
+      if (music.isPlayingNow) await music.togglePlayPause();
       final tts = await _engine();
       speaking.value = true;
       // Android caps one utterance at ~4,000 characters; a page is far

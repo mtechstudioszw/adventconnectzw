@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../../models/egw_book_model.dart';
 import '../../theme/app_colors.dart';
 import '../../services/read_aloud_service.dart';
+import '../../services/calls/call_service.dart';
 import '../../services/cache_service.dart';
 import '../../services/egw_highlights.dart';
 import '../../services/egw_paginator.dart';
@@ -213,14 +214,22 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
         if (mounted) {
           setState(() => _reading = false);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
-                "This phone has no reading voice set up. Install one in "
-                'Settings → Text-to-speech, then try again.',
+                CallService.isBusy
+                    ? 'Reading paused for your call.'
+                    : "This phone has no reading voice set up. Install one "
+                          'in Settings → Text-to-speech, then try again.',
               ),
             ),
           );
         }
+        return;
+      }
+      // Stopped from outside (a call came in, another audio started):
+      // don't turn the page.
+      if (!ReadAloud.instance.speaking.value) {
+        if (mounted && _reading) setState(() => _reading = false);
         return;
       }
       if (!_reading || !mounted) return;

@@ -23,6 +23,9 @@
 #        ANDROID_KEY_PASSWORD      — key password (often same as store)
 #
 #   4. Trigger: Actions → "Build AAB (Play Store)" → Run workflow.
+#      The default track is "internal": the AAB goes straight to Play
+#      internal testing (needs PLAY_SERVICE_ACCOUNT_JSON, see the
+#      "Check the Google Play key" step). Pick "none" to only build it.
 #
 # Download:
 #   Releases page → "Latest Play Store build" → app-release.aab.
@@ -41,8 +44,10 @@ on:
         description: Send the AAB to Google Play (none = GitHub release only)
         required: true
         type: choice
-        default: none
-        options: [none, internal, alpha, beta, production]
+        # Internal testing by default (owner, 2 Nov 2026): "Run workflow"
+        # with no changes builds the AAB and sends it to internal testers.
+        default: internal
+        options: [internal, none, alpha, beta, production]
       release_now:
         # Testing tracks (internal / alpha / beta) always go out at once.
         # Production lands as a DRAFT unless this is ticked, so one wrong
@@ -106,6 +111,24 @@ jobs:
           docker image prune --all --force || true
           echo "=== after ==="
           df -h /
+
+      # Fail in seconds, not after a 20-minute build, when the Play key
+      # was never added. Setup: Play Console -> Users and permissions ->
+      # invite the service account's email with "Release apps to testing
+      # tracks"; then repo Settings -> Secrets -> Actions ->
+      # PLAY_SERVICE_ACCOUNT_JSON = the whole JSON key file.
+      - name: Check the Google Play key is set
+        if: ${{ inputs.play_track != 'none' }}
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$PLAY_JSON" ]; then
+            echo "::error::PLAY_SERVICE_ACCOUNT_JSON secret is missing, so the AAB can't be sent to Google Play."
+            echo "::error::Add it (see the comment on this step), or choose play_track = none to only build the AAB."
+            exit 1
+          fi
+          echo "$PLAY_JSON" | python3 -c "import json,sys; d=json.load(sys.stdin); print('Play key OK for', d['client_email'])" \
+            || { echo "::error::PLAY_SERVICE_ACCOUNT_JSON is not a valid service-account JSON key."; exit 1; }
 
       - name: Set up JDK 17
         uses: actions/setup-java@v3

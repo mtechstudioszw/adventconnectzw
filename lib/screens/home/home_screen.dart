@@ -105,6 +105,8 @@ import '../../widgets/cached_image.dart';
 import '../../widgets/inline_action.dart';
 import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../services/seller_service.dart';
+import '../../widgets/tour/app_tours.dart';
+import '../../widgets/tour/feature_tour.dart';
 import '../../widgets/moderation_actions.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -626,6 +628,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() => _newPostCount = n);
   }
 
+  /// The guided tour (3 Nov 2026): once Home has painted its feed and is
+  /// the screen in front, spotlight the main features — once per phone.
+  void _scheduleTour() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future<void>.delayed(const Duration(milliseconds: 900), () {
+        if (!mounted) return;
+        final route = ModalRoute.of(context);
+        if (route != null && !route.isCurrent) return;
+        if (TabShell.activeIndex.value != TabShell.homeIndex) return;
+        unawaited(AppTours.maybeRun(context));
+      });
+    });
+  }
+
   /// Tap on the pill: load what's new and show THOSE posts at the top.
   ///
   /// The count comes from "posts newer than the newest one on screen", but
@@ -807,6 +823,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _loading = false;
         _feedFailed = false;
       });
+      _scheduleTour();
       // Save the fresh posts NOW. This used to wait for the end of tier 2,
       // where any one of eleven decorative requests failing skipped the
       // write — so the cache was often empty and offline showed nothing.
@@ -1797,7 +1814,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 // No action link: it said "Prayer" and opened Prayer from
                 // the Stories heading, one row under the Prayer chip.
                 title: 'Stories',
-                child: StoriesRail(
+                child: TourAnchor(
+                  id: 'home_stories',
+                  child: StoriesRail(
                   stories: _stories,
                   viewerId: AuthService.currentUser?.id ?? '',
                   viewerName: _displayFullName(),
@@ -1805,6 +1824,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   onAddStory: _openStoryComposer,
                   onAuthorTapped: (_, list) => _openStoryViewer(list),
                   viewedStoryIds: _allViewedIds,
+                ),
                 ),
               ),
             ),

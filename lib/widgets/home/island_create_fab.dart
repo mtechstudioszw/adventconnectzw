@@ -8,6 +8,7 @@ import '../../services/cache_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
+import '../tour/feature_tour.dart';
 import '../../theme/app_tokens.dart';
 
 /// Home's floating "+" (owner, 3 Nov 2026).
@@ -155,7 +156,10 @@ class _IslandCreateFabState extends State<IslandCreateFab> {
                 child: AnimatedScale(
                   scale: drag != null ? 1.08 : 1.0,
                   duration: const Duration(milliseconds: 140),
-                  child: const _GlassPlus(),
+                  child: const TourAnchor(
+                    id: 'home_create',
+                    child: _GlassPlus(),
+                  ),
                 ),
               ),
             ),

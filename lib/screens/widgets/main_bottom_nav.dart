@@ -12,6 +12,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/cached_image.dart';
+import '../../widgets/tour/feature_tour.dart';
 import '../../widgets/motion/pressable.dart';
 
 /// Frosted glass behind the island.
@@ -452,7 +453,9 @@ class _NavItem extends StatelessWidget {
 
     // The active pill takes whatever room it needs (and gives some back when
     // cramped); inactive icons stay a fixed, comfortable tap target.
-    return active ? Flexible(child: item) : item;
+    // Tour anchor: the guided tour spotlights each tab (3 Nov 2026).
+    final anchored = TourAnchor(id: 'nav_${label.toLowerCase()}', child: item);
+    return active ? Flexible(child: anchored) : anchored;
   }
 }
 

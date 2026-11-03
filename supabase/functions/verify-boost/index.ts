@@ -38,6 +38,15 @@ const SKUS: Record<string, { type: "product" | "job"; days: number }> = {
   job_boost_14d: { type: "job", days: 14 },
 };
 
+/// Call-minute packs (patch 305, 3 Nov 2026). One-off, consumable;
+/// granted to the CALLER (no target), valid 30 days, spent only after the
+/// plan's own call allowance runs out. Mirrors CallPackCatalog in
+/// lib/services/billing/call_pack_catalog.dart; the server's copy decides.
+const PACKS: Record<string, { minutes: number; days: number }> = {
+  call_minutes_300: { minutes: 300, days: 30 },
+  call_minutes_1200: { minutes: 1200, days: 30 },
+};
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -83,11 +92,12 @@ Deno.serve(async (req) => {
   const productId = String(body?.product_id ?? "");
   const purchaseToken = String(body?.purchase_token ?? "");
   const sku = SKUS[productId];
+  const pack = PACKS[productId];
 
   if (platform !== "google_play") {
     return json({ ok: false, error: "unsupported_platform" }, 400);
   }
-  if (!sku) return json({ ok: false, error: "unknown_product" }, 400);
+  if (!sku && !pack) return json({ ok: false, error: "unknown_product" }, 400);
   if (!purchaseToken) return json({ ok: false, error: "missing_token" }, 400);
 
   let purchase;
@@ -103,6 +113,37 @@ Deno.serve(async (req) => {
   }
   if (purchase.purchaseState !== 0) {
     return json({ ok: false, error: "invalid_purchase" }, 400);
+  }
+
+  // ---- call-minute pack: credit the caller, no target ---------------
+  if (pack) {
+    const { data: expiresAt, error: packErr } = await admin.rpc(
+      "grant_call_minutes",
+      {
+        p_user: user.id,
+        p_product: productId,
+        p_minutes: pack.minutes,
+        p_days: pack.days,
+        p_token: purchaseToken,
+        p_order: purchase.orderId,
+      },
+    );
+    if (packErr) {
+      // Not acknowledged, so Play refunds it within 3 days.
+      console.error("grant_call_minutes failed:", packErr);
+      return json({ ok: false, error: "write_failed" }, 500);
+    }
+    try {
+      await acknowledgePlayProductPurchase(productId, purchaseToken);
+    } catch (e) {
+      console.error("acknowledge failed:", e);
+    }
+    return json({
+      ok: true,
+      minutes: pack.minutes,
+      expires_at: expiresAt,
+      test_purchase: purchase.isTestPurchase,
+    });
   }
 
   const target = parseTag(purchase.accountTag) ??

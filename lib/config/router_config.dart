@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../screens/settings/chat_backup_screen.dart';
 import '../screens/settings/two_step_setup_screen.dart';
 import '../screens/auth/two_step_challenge_screen.dart';
+import '../screens/auth/verify_phone_screen.dart';
 import '../services/two_step_service.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_library_screen.dart';
@@ -311,6 +312,13 @@ final GoRouter appRouter = GoRouter(
       path: '/two-step-code',
       name: 'two_step_code',
       builder: (context, state) => const TwoStepChallengeScreen(),
+    ),
+    GoRoute(
+      // New-account phone check (PhoneVerificationService) — pushed by
+      // TabShell only when the server says this account needs it.
+      path: '/verify-phone',
+      name: 'verify_phone',
+      builder: (context, state) => const VerifyPhoneScreen(),
     ),
     GoRoute(
       // WhatsApp-style biometric lock. Splash routes here on cold

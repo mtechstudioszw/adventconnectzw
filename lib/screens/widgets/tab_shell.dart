@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/messaging_service.dart';
+import '../../services/phone_verification_service.dart';
 import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/motion/hide_on_scroll.dart';
 import '../../widgets/home/composer_entry.dart';
@@ -65,6 +66,21 @@ class TabShell extends StatefulWidget {
 }
 
 class _TabShellState extends State<TabShell> with NavVisibilityMixin {
+  @override
+  void initState() {
+    super.initState();
+    // Phone verification for new accounts (patch 311). Asked once per app
+    // start; the server answers 'ok' while the owner has it switched off,
+    // so normally nothing happens here.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkPhone());
+  }
+
+  Future<void> _checkPhone() async {
+    if (await PhoneVerificationService.status() != 'required') return;
+    if (!mounted) return;
+    context.pushNamed('verify_phone');
+  }
+
   void _select(int index) {
     final shell = widget.shell;
     // A tab you arrive at should show its island; one hidden by scrolling

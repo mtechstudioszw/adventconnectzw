@@ -47,6 +47,7 @@ import '../models/youtube_playlist.dart';
 import '../models/youtube_video.dart';
 import '../screens/quiz/arena/quiz_boot_screen.dart';
 import '../screens/quiz/arena/quiz_matchmaking_screen.dart';
+import '../screens/quiz/arena/quiz_room_screen.dart';
 import '../screens/quiz/arena/widgets/arena_page_route.dart';
 import '../screens/profile/blocked_users_screen.dart';
 import '../screens/profile/friends_screen.dart';
@@ -1066,6 +1067,15 @@ final GoRouter appRouter = GoRouter(
             child: QuizMatchmakingScreen(
               matchId: state.pathParameters['matchId'],
             ),
+          ),
+        ),
+        // Live room invite (patch_306): join by code, then play.
+        GoRoute(
+          path: 'room/:code',
+          name: 'quiz_room_join',
+          pageBuilder: (context, state) => arenaPage<void>(
+            key: state.pageKey,
+            child: QuizRoomJoinScreen(code: state.pathParameters['code'] ?? ''),
           ),
         ),
         GoRoute(

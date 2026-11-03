@@ -23,6 +23,7 @@ import 'quiz_boot_screen.dart' show showQuizSettings;
 import 'quiz_challenge_screen.dart';
 import 'quiz_leaderboard_screen.dart';
 import 'quiz_matchmaking_screen.dart';
+import 'quiz_room_screen.dart';
 import 'quiz_results_screen.dart';
 import 'quiz_round_screen.dart';
 import 'widgets/arena_scaffold.dart';
@@ -582,10 +583,7 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
     ];
     if (offers.isEmpty) return const [];
     return [
-      for (final offer in offers) ...[
-        const SizedBox(height: 12),
-        offer,
-      ],
+      for (final offer in offers) ...[const SizedBox(height: 12), offer],
     ];
   }
 
@@ -597,9 +595,9 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
     setState(() => _claimingCoins = false);
     if (granted <= 0) return;
     QuizSfx.play(QuizSound.levelUp);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$granted coins added')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$granted coins added')));
   }
 
   Future<void> _claimStreakRepair() async {
@@ -920,6 +918,25 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
           highlight: _incomingChallenges > 0,
           onTap: _incomingChallenges > 0 ? _openChallenges : _startChallenge,
         ),
+        // Live rooms for 2–5 players (3 Nov 2026).
+        _ModeRow(
+          label: 'Play with friends',
+          blurb: 'Live room for up to 5. Share a code, play together.',
+          icon: Icons.groups_rounded,
+          onTap: () {
+            QuizSfx.tap();
+            QuizRoomScreen.host(context);
+          },
+        ),
+        _ModeRow(
+          label: 'Join a room',
+          blurb: 'Got a 6-letter code? Enter it here.',
+          icon: Icons.login_rounded,
+          onTap: () {
+            QuizSfx.tap();
+            QuizRoomScreen.askCode(context);
+          },
+        ),
         _ModeRow(
           label: 'Leaderboard',
           blurb: 'Where you stand this week.',
@@ -1089,10 +1106,7 @@ class _ModeRow extends StatelessWidget {
                   }
                 : null,
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 13,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
               decoration: BoxDecoration(
                 color: highlight
                     ? ArenaTheme.correctOnNavy.withValues(alpha: 0.12)

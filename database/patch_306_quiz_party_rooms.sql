@@ -1,4 +1,4 @@
--- patch_306 — Live quiz rooms for 2 to 5 players (3 Nov 2026).
+-- patch_306 — Live quiz rooms for 2 to 5 players (3 Nov 2026). APPLIED 3 Nov 2026 (owner ran it in the SQL editor; verified).
 --
 -- Owner: "live match what happens when 5 people live match".
 --

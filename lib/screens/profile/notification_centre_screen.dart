@@ -223,6 +223,11 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
       case 'friend_request':
         ConversationsScreen.openRequests(GoRouter.of(context));
         return true;
+      case 'quiz_room':
+        // Live room invite (patch_306); reference_id is the room code.
+        if (id.isEmpty) return false;
+        context.pushNamed('quiz_room_join', pathParameters: {'code': id});
+        return true;
       case 'quiz_match':
         // A live quiz invite, and it expires in five minutes — so this has
         // to open the live area with the match named, not a reader sheet

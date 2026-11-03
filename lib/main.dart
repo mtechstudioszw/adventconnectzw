@@ -421,6 +421,15 @@ Future<void> _initBackgroundServices() async {
             // Chat is a shell tab — switch to it, don't push a second inbox.
             ConversationsScreen.openRequests(appRouter);
             break;
+          case 'quiz_room':
+            // Live room invite (patch_306); reference_id is the room code.
+            if (id.isNotEmpty) {
+              appRouter.pushNamed(
+                'quiz_room_join',
+                pathParameters: {'code': id},
+              );
+            }
+            break;
           case 'quiz_match':
             // Live quiz invite. Mirrors the in-app notification centre —
             // keep the two switches in step. The invite dies after five

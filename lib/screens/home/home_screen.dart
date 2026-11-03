@@ -114,8 +114,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
-    with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   List<Event> _events = [];
   List<Church> _churches = [];
   List<MemberDirectoryEntry> _suggestedMembers = [];
@@ -183,10 +182,12 @@ class _HomeScreenState extends State<HomeScreen>
   /// scrolling (a rebuild must never reshuffle what is on screen).
   List<T> _seeded<T>(List<T> source) {
     final now = DateTime.now();
-    final seed = '${AuthService.currentUser?.id}-${now.year}-${now.month}-${now.day}'
-        .hashCode;
+    final seed =
+        '${AuthService.currentUser?.id}-${now.year}-${now.month}-${now.day}'
+            .hashCode;
     return List<T>.of(source)..shuffle(Random(seed));
   }
+
   // userId -> friendship row (if any) so the suggestion cards know
   // whether to show "Add friend" / "Pending" / "Friends".
   Map<String, Friendship> _friendshipsByUser = <String, Friendship>{};
@@ -249,9 +250,9 @@ class _HomeScreenState extends State<HomeScreen>
   /// than stranding it half-revealed.
   late final FloatingHeaderSnapConfiguration _headerSnap =
       FloatingHeaderSnapConfiguration(
-    curve: AppMotion.easeOut,
-    duration: const Duration(milliseconds: 220),
-  );
+        curve: AppMotion.easeOut,
+        duration: const Duration(milliseconds: 220),
+      );
   bool _loadingMore = false;
   bool _endOfFeed = false;
 
@@ -302,6 +303,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
+    HomeCreateBridge.handler.value = _handleCreate;
     _lifecycle = AppLifecycleListener(onResume: _onResume);
     _loadSuperAdmin();
     _postChangesSub = FeedService.postChanges.listen(_onPostChange);
@@ -400,7 +402,9 @@ class _HomeScreenState extends State<HomeScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: palette.card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         title: Row(
           children: [
             const Icon(
@@ -495,6 +499,9 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    if (HomeCreateBridge.handler.value == _handleCreate) {
+      HomeCreateBridge.handler.value = null;
+    }
     _postChangesSub?.cancel();
     FeedService.hiddenPostIds.removeListener(_onHiddenChanged);
     SabbathService.changes.removeListener(_onSabbathChanged);
@@ -560,14 +567,16 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _cacheBadges() {
-    unawaited(CacheService.writeString(
-      _badgeCacheKey,
-      jsonEncode({
-        'n': _unreadNotifications,
-        'm': _unreadMessages,
-        'r': _pendingFriendRequests,
-      }),
-    ));
+    unawaited(
+      CacheService.writeString(
+        _badgeCacheKey,
+        jsonEncode({
+          'n': _unreadNotifications,
+          'm': _unreadMessages,
+          'r': _pendingFriendRequests,
+        }),
+      ),
+    );
   }
 
   /// Loads Home in tiers instead of one 17-call `Future.wait`.
@@ -690,10 +699,16 @@ class _HomeScreenState extends State<HomeScreen>
       // query used to throw the whole refresh away (29 Oct 2026: "when I
       // swipe down, the posts are not refreshing").
       final social = await Future.wait<Object?>([
-        _soft('friendships', FeedService.fetchMyFriendships(),
-            const <Friendship>[]),
-        _soft('followed churches',
-            ChurchService.fetchUserFollowedChurchIds(), <String>{}),
+        _soft(
+          'friendships',
+          FeedService.fetchMyFriendships(),
+          const <Friendship>[],
+        ),
+        _soft(
+          'followed churches',
+          ChurchService.fetchUserFollowedChurchIds(),
+          <String>{},
+        ),
         _soft('followed pages', PageService.myFollowedPageIds(), <String>{}),
         // Fills FollowService.followingIds; fails soft.
         _soft<void>('following', FollowService.loadMyFollowing(), null),
@@ -738,12 +753,21 @@ class _HomeScreenState extends State<HomeScreen>
         // Only the feed itself may fail the refresh. Stories, the badge
         // and the urgent banner fall back on their own.
         _soft('stories', FeedService.fetchStories(), _stories),
-        _soft('viewed stories', FeedService.fetchMyViewedStoryIds(),
-            _viewedStoryIds),
-        _soft('unread', NotificationService.unreadCount(),
-            _unreadNotifications),
-        _soft<UrgentBanner?>('banner', UrgentBannerService.fetchActive(),
-            _banner),
+        _soft(
+          'viewed stories',
+          FeedService.fetchMyViewedStoryIds(),
+          _viewedStoryIds,
+        ),
+        _soft(
+          'unread',
+          NotificationService.unreadCount(),
+          _unreadNotifications,
+        ),
+        _soft<UrgentBanner?>(
+          'banner',
+          UrgentBannerService.fetchActive(),
+          _banner,
+        ),
       ]);
       if (!mounted) return;
       // The viewer's own posts are part of their Home feed (owner's
@@ -793,24 +817,32 @@ class _HomeScreenState extends State<HomeScreen>
       // Each request falls back on its own (patch 29 Oct 2026): one dead
       // endpoint now costs only its own rail, not every rail and the cache.
       final results = await Future.wait<Object?>([
-        _soft('events', EventService.fetchEvents(upcomingOnly: true),
-            _events),
+        _soft('events', EventService.fetchEvents(upcomingOnly: true), _events),
         // A discovery rail, not the directory: scoped and capped so the
         // OrgMast import cannot turn this into a 185,000-row download.
-        _soft('churches',
-            ChurchService.fetchChurches(country: _country, limit: 60),
-            _churches),
-        _soft('rsvps', EventService.fetchUserRsvpedEventIds(),
-            _rsvpedEventIds),
+        _soft(
+          'churches',
+          ChurchService.fetchChurches(country: _country, limit: 60),
+          _churches,
+        ),
+        _soft('rsvps', EventService.fetchUserRsvpedEventIds(), _rsvpedEventIds),
         // Everyone discoverable (685 on 29 Oct 2026): the endless feed
         // shows them group after group instead of two rails and done.
-        _soft('people',
-            DirectoryService.fetchSuggestedMembers(limit: 1000, poolSize: 1000),
-            _suggestedMembers),
-        _soft('friend requests', FeedService.pendingRequestCount(),
-            _pendingFriendRequests),
-        _soft('conversations', MessagingService.fetchConversations(),
-            const <Conversation>[]),
+        _soft(
+          'people',
+          DirectoryService.fetchSuggestedMembers(limit: 1000, poolSize: 1000),
+          _suggestedMembers,
+        ),
+        _soft(
+          'friend requests',
+          FeedService.pendingRequestCount(),
+          _pendingFriendRequests,
+        ),
+        _soft(
+          'conversations',
+          MessagingService.fetchConversations(),
+          const <Conversation>[],
+        ),
         // Every recent story, one card each through the feed.
         _soft('news', AdventNewsService.fetchNews(limit: 60), _topNews),
         _soft('prayers', PrayerService.fetchPrayers(), _prayers),
@@ -819,8 +851,7 @@ class _HomeScreenState extends State<HomeScreen>
         _soft('music', LibraryService.fetchItems('music'), _music),
         // Owner, 1 Nov 2026: church suggestions only for members with no
         // home church yet, in Zimbabwe. Index 11.
-        _soft('suggest churches', ChurchService.shouldSuggestChurches(),
-            false),
+        _soft('suggest churches', ChurchService.shouldSuggestChurches(), false),
       ]);
       if (!mounted) return;
       // Drop events whose start time is more than a few hours in the
@@ -912,17 +943,18 @@ class _HomeScreenState extends State<HomeScreen>
         _jobs = (results[9] as List<Job>).take(8).toList();
         // Shuffled per refresh so the same few tracks don't lead the feed
         // every single time.
-        _music = (List<LibraryItem>.of(results[10] as List<LibraryItem>)
-              ..shuffle())
-            .take(8)
-            .toList();
+        _music = (List<LibraryItem>.of(
+          results[10] as List<LibraryItem>,
+        )..shuffle()).take(8).toList();
       });
       // Best-effort cache write — failures here must never surface.
       unawaited(_writeCache(events, churches, _posts));
       unawaited(_loadMomentPools());
-      unawaited(FollowService.myWhoCanFollow().then((w) {
-        if (mounted && w != null) setState(() => _myWhoCanFollow = w);
-      }));
+      unawaited(
+        FollowService.myWhoCanFollow().then((w) {
+          if (mounted && w != null) setState(() => _myWhoCanFollow = w);
+        }),
+      );
       _cacheBadges();
     } catch (_) {
       // Decorative content — the feed is already on screen.
@@ -1083,9 +1115,7 @@ class _HomeScreenState extends State<HomeScreen>
       0,
       // Scale with distance so a short hop isn't sluggish, capped so a
       // 200-post scroll doesn't take forever.
-      duration: Duration(
-        milliseconds: (distance / 6).clamp(220, 600).round(),
-      ),
+      duration: Duration(milliseconds: (distance / 6).clamp(220, 600).round()),
       curve: AppMotion.ease,
     );
   }
@@ -1150,9 +1180,11 @@ class _HomeScreenState extends State<HomeScreen>
           .map((n) => AdventNews.fromJson(n as Map<String, dynamic>))
           .toList();
       final people = ((decoded['people'] as List?) ?? const [])
-          .map((m) => MemberDirectoryEntry.fromCacheJson(
-                Map<String, dynamic>.from(m as Map),
-              ))
+          .map(
+            (m) => MemberDirectoryEntry.fromCacheJson(
+              Map<String, dynamic>.from(m as Map),
+            ),
+          )
           .toList();
       final followed = ((decoded['followedChurchIds'] as List?) ?? const [])
           .map((e) => e.toString())
@@ -1517,7 +1549,7 @@ class _HomeScreenState extends State<HomeScreen>
       // TabShell's extendBody adds the island's height to this body's
       // bottom padding, so the FAB rests above the island and drops with
       // it when the island hides on scroll.
-      floatingActionButton: HomeComposeFab(onCreate: _handleCreate),
+      // The "+" lives on the island now (HomeCreateBridge, 3 Nov 2026).
       body: NotificationListener<ScrollNotification>(
         onNotification: (note) {
           if (note is ScrollUpdateNotification) {
@@ -1544,9 +1576,7 @@ class _HomeScreenState extends State<HomeScreen>
               right: 0,
               child: Center(
                 child: AnimatedSlide(
-                  offset: _newPostCount > 0
-                      ? Offset.zero
-                      : const Offset(0, -3),
+                  offset: _newPostCount > 0 ? Offset.zero : const Offset(0, -3),
                   duration: const Duration(milliseconds: 320),
                   curve: Curves.easeOutBack,
                   child: AnimatedOpacity(
@@ -1732,7 +1762,7 @@ class _HomeScreenState extends State<HomeScreen>
                   // header, live match, live banner, these chips, stories,
                   // devotion cards, library tiles, church events, feed.
                   // The composer card is gone from this column — posting
-                  // is the floating gold "+" (HomeComposeFab) now.
+                  // is the island's "+" (HomeCreateBridge) now.
                   HomeShortcutChips(
                     onChurches: () => context.pushNamed('churches'),
                     onEvents: () => context.pushNamed('events'),
@@ -1771,10 +1801,7 @@ class _HomeScreenState extends State<HomeScreen>
                   // Devotion + Sabbath School + hymn / music / EGW of the
                   // day. Self-hides only if every source is empty, which the
                   // bundled hymnal makes very unlikely.
-                  TodayCard(
-                    devotion: _devotion,
-                    refreshTick: _refreshTick,
-                  ),
+                  TodayCard(devotion: _devotion, refreshTick: _refreshTick),
                   const SizedBox(height: AppSpace.md),
                   // Quiz, then Continue (Bible chapter, lesson day, hymn,
                   // EGW book), then Library — the section pills went with
@@ -1863,8 +1890,7 @@ class _HomeScreenState extends State<HomeScreen>
       final more = await DirectoryService.fetchSuggestedMembers(limit: 40);
       if (!mounted) return;
       final known = {for (final e in _suggestedMembers) e.userId};
-      final fresh =
-          more.where((e) => !known.contains(e.userId)).toList();
+      final fresh = more.where((e) => !known.contains(e.userId)).toList();
       if (fresh.isEmpty) return;
       setState(() => _suggestedMembers = [..._suggestedMembers, ...fresh]);
     } catch (_) {
@@ -2291,15 +2317,16 @@ class _HomeScreenState extends State<HomeScreen>
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                  // NOT member_directory. That screen predates this card
-                  // and does not work; sending people to a dead end at the
-                  // exact moment they have run out of feed is the worst
-                  // possible place to do it. `extra: true` opens New chat
-                  // already switched to "Find people", which is the screen
-                  // that actually answers "who else is on here?".
-                  onPressed: () => context.pushNamed('new_chat', extra: true),
-                  icon: const Icon(Icons.people_outline_rounded, size: 18),
-                  label: const Text('Meet people'),
+                      // NOT member_directory. That screen predates this card
+                      // and does not work; sending people to a dead end at the
+                      // exact moment they have run out of feed is the worst
+                      // possible place to do it. `extra: true` opens New chat
+                      // already switched to "Find people", which is the screen
+                      // that actually answers "who else is on here?".
+                      onPressed: () =>
+                          context.pushNamed('new_chat', extra: true),
+                      icon: const Icon(Icons.people_outline_rounded, size: 18),
+                      label: const Text('Meet people'),
                     ),
                   ),
                   const SizedBox(width: AppSpace.sm),
@@ -2443,8 +2470,9 @@ class _HomeScreenState extends State<HomeScreen>
       adAfterPost: posts.length >= _adEveryNPosts ? _adEveryNPosts : null,
     );
     // Keep sermons topped up while the feed is still drawing from them.
-    final videosUsed =
-        blocks.where((b) => b.kind == FeedBlockKind.video).length;
+    final videosUsed = blocks
+        .where((b) => b.kind == FeedBlockKind.video)
+        .length;
     if (videosUsed >= _homeVideos.length - 3) unawaited(_loadMoreVideos());
 
     for (final block in blocks) {
@@ -2463,8 +2491,7 @@ class _HomeScreenState extends State<HomeScreen>
   List<List<MemberDirectoryEntry>> get _peopleGroups {
     // Members who allow followers are offered in "Leaders to follow"
     // instead, so nobody appears twice with two different buttons.
-    final open =
-        _openSuggestions.where((m) => !m.allowsFollowers).toList();
+    final open = _openSuggestions.where((m) => !m.allowsFollowers).toList();
     final groups = <List<MemberDirectoryEntry>>[];
     for (var i = 0; i < open.length; i += _peoplePerGroup) {
       final g = open.sublist(i, min(i + _peoplePerGroup, open.length));
@@ -2480,11 +2507,13 @@ class _HomeScreenState extends State<HomeScreen>
     final following = FollowService.followingIds.value ?? const <String>{};
     final me = AuthService.currentUser?.id;
     final open = _suggestedMembers
-        .where((m) =>
-            m.allowsFollowers &&
-            m.userId != me &&
-            !following.contains(m.userId) &&
-            !_dismissedSuggestionIds.contains(m.userId))
+        .where(
+          (m) =>
+              m.allowsFollowers &&
+              m.userId != me &&
+              !following.contains(m.userId) &&
+              !_dismissedSuggestionIds.contains(m.userId),
+        )
         .toList();
     return [
       for (var i = 0; i < open.length; i += _peoplePerGroup)
@@ -2528,17 +2557,17 @@ class _HomeScreenState extends State<HomeScreen>
 
   /// How many items each recurring module can still give.
   Map<FeedBlockKind, int> get _feedAvailable => {
-        FeedBlockKind.people: _peopleGroups.length,
-        FeedBlockKind.leaders: _leaderGroups.length,
-        FeedBlockKind.news: _topNews.length,
-        FeedBlockKind.video: _homeVideos.length,
-        FeedBlockKind.verse: _versePool.length,
-        FeedBlockKind.quiz: _quizPool.length,
-        FeedBlockKind.hymn: _hymnPool.length,
-        FeedBlockKind.belief: _beliefPool.length,
-        FeedBlockKind.church: _churchPool.length,
-        FeedBlockKind.music: kHideMusic ? 0 : _music.length,
-      };
+    FeedBlockKind.people: _peopleGroups.length,
+    FeedBlockKind.leaders: _leaderGroups.length,
+    FeedBlockKind.news: _topNews.length,
+    FeedBlockKind.video: _homeVideos.length,
+    FeedBlockKind.verse: _versePool.length,
+    FeedBlockKind.quiz: _quizPool.length,
+    FeedBlockKind.hymn: _hymnPool.length,
+    FeedBlockKind.belief: _beliefPool.length,
+    FeedBlockKind.church: _churchPool.length,
+    FeedBlockKind.music: kHideMusic ? 0 : _music.length,
+  };
 
   /// Headings for successive people groups — true to who is in them.
   String _peopleTitle(int index, List<MemberDirectoryEntry> group) {
@@ -2579,8 +2608,9 @@ class _HomeScreenState extends State<HomeScreen>
             onDelete: () => _confirmDeletePost(post),
             onToggleVisibility: () => _togglePostVisibility(post),
             onReport: () => _reportPost(post),
-            onAdminModerate:
-                _isSuperAdmin ? () => _adminModeratePost(post) : null,
+            onAdminModerate: _isSuperAdmin
+                ? () => _adminModeratePost(post)
+                : null,
             onAuthorTapped: () => _openAuthorProfile(post),
             onAuthorAvatarTapped: () => _previewAuthor(post),
             hasStory: _authorHasStory(post.authorId),
@@ -2611,20 +2641,25 @@ class _HomeScreenState extends State<HomeScreen>
       case FeedBlockKind.people:
         final groups = _peopleGroups;
         if (i >= groups.length) return null;
-        return reveal(_discoverySection(
-          title: _peopleTitle(i, groups[i]),
-          action: i == 0 ? 'See all' : null,
-          onAction:
-              i == 0 ? () => context.pushNamed('new_chat', extra: true) : null,
-          child: _buildSuggestedMembersRow(groups[i]),
-        ));
+        return reveal(
+          _discoverySection(
+            title: _peopleTitle(i, groups[i]),
+            action: i == 0 ? 'See all' : null,
+            onAction: i == 0
+                ? () => context.pushNamed('new_chat', extra: true)
+                : null,
+            child: _buildSuggestedMembersRow(groups[i]),
+          ),
+        );
       case FeedBlockKind.leaders:
         final groups = _leaderGroups;
         if (i >= groups.length) return null;
-        return reveal(_discoverySection(
-          title: i == 0 ? 'Leaders to follow' : 'More voices to follow',
-          child: _buildSuggestedMembersRow(groups[i], follow: true),
-        ));
+        return reveal(
+          _discoverySection(
+            title: i == 0 ? 'Leaders to follow' : 'More voices to follow',
+            child: _buildSuggestedMembersRow(groups[i], follow: true),
+          ),
+        );
       case FeedBlockKind.news:
         return reveal(NewsFeedCard(news: _topNews[i]));
       case FeedBlockKind.video:
@@ -2643,49 +2678,53 @@ class _HomeScreenState extends State<HomeScreen>
         // Only reaches members with no home church (shouldSuggestChurches).
         // The action is "this is my church", not "follow": you belong to
         // one church here and there is no following others.
-        return reveal(ChurchFollowCard(
-          church: c,
-          following: false,
-          onFollow: () async {
-            HapticFeedback.selectionClick();
-            final ok = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Is this your church?'),
-                content: Text(
-                  '${c.name} becomes your home church — the one church you '
-                  'belong to here. Its announcements and church chat come '
-                  'to you. You can change it later from your profile.',
+        return reveal(
+          ChurchFollowCard(
+            church: c,
+            following: false,
+            onFollow: () async {
+              HapticFeedback.selectionClick();
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Is this your church?'),
+                  content: Text(
+                    '${c.name} becomes your home church — the one church you '
+                    'belong to here. Its announcements and church chat come '
+                    'to you. You can change it later from your profile.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Not now'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Yes, my church'),
+                    ),
+                  ],
                 ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('Not now'),
-                  ),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text('Yes, my church'),
-                  ),
-                ],
-              ),
-            );
-            if (ok != true || !mounted) return;
-            final messenger = ScaffoldMessenger.of(context);
-            try {
-              await ChurchService.setHomeChurch(c.id);
-              if (!mounted) return;
-              // A member with a church gets no more church suggestions.
-              setState(() => _churchPool = const []);
-              messenger.showSnackBar(
-                SnackBar(content: Text('${c.name} is now your home church.')),
               );
-            } catch (_) {
-              messenger.showSnackBar(
-                const SnackBar(content: Text('Could not save that. Try again.')),
-              );
-            }
-          },
-        ));
+              if (ok != true || !mounted) return;
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                await ChurchService.setHomeChurch(c.id);
+                if (!mounted) return;
+                // A member with a church gets no more church suggestions.
+                setState(() => _churchPool = const []);
+                messenger.showSnackBar(
+                  SnackBar(content: Text('${c.name} is now your home church.')),
+                );
+              } catch (_) {
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('Could not save that. Try again.'),
+                  ),
+                );
+              }
+            },
+          ),
+        );
       case FeedBlockKind.music:
         return HomeMusicCard(item: _music[i]);
       case FeedBlockKind.ad:
@@ -2900,8 +2939,12 @@ class _HomeScreenState extends State<HomeScreen>
   }) {
     // Routes through the one shared HomeSection so discovery rails keep the
     // same header grammar and vertical rhythm as everything else on Home.
-    return HomeSection(title: title, action: action, onAction: onAction,
-        child: child);
+    return HomeSection(
+      title: title,
+      action: action,
+      onAction: onAction,
+      child: child,
+    );
   }
 
   /// Saves EVERY photo on the post, not just the first.
@@ -2912,7 +2955,10 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _savePostImage(Post post) async {
     final urls = post.imageUrls.isNotEmpty
         ? post.imageUrls
-        : [if (post.imageUrl != null && post.imageUrl!.isNotEmpty) post.imageUrl!];
+        : [
+            if (post.imageUrl != null && post.imageUrl!.isNotEmpty)
+              post.imageUrl!,
+          ];
     if (urls.isEmpty) return;
     final many = urls.length > 1;
 
@@ -2939,21 +2985,21 @@ class _HomeScreenState extends State<HomeScreen>
         backgroundColor: saved == 0
             ? AppColors.red
             : (all ? AppColors.successGreen : AppColors.goldAccent),
-        content: Text(
-          switch ((saved, all)) {
-            (0, _) => many
+        content: Text(switch ((saved, all)) {
+          (0, _) =>
+            many
                 ? 'Could not save the photos. Check storage permission and try again.'
                 : 'Could not save the image. Check storage permission and try again.',
-            // Partial is reported honestly rather than as a flat success —
-            // the member can retry knowing some already landed.
-            (_, false) => '$saved of ${urls.length} photos saved to your '
+          // Partial is reported honestly rather than as a flat success —
+          // the member can retry knowing some already landed.
+          (_, false) =>
+            '$saved of ${urls.length} photos saved to your '
                 'Adventist Super App album.',
-            _ => many
+          _ =>
+            many
                 ? 'All ${urls.length} photos saved to your Adventist Super App album.'
                 : 'Saved to your Adventist Super App album.',
-          },
-          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
-        ),
+        }, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white)),
       ),
     );
   }
@@ -3177,6 +3223,7 @@ class _HomeScreenState extends State<HomeScreen>
   /// filtering lives in [_suggestionsForRail] rather than here.
   Widget _buildSuggestedMembersRow(
     List<MemberDirectoryEntry> visibleSuggestions, {
+
     /// "Leaders to follow": Follow instead of Add friend (patch_287).
     bool follow = false,
   }) {
@@ -3353,19 +3400,12 @@ class _SabbathChipState extends State<_SabbathChip> {
         decoration: BoxDecoration(
           color: AppColors.goldAccent.withValues(alpha: 0.92),
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(
-            color: AppColors.goldAccent,
-            width: 1,
-          ),
+          border: Border.all(color: AppColors.goldAccent, width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.brightness_3,
-              size: 13,
-              color: AppColors.darkNavy,
-            ),
+            const Icon(Icons.brightness_3, size: 13, color: AppColors.darkNavy),
             const SizedBox(width: 6),
             Text(
               'Sabbath in ${_format(remaining)}',
@@ -3477,10 +3517,7 @@ class _SuggestedMemberTile extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  _MemberPhoto(
-                    photoUrl: entry.profilePhotoUrl,
-                    name: name,
-                  ),
+                  _MemberPhoto(photoUrl: entry.profilePhotoUrl, name: name),
                   // Name and reason sit ON the photo over a soft navy fade
                   // (29 Oct 2026 redesign) — the face stays the hero and
                   // the card reads at a glance.
@@ -3535,7 +3572,9 @@ class _SuggestedMemberTile extends StatelessWidget {
                                       ? Icons.place_outlined
                                       : _reasonIcon(reason),
                                   size: 12,
-                                  color: AppColors.white.withValues(alpha: 0.85),
+                                  color: AppColors.white.withValues(
+                                    alpha: 0.85,
+                                  ),
                                 ),
                                 const SizedBox(width: 4),
                                 Expanded(
@@ -3544,8 +3583,9 @@ class _SuggestedMemberTile extends StatelessWidget {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: AppTextStyles.bodySmall.copyWith(
-                                      color:
-                                          AppColors.white.withValues(alpha: 0.9),
+                                      color: AppColors.white.withValues(
+                                        alpha: 0.9,
+                                      ),
                                       fontSize: 11.5,
                                     ),
                                   ),
@@ -3556,40 +3596,37 @@ class _SuggestedMemberTile extends StatelessWidget {
                       ),
                     ),
                   ),
-                // Dismiss. Session-only: nothing persists it, so the
-                // person can return on the next refresh. Storing it would
-                // need a table, and "not right now" is not "never".
-                Positioned(
-                  top: 6,
-                  right: 6,
-                  child: Semantics(
-                    button: true,
-                    label: 'Not now',
-                    child: Pressable(
-                      onTap: onDismiss,
-                      haptics: true,
-                      child: Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: AppColors.darkNavy.withValues(alpha: 0.45),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.close_rounded,
-                          size: 14,
-                          color: AppColors.white,
+                  // Dismiss. Session-only: nothing persists it, so the
+                  // person can return on the next refresh. Storing it would
+                  // need a table, and "not right now" is not "never".
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Semantics(
+                      button: true,
+                      label: 'Not now',
+                      child: Pressable(
+                        onTap: onDismiss,
+                        haptics: true,
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: AppColors.darkNavy.withValues(alpha: 0.45),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            size: 14,
+                            color: AppColors.white,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: _friendButton(),
-            ),
+            Padding(padding: const EdgeInsets.all(10), child: _friendButton()),
           ],
         ),
       ),
@@ -3740,7 +3777,6 @@ class _SeenReporterState extends State<_SeenReporter> {
   @override
   Widget build(BuildContext context) => widget.child;
 }
-
 
 class _UrgentBannerCard extends StatelessWidget {
   const _UrgentBannerCard({required this.banner, required this.onDismiss});
@@ -3971,7 +4007,9 @@ class _HomeEventCard extends StatelessWidget {
                               ),
                               decoration: BoxDecoration(
                                 color: AppColors.successGreen,
-                                borderRadius: BorderRadius.circular(AppRadius.sm),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.sm,
+                                ),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -4050,7 +4088,6 @@ class _HomeEventCard extends StatelessWidget {
     );
   }
 }
-
 
 class _CoverImage extends StatelessWidget {
   const _CoverImage({this.url, required this.fallbackIcon});
@@ -4618,7 +4655,6 @@ class _FeaturedProductCard extends StatelessWidget {
   }
 }
 
-
 /// Invitation shown where the jobs row would be when the board is empty.
 ///
 /// Mirrors [_PrayersEmpty] deliberately - same card, same 48dp tinted glyph,
@@ -4709,8 +4745,8 @@ class _NewPostsPill extends StatelessWidget {
     final label = count >= 20
         ? 'New posts'
         : count == 1
-            ? '1 new post'
-            : '$count new posts';
+        ? '1 new post'
+        : '$count new posts';
     return Semantics(
       button: true,
       label: '$label. Show them.',
@@ -4734,8 +4770,11 @@ class _NewPostsPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.arrow_upward_rounded,
-                  size: 16, color: AppColors.white),
+              const Icon(
+                Icons.arrow_upward_rounded,
+                size: 16,
+                color: AppColors.white,
+              ),
               const SizedBox(width: 6),
               Text(
                 label,

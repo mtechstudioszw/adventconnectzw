@@ -67,7 +67,13 @@ class MainBottomNav extends StatelessWidget {
     this.badges = const <int, int>{},
     this.onReselect,
     this.onTabSelected,
+    this.onCreate,
   });
+
+  /// When set, a round frosted "+" joins the island on its right — same
+  /// height and glass — and this runs on tap (owner, 3 Nov 2026). TabShell
+  /// passes it only on Home.
+  final VoidCallback? onCreate;
 
   /// Index of the Chat tab, which merges in the app-wide unread count.
   static const int chatIndex = 2;
@@ -201,19 +207,30 @@ class MainBottomNav extends StatelessWidget {
 
     final surface = palette.card.withValues(alpha: blurring ? 0.82 : 1.0);
 
+    BoxBorder glassBorder() => Border.all(
+      color: dark ? AppColors.white.withValues(alpha: 0.08) : palette.divider,
+    );
+    Gradient glassFill() => LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        Color.alphaBlend(
+          AppColors.white.withValues(alpha: dark ? 0.06 : 0.5),
+          surface,
+        ),
+        surface,
+      ],
+    );
+
     Widget island = ValueListenableBuilder<int>(
       valueListenable: MessagingService.unreadTotal,
       builder: (context, unread, _) {
         return Container(
-          height: 62,
+          height: _height,
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.sm),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.sheet + 4),
-            border: Border.all(
-              color: dark
-                  ? AppColors.white.withValues(alpha: 0.08)
-                  : palette.divider,
-            ),
+            border: glassBorder(),
             // A top-down sheen so the glass has a light source instead of
             // reading as a flat slab. Barely visible on its own; what it buys
             // is the sense that the island has thickness.
@@ -224,47 +241,46 @@ class MainBottomNav extends StatelessWidget {
             // here would erase the island's fill. Translucent while blurring
             // so the frost reads, opaque otherwise so it never looks washed
             // out.
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color.alphaBlend(
-                  AppColors.white.withValues(alpha: dark ? 0.06 : 0.5),
-                  surface,
-                ),
-                surface,
-              ],
-            ),
+            gradient: glassFill(),
           ),
-          child: Row(
-            // Without this the active pill (a loose Flexible) takes only the
-            // width it needs and every leftover pixel piles up after the last
-            // tab — the "huge gap on the right of the island". Spreading the
-            // slack across the four gaps keeps the row optically even at any
-            // pill width.
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              for (var i = 0; i < _tabs.length; i++)
-                _NavItem(
-                  outlineIcon: _tabs[i].$1,
-                  filledIcon: _tabs[i].$2,
-                  label: _tabs[i].$3,
-                  active: i == currentIndex,
-                  // Chat merges the app-wide unread total with anything the
-                  // host screen passed, so the badge is right everywhere.
-                  badge: i == chatIndex
-                      ? (badges[i] ?? unread)
-                      : (badges[i] ?? 0),
-                  onTap: () => _go(context, i),
-                  // Profile is the last tab and shows the member's own photo.
-                  glyph: i == _tabs.length - 1
-                      ? _profileAvatar(
-                          active: i == currentIndex,
-                          size: i == currentIndex ? 24 : 26,
-                        )
-                      : null,
-                ),
-            ],
+          child: LayoutBuilder(
+            builder: (context, box) {
+              // Too narrow for a labelled active pill (small phones, and
+              // the "+" taking its slot): the active tab becomes an
+              // icon-only blue pill rather than a clipped "Ho…".
+              final compact = box.maxWidth < _labelledMinWidth;
+              return Row(
+                // Without this the active pill (a loose Flexible) takes only the
+                // width it needs and every leftover pixel piles up after the last
+                // tab — the "huge gap on the right of the island". Spreading the
+                // slack across the four gaps keeps the row optically even at any
+                // pill width.
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  for (var i = 0; i < _tabs.length; i++)
+                    _NavItem(
+                      outlineIcon: _tabs[i].$1,
+                      filledIcon: _tabs[i].$2,
+                      label: _tabs[i].$3,
+                      active: i == currentIndex,
+                      // Chat merges the app-wide unread total with anything the
+                      // host screen passed, so the badge is right everywhere.
+                      badge: i == chatIndex
+                          ? (badges[i] ?? unread)
+                          : (badges[i] ?? 0),
+                      onTap: () => _go(context, i),
+                      // Profile is the last tab and shows the member's own photo.
+                      glyph: i == _tabs.length - 1
+                          ? _profileAvatar(
+                              active: i == currentIndex,
+                              size: i == currentIndex ? 24 : 26,
+                            )
+                          : null,
+                      compact: compact,
+                    ),
+                ],
+              );
+            },
           ),
         );
       },
@@ -286,16 +302,111 @@ class MainBottomNav extends StatelessWidget {
           AppSpace.lg,
           AppSpace.md,
         ),
-        child: DecoratedBox(
-          // The shadow sits OUTSIDE the ClipRRect — clipping it would cut the
-          // blur off at the same edge and lose the lift entirely.
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.sheet + 4),
-            boxShadow: AppShadows.floating(context),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.sheet + 4),
-            child: island,
+        child: Row(
+          children: [
+            Expanded(
+              child: DecoratedBox(
+                // The shadow sits OUTSIDE the ClipRRect — clipping it would
+                // cut the blur off at the same edge and lose the lift.
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppRadius.sheet + 4),
+                  boxShadow: AppShadows.floating(context),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.sheet + 4),
+                  child: island,
+                ),
+              ),
+            ),
+            if (onCreate != null) ...[
+              const SizedBox(width: AppSpace.sm),
+              _CreateButton(
+                onTap: onCreate!,
+                blurring: blurring,
+                border: glassBorder(),
+                fill: glassFill(),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The island's height; the "+" matches it.
+  static const double _height = 62;
+
+  /// Below this inner width the active tab drops its label. Four 46dp icon
+  /// slots plus a pill that can show a short label ("Home", "Chat").
+  static const double _labelledMinWidth = 4 * 46 + 100;
+}
+
+/// The round frosted "+" that sits beside the island on Home: same glass,
+/// border, shadow and height as the island, with the brand-blue disc the
+/// active tab uses, so the two read as one piece.
+class _CreateButton extends StatelessWidget {
+  const _CreateButton({
+    required this.onTap,
+    required this.blurring,
+    required this.border,
+    required this.fill,
+  });
+
+  final VoidCallback onTap;
+  final bool blurring;
+  final BoxBorder border;
+  final Gradient fill;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = MainBottomNav._height;
+    Widget glass = Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: border,
+        gradient: fill,
+      ),
+      child: Container(
+        width: 46,
+        height: 46,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: AppColors.primaryGradient,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryBlue.withValues(alpha: 0.34),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: const Icon(Icons.add_rounded, color: AppColors.white, size: 28),
+      ),
+    );
+    if (blurring) {
+      glass = BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: glass,
+      );
+    }
+    return Semantics(
+      button: true,
+      label: 'Create a post',
+      child: Tooltip(
+        message: 'Create a post',
+        child: Pressable(
+          haptics: true,
+          pressedScale: 0.92,
+          onTap: onTap,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: AppShadows.floating(context),
+            ),
+            child: ClipOval(child: glass),
           ),
         ),
       ),
@@ -312,7 +423,11 @@ class _NavItem extends StatelessWidget {
     required this.badge,
     required this.onTap,
     this.glyph,
+    this.compact = false,
   });
+
+  /// Icon-only active pill, for an island too narrow for a label.
+  final bool compact;
 
   final IconData outlineIcon;
   final IconData filledIcon;
@@ -329,7 +444,8 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    Widget icon = glyph ??
+    Widget icon =
+        glyph ??
         Icon(
           active ? filledIcon : outlineIcon,
           size: 23,
@@ -337,7 +453,25 @@ class _NavItem extends StatelessWidget {
         );
     if (badge > 0) icon = _BadgedIcon(icon: icon, badge: badge);
 
-    final content = active
+    final content = active && compact
+        ? Container(
+            width: 56,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryBlue.withValues(alpha: 0.34),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Semantics(label: label, child: icon),
+          )
+        : active
         ? Container(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpace.md,

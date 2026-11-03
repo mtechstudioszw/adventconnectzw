@@ -50,9 +50,7 @@ class TabPlaceholder extends StatelessWidget {
               decoration: BoxDecoration(
                 color: context.palette.chipBg,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: context.palette.divider,
-                ),
+                border: Border.all(color: context.palette.divider),
               ),
               child: Text(
                 'Coming soon',

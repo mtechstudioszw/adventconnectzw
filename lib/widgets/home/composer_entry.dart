@@ -7,36 +7,24 @@ import '../../theme/app_tokens.dart';
 import '../motion/pressable.dart';
 import 'create_sheet.dart';
 
-/// Home's floating "create" button — the composer card's replacement.
+/// Home's "create" handler, handed to the floating island.
 ///
-/// Founder call, 27 Oct 2026: the "Share something…" card left the top of
-/// Home and became a floating gold "+". It opens the same [showCreateSheet]
-/// chooser the card did, so every kind of post is still one tap away
-/// without the card taking a row above the live banner and chips.
-///
-/// Gold is this screen's single gold moment now (the Donate chip that held
-/// it is gone). The glyph is navy, not white: white on #C8A951 is ~2.2:1
-/// and fails contrast; navy on it is ~7:1.
-class HomeComposeFab extends StatelessWidget {
-  const HomeComposeFab({super.key, required this.onCreate});
+/// Owner, 3 Nov 2026: the "+" joins the island — a round frosted button
+/// beside the bar, same height and glass, hiding and returning with it on
+/// scroll. The island is drawn once by `TabShell` for all five tabs, so
+/// Home registers what "+" should do here and the island shows the button
+/// only while Home is the active tab and a handler is registered.
+class HomeCreateBridge {
+  const HomeCreateBridge._();
 
-  /// Fires with whatever the member picked in the sheet.
-  final void Function(CreateRequest) onCreate;
+  static final ValueNotifier<void Function(CreateRequest)?> handler =
+      ValueNotifier(null);
 
-  @override
-  Widget build(BuildContext context) {
-    return FloatingActionButton(
-      heroTag: 'home-compose',
-      tooltip: 'Create a post',
-      backgroundColor: AppColors.goldAccent,
-      foregroundColor: AppColors.darkNavy,
-      shape: const CircleBorder(),
-      onPressed: () async {
-        final choice = await showCreateSheet(context);
-        if (choice != null) onCreate(choice);
-      },
-      child: const Icon(Icons.add_rounded, size: 30),
-    );
+  /// Opens the same chooser the old floating "+" did and passes the pick
+  /// to Home.
+  static Future<void> open(BuildContext context) async {
+    final choice = await showCreateSheet(context);
+    if (choice != null) handler.value?.call(choice);
   }
 }
 

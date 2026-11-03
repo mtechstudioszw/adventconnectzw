@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../services/messaging_service.dart';
 import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/motion/hide_on_scroll.dart';
+import '../../widgets/home/composer_entry.dart';
+import '../../widgets/home/create_sheet.dart' show CreateRequest;
 import 'main_bottom_nav.dart';
 
 /// The frame around the five tab destinations — Home, Watch, Chat,
@@ -108,12 +110,20 @@ class _TabShellState extends State<TabShell> with NavVisibilityMixin {
               valueListenable: MessagingService.unreadTotal,
               builder: (context, unread, _) => ValueListenableBuilder<int>(
                 valueListenable: TabShell.pendingFriendRequests,
-                builder: (context, requests, _) => MainBottomNav(
-                  currentIndex: index,
-                  onTabSelected: _select,
-                  onReselect: _reselect,
-                  badges: {MainBottomNav.chatIndex: unread + requests},
-                ),
+                builder: (context, requests, _) =>
+                    ValueListenableBuilder<void Function(CreateRequest)?>(
+                      valueListenable: HomeCreateBridge.handler,
+                      builder: (context, create, _) => MainBottomNav(
+                        currentIndex: index,
+                        onTabSelected: _select,
+                        onReselect: _reselect,
+                        badges: {MainBottomNav.chatIndex: unread + requests},
+                        // Home's "+" joins the island (3 Nov 2026).
+                        onCreate: index == TabShell.homeIndex && create != null
+                            ? () => HomeCreateBridge.open(context)
+                            : null,
+                      ),
+                    ),
               ),
             ),
           ],

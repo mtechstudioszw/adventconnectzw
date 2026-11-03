@@ -101,4 +101,35 @@ void main() {
     expect(failed, 1); // week two needs the network; week one was skipped
     expect(SabbathSchoolService.quarterProgress.value, isEmpty);
   });
+
+  test(
+    'sign-out keeps lesson text, clears personal Sabbath School data',
+    () async {
+      await CacheService.writeString('ss_notes_v1', '{"x":"my note"}');
+      await CacheService.writeString('ss_highlights_v1', '[1]');
+      await CacheService.writeString('ss_last_read_v1', 'r/01/02');
+      await CacheService.writeString('ss_read_days_v1', '[]');
+      await CacheService.writeString('inbox_v1', '[]');
+
+      await CacheService.clearUserData();
+
+      // Downloaded lesson text survives…
+      expect(CacheService.readStringStale('ss:lessons:$lang:$q'), isNotNull);
+      expect(CacheService.readStringStale('ss:read:r/01/02'), isNotNull);
+      expect(
+        await SabbathSchoolService.isLessonDownloaded(q, '01', lang: lang),
+        isTrue,
+      );
+      // …the member's own notes, highlights and progress do not.
+      for (final k in [
+        'ss_notes_v1',
+        'ss_highlights_v1',
+        'ss_last_read_v1',
+        'ss_read_days_v1',
+        'inbox_v1',
+      ]) {
+        expect(CacheService.readStringStale(k), isNull, reason: k);
+      }
+    },
+  );
 }

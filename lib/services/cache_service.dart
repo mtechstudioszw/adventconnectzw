@@ -119,7 +119,9 @@ class CacheService {
           limit = _maxAge;
         }
         if (now.difference(ts) > limit) {
-          toDelete..add(key)..add('${key}__ts');
+          toDelete
+            ..add(key)
+            ..add('${key}__ts');
         }
       }
       if (toDelete.isNotEmpty) await box.deleteAll(toDelete);
@@ -193,10 +195,26 @@ class CacheService {
     if (box == null) return;
     final keys = box.keys
         .whereType<String>()
-        .where((k) => !k.startsWith('pref:'))
+        .where((k) => !keepsOnSignOut(k))
         .toList();
     await box.deleteAll(keys);
   }
+
+  /// Keys that survive sign-out.
+  ///
+  /// * `pref:` — device settings (see [writePref]).
+  /// * `ss:` and `ss_languages_` — downloaded Sabbath School lesson TEXT
+  ///   and the language list (owner, 3 Nov 2026: "keep lessons saved after
+  ///   sign out"). Public content, identical for every member, so it can't
+  ///   leak anything to the next account. The member's OWN Sabbath School
+  ///   data — notes, highlights, days read, last-read place — lives under
+  ///   `ss_notes_`, `ss_highlights`, `ss_read_days_`, `ss_last_read_` and is
+  ///   still cleared.
+  @visibleForTesting
+  static bool keepsOnSignOut(String key) =>
+      key.startsWith('pref:') ||
+      key.startsWith('ss:') ||
+      key.startsWith('ss_languages_');
 
   // ---------- Long-term preferences (no TTL) -------------------------
   //
@@ -235,8 +253,10 @@ class CacheService {
   static Future<void> deletePrefsWithPrefix(String prefix) async {
     final box = _box;
     if (box == null) return;
-    final keys =
-        box.keys.whereType<String>().where((k) => k.startsWith(prefix)).toList();
+    final keys = box.keys
+        .whereType<String>()
+        .where((k) => k.startsWith(prefix))
+        .toList();
     if (keys.isEmpty) return;
     await box.deleteAll(keys);
   }

@@ -2507,9 +2507,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   /// last group only if it still has three people (a rail of one reads as
   /// emptier than no rail).
   List<List<MemberDirectoryEntry>> get _peopleGroups {
-    // Members who allow followers are offered in "Leaders to follow"
-    // instead, so nobody appears twice with two different buttons.
-    final open = _openSuggestions.where((m) => !m.allowsFollowers).toList();
+    // Everyone suggested appears here now. Members who allow followers used
+    // to be held back for "Leaders to follow", which Home no longer shows
+    // (owner, 3 Nov 2026) — so they'd otherwise vanish from discovery.
+    final open = _openSuggestions.toList();
     final groups = <List<MemberDirectoryEntry>>[];
     for (var i = 0; i < open.length; i += _peoplePerGroup) {
       final g = open.sublist(i, min(i + _peoplePerGroup, open.length));
@@ -2576,7 +2577,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   /// How many items each recurring module can still give.
   Map<FeedBlockKind, int> get _feedAvailable => {
     FeedBlockKind.people: _peopleGroups.length,
-    FeedBlockKind.leaders: _leaderGroups.length,
+    // "Leaders to follow" removed from Home (owner, 3 Nov 2026).
+    FeedBlockKind.leaders: 0,
     FeedBlockKind.news: _topNews.length,
     FeedBlockKind.video: _homeVideos.length,
     FeedBlockKind.verse: _versePool.length,

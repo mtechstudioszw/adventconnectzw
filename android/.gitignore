@@ -19,3 +19,6 @@ key.properties
 # Android defaults; not a secret. Release/upload keystores remain
 # ignored by the **/*.keystore + **/*.jks rules above.
 !app/debug.keystore
+
+# Kotlin compiler daemon session files (build byproducts)
+.kotlin/

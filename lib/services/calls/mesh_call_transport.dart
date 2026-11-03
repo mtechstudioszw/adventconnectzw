@@ -98,6 +98,18 @@ class MeshCallTransport implements CallTransport {
 
   final Map<String, _Peer> _peers = {};
 
+  /// Peer connections being created right now, so a roster update and an
+  /// inbound offer for the same peer can never build two of them.
+  final Map<String, Future<_Peer?>> _adding = {};
+
+  /// ICE candidates that arrived before their peer existed at all. Moved
+  /// onto the peer's own pending list the moment it is created.
+  final Map<String, List<RTCIceCandidate>> _earlyIce = {};
+
+  /// How long a peer created by THEIR offer is protected from a roster
+  /// update that has not caught up with them yet.
+  static const _inboundGrace = Duration(seconds: 15);
+
   // ---- lifecycle ---------------------------------------------------------
 
   @override
@@ -131,18 +143,40 @@ class MeshCallTransport implements CallTransport {
     // are created, which matters on the low-end handsets this app runs
     // on.
     for (final id in _peers.keys.toList()) {
-      if (!wanted.contains(id)) await _removePeer(id);
+      if (wanted.contains(id)) continue;
+      // A peer that offered to us moments ago may not be on this roster
+      // yet — the snapshot it came from can predate their answer. Tearing
+      // it down would drop the call we are in the middle of setting up.
+      final since = _peers[id]?.inboundAt;
+      if (since != null && DateTime.now().difference(since) < _inboundGrace) {
+        continue;
+      }
+      await _removePeer(id);
     }
 
     // New: connect.
     for (final id in wanted) {
-      if (_peers.containsKey(id)) continue;
-      await _addPeer(id);
+      await _ensurePeer(id, initiate: true);
     }
   }
 
-  Future<void> _addPeer(String peerId) async {
-    if (_disposed) return;
+  /// The peer for [peerId], created if needed — exactly once, however
+  /// many callers ask at the same moment.
+  Future<_Peer?> _ensurePeer(String peerId, {required bool initiate}) {
+    final existing = _peers[peerId];
+    if (existing != null) return Future.value(existing);
+    final inFlight = _adding[peerId];
+    if (inFlight != null) return inFlight;
+    final f = _addPeer(
+      peerId,
+      initiate: initiate,
+    ).whenComplete(() => _adding.remove(peerId));
+    _adding[peerId] = f;
+    return f;
+  }
+
+  Future<_Peer?> _addPeer(String peerId, {required bool initiate}) async {
+    if (_disposed) return null;
     final local = _localStream;
     if (local == null) {
       throw StateError('MeshCallTransport.setPeers called before start()');
@@ -161,6 +195,10 @@ class MeshCallTransport implements CallTransport {
 
     final peer = _Peer(id: peerId, pc: pc);
     _peers[peerId] = peer;
+    // Candidates that beat the peer here wait with the rest until the
+    // remote description lands.
+    final early = _earlyIce.remove(peerId);
+    if (early != null) peer.pending.addAll(early);
 
     for (final track in local.getAudioTracks()) {
       await pc.addTrack(track, local);
@@ -192,11 +230,12 @@ class MeshCallTransport implements CallTransport {
     // Deterministic offerer, so two phones never offer at once (glare).
     // Comparing user ids gives both sides the same answer with no round
     // trip; the peer with the lower id offers.
-    if (selfUserId.compareTo(peerId) < 0) {
+    if (initiate && selfUserId.compareTo(peerId) < 0) {
       await _makeOffer(peer, renegotiate: false);
     }
     // Otherwise we wait for theirs. If it never comes the call service's
     // connect timeout catches it.
+    return peer;
   }
 
   Future<void> _removePeer(String peerId) async {
@@ -246,8 +285,17 @@ class MeshCallTransport implements CallTransport {
     switch (signal.type) {
       case CallSignalType.offer:
       case CallSignalType.renegotiate:
-        if (peer == null) return;
-        await _handleOffer(peer, signal);
+        // THE "stuck on connecting" bug (owner, 3 Nov 2026). The peer
+        // with the lower user id offers the moment they answer — often
+        // before our roster says they have joined, so we had no
+        // connection for them yet and the offer was DROPPED. Then we
+        // waited for an offer that had already come and gone. Now an
+        // offer creates the connection. The sender is already checked
+        // against the server's roster by CallService before it gets here.
+        final target = peer ?? await _ensurePeer(signal.from, initiate: false);
+        if (target == null) return;
+        target.inboundAt ??= DateTime.now();
+        await _handleOffer(target, signal);
         break;
 
       case CallSignalType.answer:
@@ -256,7 +304,12 @@ class MeshCallTransport implements CallTransport {
         break;
 
       case CallSignalType.ice:
-        if (peer == null) return;
+        if (peer == null) {
+          // Their candidates can beat both their offer and our roster.
+          // Hold them for the peer instead of dropping them.
+          _holdEarlyIce(signal);
+          return;
+        }
         await _handleIce(peer, signal);
         break;
 
@@ -380,6 +433,26 @@ class MeshCallTransport implements CallTransport {
         debugPrint('MeshCallTransport: addCandidate(${peer.id}) failed: $e');
       }
     }
+  }
+
+  void _holdEarlyIce(CallSignal signal) {
+    final raw = signal.data['candidates'];
+    if (raw is! List) return;
+    final held = _earlyIce.putIfAbsent(signal.from, () => []);
+    for (final entry in raw) {
+      if (entry is! Map) continue;
+      final candidate = entry['candidate'];
+      if (candidate is! String || candidate.isEmpty) continue;
+      held.add(
+        RTCIceCandidate(
+          candidate,
+          entry['sdpMid'] as String?,
+          (entry['sdpMLineIndex'] as num?)?.toInt(),
+        ),
+      );
+    }
+    // A runaway sender must not grow this without bound.
+    if (held.length > 64) held.removeRange(0, held.length - 64);
   }
 
   void _flushCandidates(String peerId, List<Map<String, dynamic>> batch) {
@@ -543,6 +616,7 @@ class MeshCallTransport implements CallTransport {
       await _removePeer(id);
     }
     _peers.clear();
+    _earlyIce.clear();
 
     // The microphone, in the order that actually releases it: stop each
     // track, THEN dispose the stream. Disposing without stopping leaves
@@ -657,6 +731,10 @@ class _Peer {
   /// second one deserves "Reconnecting…".
   bool everConnected = false;
   bool hasRemoteAudio = false;
+
+  /// Set when this connection was created by THEIR offer; see
+  /// [MeshCallTransport._inboundGrace].
+  DateTime? inboundAt;
 
   /// Candidates that arrived before the remote description. Held rather
   /// than dropped — see [_handleIce].

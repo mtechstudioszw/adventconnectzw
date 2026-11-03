@@ -68,6 +68,18 @@ class CallService {
 
   static CallTransport? _transport;
 
+  /// Media signals (offer / answer / ICE) that arrived before [_transport]
+  /// was ready, held and replayed once it is (3 Nov 2026).
+  ///
+  /// The callee joins the signalling channel, THEN fetches ICE servers and
+  /// opens the microphone — one to two seconds. The caller sees them join
+  /// and offers at once, so the offer landed while the callee had no
+  /// transport and was dropped: both phones sat on "Connecting…" forever.
+  /// That, together with the dropped-early-offer case in
+  /// MeshCallTransport, is why no call had ever connected.
+  static final List<CallSignal> _earlySignals = [];
+  static bool _transportReady = false;
+
   /// True when every peer's call keys were checked end-to-end over the
   /// Signal session and matched (CallE2ee). False while unchecked, or if
   /// a peer's app can't do the check — the audio is still encrypted.
@@ -76,6 +88,7 @@ class CallService {
     if (t is! MeshCallTransport || t.keyChecks.isEmpty) return false;
     return t.keyChecks.values.every((c) => c == CallKeyCheck.verified);
   }
+
   static CallSignaling? _signaling;
   static StreamSubscription<TransportEvent>? _transportSub;
   static StreamSubscription<CallKitEvent>? _callKitSub;
@@ -566,6 +579,10 @@ class CallService {
     // earpiece is unavailable and echo cancellation does not engage.
     await CallAudio.begin(preferSpeaker: session.isGroup);
 
+    // A fresh call starts with nothing held over from the last one.
+    _transportReady = false;
+    _earlySignals.clear();
+
     final signaling = CallSignaling(selfUserId: myId);
     _signaling = signaling;
 
@@ -623,6 +640,12 @@ class CallService {
     if (generation != _generation) return;
 
     await transport.setPeers(session.peerIdsFor(myId));
+    if (generation != _generation) return;
+
+    // Anything the other phone sent while we were opening the microphone
+    // — above all its offer — is delivered now rather than lost.
+    _transportReady = true;
+    await _replayEarlySignals();
 
     _startHeartbeat();
     _startTicker();
@@ -688,8 +711,28 @@ class CallService {
         _set(value.copyWith(speakingPeers: speaking));
         break;
       default:
-        unawaited(_safe(() => _transport?.handleSignal(signal)));
+        final transport = _transport;
+        if (transport == null || !_transportReady) {
+          _earlySignals.add(signal);
+          // Bounded: a peer that floods ICE before we are ready must not
+          // grow this without limit. The offer comes first, so the
+          // newest are the ones worth dropping.
+          if (_earlySignals.length > 200) _earlySignals.removeLast();
+          break;
+        }
+        unawaited(_safe(() => transport.handleSignal(signal)));
         break;
+    }
+  }
+
+  /// Delivers the signals that arrived before the transport, in order.
+  static Future<void> _replayEarlySignals() async {
+    final transport = _transport;
+    if (transport == null) return;
+    final held = List<CallSignal>.from(_earlySignals);
+    _earlySignals.clear();
+    for (final signal in held) {
+      await _safe(() => transport.handleSignal(signal));
     }
   }
 
@@ -1111,6 +1154,8 @@ class CallService {
     // the member's music resumes), then the system call UI.
     final transport = _transport;
     _transport = null;
+    _transportReady = false;
+    _earlySignals.clear();
     if (transport != null) await _safe(() => transport.dispose());
 
     final signaling = _signaling;

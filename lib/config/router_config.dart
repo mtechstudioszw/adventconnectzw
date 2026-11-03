@@ -279,6 +279,13 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const BiometricLockScreen(),
     ),
     GoRoute(
+      // Top level on purpose — see the note on the 'chat' route.
+      path: '/group-info/:id',
+      name: 'group_info',
+      builder: (context, state) =>
+          GroupInfoScreen(conversationId: state.pathParameters['id'] ?? ''),
+    ),
+    GoRoute(
       path: '/onboarding',
       name: 'onboarding',
       builder: (context, state) => const OnboardingScreen(),
@@ -473,15 +480,13 @@ final GoRouter appRouter = GoRouter(
                       highlightMessageId: highlight,
                     );
                   },
-                  routes: [
-                    GoRoute(
-                      path: 'info',
-                      name: 'group_info',
-                      builder: (context, state) => GroupInfoScreen(
-                        conversationId: state.pathParameters['id'] ?? '',
-                      ),
-                    ),
-                  ],
+                  // Group info is NOT nested here (3 Nov 2026). go_router
+                  // builds every page of a pushed nested route, so pushing
+                  // /messages/:id/info also pushed a SECOND chat screen
+                  // under it — with no Conversation, so it refetched
+                  // everything. Each tap on a group header stacked another
+                  // chat; members reported church groups "not loading".
+                  // It lives at /group-info/:id instead.
                 ),
               ],
             ),
@@ -998,8 +1003,7 @@ final GoRouter appRouter = GoRouter(
                 ? state.extra as YoutubePlaylist
                 : null;
             final from =
-                int.tryParse(state.uri.queryParameters['from'] ?? '') ??
-                0;
+                int.tryParse(state.uri.queryParameters['from'] ?? '') ?? 0;
             return SeriesScreen(
               playlistId: id,
               initial: initial,
@@ -1028,10 +1032,7 @@ final GoRouter appRouter = GoRouter(
             final initial = state.extra is YoutubeVideo
                 ? state.extra as YoutubeVideo
                 : null;
-            return VideoPlayerScreen(
-              videoId: id,
-              initialVideo: initial,
-            );
+            return VideoPlayerScreen(videoId: id, initialVideo: initial);
           },
         ),
       ],
@@ -1217,10 +1218,8 @@ final GoRouter appRouter = GoRouter(
       name: 'call',
       // No transition. A call screen that fades in feels like a delay on
       // the one screen where a delay reads as a dropped call.
-      pageBuilder: (context, state) => NoTransitionPage<void>(
-        key: state.pageKey,
-        child: const CallScreen(),
-      ),
+      pageBuilder: (context, state) =>
+          NoTransitionPage<void>(key: state.pageKey, child: const CallScreen()),
     ),
     GoRoute(
       path: '/calls',

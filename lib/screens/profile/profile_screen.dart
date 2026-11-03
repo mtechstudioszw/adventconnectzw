@@ -45,6 +45,7 @@ import '../../widgets/home/composer_sheet.dart';
 import '../../theme/app_tokens.dart';
 import '../widgets/tab_shell.dart';
 import '../../config/countries.dart';
+import '../../config/sda_divisions.dart';
 import '../../config/share_config.dart';
 import '../../services/follow_service.dart';
 import '../../services/user_profile_service.dart';
@@ -725,6 +726,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ProfileFact(
               Icons.location_on_outlined,
               '${Countries.flagOf(row?.country)} $place'.trim(),
+            ),
+          // The member's Adventist world division, from their country.
+          if (SdaDivisions.forCountry(row?.country) != null)
+            ProfileFact(
+              Icons.public_rounded,
+              SdaDivisions.forCountry(row?.country)!,
             ),
           if (row?.website != null)
             ProfileFact(

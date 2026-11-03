@@ -652,12 +652,17 @@ class AuthService {
     if (normalised.isEmpty) {
       return AuthResult.failure('Enter your email to reset.');
     }
-    final serverOk = await _checkServerRateLimit(
-      identity: normalised,
-      action: 'password_reset',
-      max: 3,
-      windowSeconds: 3600,
-    );
+    // patch 310: a fixed-limit check the server owns (3 per email and 10
+    // per network an hour). The generic counter is no longer callable
+    // from the app — anyone could use it to block someone else — so the
+    // old call is only a fallback while patch 310 is not yet applied.
+    final serverOk = await _passwordResetAllowed(normalised) ??
+        await _checkServerRateLimit(
+          identity: normalised,
+          action: 'password_reset',
+          max: 3,
+          windowSeconds: 3600,
+        );
     if (serverOk == false) {
       return AuthResult.failure(
         'Too many reset attempts for this email in the last hour. '
@@ -716,6 +721,18 @@ class AuthService {
       return AuthResult.failure(_friendlyAuthError(e.message));
     } catch (e) {
       return AuthResult.failure(_friendlyAuthError(e.toString()));
+    }
+  }
+
+  static Future<bool?> _passwordResetAllowed(String email) async {
+    try {
+      final result = await _client.rpc(
+        'password_reset_allowed',
+        params: {'p_email': email},
+      );
+      return result is bool ? result : null;
+    } catch (_) {
+      return null;
     }
   }
 

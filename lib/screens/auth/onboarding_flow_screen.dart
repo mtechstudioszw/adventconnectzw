@@ -70,7 +70,11 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
   /// Pre-selected from the device locale so most people just tap Continue.
   /// This step is the choke point BOTH email and Google signups pass through,
   /// which is why country is collected here and not on the signup form.
-  String _country = Countries.detect().code;
+  // Blank until the member picks (owner, 3 Nov 2026: "the app shouldn't
+  // automatically select a country for you"). The phone's locale often
+  // isn't where someone lives, and a guessed country also guessed their
+  // church list and their division.
+  String _country = '';
   String? _profilePhotoUrl;
   String? _coverPhotoUrl;
   bool _uploadingPhoto = false;
@@ -157,6 +161,11 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
   }
 
   Future<void> _loadChurches() async {
+    // Nothing to list until a country is chosen.
+    if (_country.isEmpty) {
+      if (mounted) setState(() => _churchesLoading = false);
+      return;
+    }
     try {
       // The FIRST PAGE only, scoped to the member's country — not the whole
       // directory. `searchChurches` with no query is an alphabetical top-N;
@@ -216,6 +225,10 @@ class _OnboardingFlowScreenState extends State<OnboardingFlowScreen>
       final usernameErr = NameValidator.username(username);
       if (usernameErr != null) {
         setState(() => _error = usernameErr);
+        return;
+      }
+      if (_country.isEmpty) {
+        setState(() => _error = 'Choose your country.');
         return;
       }
       setState(() => _saving = true);

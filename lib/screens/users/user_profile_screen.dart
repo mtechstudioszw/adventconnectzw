@@ -2,6 +2,7 @@ import '../../config/platform_flags.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/countries.dart';
+import '../../config/sda_divisions.dart';
 import '../../utils/photo_url.dart';
 import '../../models/friendship_model.dart';
 import '../../models/member_directory_model.dart';
@@ -807,6 +808,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ProfileFact(
             Icons.location_on_outlined,
             '${Countries.flagOf(p.country)} $place'.trim(),
+          ),
+        if (open && SdaDivisions.forCountry(p.country) != null)
+          ProfileFact(
+            Icons.public_rounded,
+            SdaDivisions.forCountry(p.country)!,
           ),
         if (open && p.website != null)
           ProfileFact(

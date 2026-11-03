@@ -355,6 +355,6 @@ class NowPlayingBar extends StatelessWidget {
         )
         // Fires once the route is genuinely off the stack, however it left —
         // chevron, back button, or the drag-down dismiss.
-        .whenComplete(() => MusicPlayerService.fullPlayerOpen.value = false);
+        .whenComplete(MusicPlayerService.fullPlayerRouteClosed);
   }
 }

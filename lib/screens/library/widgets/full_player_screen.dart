@@ -31,12 +31,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
   void initState() {
     super.initState();
     // Stand the app-wide mini bar down while we're up.
-    MusicPlayerService.fullPlayerOpen.value = true;
+    MusicPlayerService.fullPlayerMounted();
   }
 
   @override
   void dispose() {
-    MusicPlayerService.fullPlayerOpen.value = false;
+    MusicPlayerService.fullPlayerUnmounted();
     super.dispose();
   }
 

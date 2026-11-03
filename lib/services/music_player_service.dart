@@ -208,6 +208,12 @@ class MusicPlayerService {
     if (!recovered || _player == null) return;
     await _indexSub?.cancel();
     _indexSub = null;
+    // Stop BEFORE dispose (3 Nov 2026). A player thrown away mid-play could
+    // keep sounding on some phones with nothing in the app attached to it —
+    // the in-app bar gone and only the system notification able to pause.
+    try {
+      await _player!.stop();
+    } catch (_) {}
     await _player!.dispose();
     _player = null;
     _loadedSignature = '';
@@ -245,6 +251,31 @@ class MusicPlayerService {
   /// `VoicePlayerService.openChatId`: the screen that would be duplicated
   /// announces itself, and the global bar stands down.
   static final ValueNotifier<bool> fullPlayerOpen = ValueNotifier<bool>(false);
+
+  /// How many full players are mounted (3 Nov 2026). The flag above used
+  /// to be written true/false by two owners — the bar that pushes the
+  /// player and the player's own dispose — and a close-then-reopen let the
+  /// old screen's late dispose overwrite the new one's "open", or the other
+  /// way round. When it stuck on true the mini bar stayed hidden while
+  /// audio played on, and only the phone's notification could stop it
+  /// (owner report). A count can't be overwritten out of order.
+  static int _fullPlayers = 0;
+
+  static void fullPlayerMounted() {
+    _fullPlayers++;
+    fullPlayerOpen.value = true;
+  }
+
+  static void fullPlayerUnmounted() {
+    _fullPlayers = _fullPlayers > 0 ? _fullPlayers - 1 : 0;
+    fullPlayerOpen.value = _fullPlayers > 0;
+  }
+
+  /// Called when the pushed route has fully gone: the flag follows the
+  /// count, never a bare `false`.
+  static void fullPlayerRouteClosed() {
+    fullPlayerOpen.value = _fullPlayers > 0;
+  }
 
   /// The currently-playing item, derived from the player's current index.
   LibraryItem? get current {

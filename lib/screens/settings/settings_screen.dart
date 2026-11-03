@@ -8,6 +8,7 @@ import '../../config/app_version.dart';
 import '../../config/platform_flags.dart';
 import '../../services/auth_service.dart';
 import '../../services/biometric_service.dart';
+import '../../services/two_step_service.dart';
 import '../../services/notification_preferences_service.dart';
 import '../../services/premium_service.dart';
 import '../../services/push_service.dart';
@@ -809,6 +810,16 @@ class _SettingsScreenState extends State<SettingsScreen>
                             icon: Icons.lock_outline,
                             label: 'Change password',
                             onTap: _changePassword,
+                          ),
+                          const _Divider(),
+                          _NavRow(
+                            icon: Icons.verified_user_outlined,
+                            label: 'Two-step verification',
+                            trailing: TwoStepService.isOn ? 'On' : 'Off',
+                            onTap: () async {
+                              await context.pushNamed('two_step_setup');
+                              if (mounted) setState(() {});
+                            },
                           ),
                           if (_biometricAvailable) ...[
                             const _Divider(),

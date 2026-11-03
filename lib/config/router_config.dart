@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../screens/settings/chat_backup_screen.dart';
+import '../screens/settings/two_step_setup_screen.dart';
+import '../screens/auth/two_step_challenge_screen.dart';
+import '../services/two_step_service.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_library_screen.dart';
 import '../screens/admin/admin_login_screen.dart';
@@ -213,6 +216,38 @@ void attachUsageTracking() {
 /// source, but iOS opts in separately and engine defaults have changed
 /// before. A shared link is the app's main growth path — it must never be
 /// one platform-default away from opening an error page.
+/// Locations a member who still owes a two-step code may open: the
+/// sign-in flow itself and the screens that replace the whole app.
+const _twoStepOpenPaths = {
+  '/splash',
+  '/two-step-code',
+  '/onboarding',
+  '/login',
+  '/email-verification',
+  '/forgot-password',
+  '/reset-password',
+  '/update-required',
+  '/maintenance',
+  '/account-banned',
+  '/biometric-lock',
+};
+
+/// Signed in with a password but not yet with the authenticator code
+/// (TwoStepService) → nothing but the code screen. One guard here covers
+/// every way in: password, Google, Apple, a restored session at launch,
+/// biometric unlock, a notification tap or a shared link.
+@visibleForTesting
+String? twoStepRedirectFor(String path, {required bool pending}) {
+  if (!pending) {
+    // Code done (or not needed): never leave anyone on the code screen.
+    return path == '/two-step-code' ? '/splash' : null;
+  }
+  return _twoStepOpenPaths.contains(path) ? null : '/two-step-code';
+}
+
+String? _twoStepRedirect(String path) =>
+    twoStepRedirectFor(path, pending: TwoStepService.challengePending);
+
 String? _shareLinkRedirect(GoRouterState state) {
   // iOS has no In-App Purchase, so no screen that asks for money may open
   // there (Guideline 3.1.1) — not even through a typed or shared link. No
@@ -262,12 +297,20 @@ final GoRouter appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
   initialLocation: '/splash',
   debugLogDiagnostics: false,
-  redirect: (context, state) => _shareLinkRedirect(state),
+  redirect: (context, state) =>
+      _twoStepRedirect(state.uri.path) ?? _shareLinkRedirect(state),
   routes: [
     GoRoute(
       path: '/splash',
       name: 'splash',
       builder: (context, state) => const SplashScreen(),
+    ),
+    GoRoute(
+      // Two-step sign-in code. Every other location redirects here while
+      // the session still owes its code — see _twoStepRedirect.
+      path: '/two-step-code',
+      name: 'two_step_code',
+      builder: (context, state) => const TwoStepChallengeScreen(),
     ),
     GoRoute(
       // WhatsApp-style biometric lock. Splash routes here on cold
@@ -432,6 +475,12 @@ final GoRouter appRouter = GoRouter(
                   path: 'chat-backup',
                   name: 'chat_backup',
                   builder: (context, state) => const ChatBackupScreen(),
+                ),
+                GoRoute(
+                  parentNavigatorKey: rootNavigatorKey,
+                  path: 'two-step',
+                  name: 'two_step_setup',
+                  builder: (context, state) => const TwoStepSetupScreen(),
                 ),
                 GoRoute(
                   parentNavigatorKey: rootNavigatorKey,

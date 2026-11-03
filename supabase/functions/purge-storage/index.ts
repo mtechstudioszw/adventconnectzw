@@ -15,7 +15,7 @@
 // =====================================================================
 
 // @ts-nocheck
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const BUCKETS = ["story_photos", "chat_media", "voice_notes"];
 

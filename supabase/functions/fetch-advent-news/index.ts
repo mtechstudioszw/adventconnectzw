@@ -15,7 +15,7 @@
 //  ?secret=... or x-cron-secret header (the cron job does).
 // =====================================================================
 // @ts-nocheck
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const FEEDS = [
   { url: "https://adventistreview.org/feed/", label: "Adventist Review" },

@@ -7,7 +7,7 @@
 //  media itself — playback is the official IFrame player on-device.
 // =====================================================================
 // @ts-nocheck
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "jsr:@supabase/supabase-js@2";
 
 const API = "https://www.googleapis.com/youtube/v3";
 

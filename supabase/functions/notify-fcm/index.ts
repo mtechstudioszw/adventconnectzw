@@ -61,7 +61,7 @@
 
 // @ts-nocheck
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 

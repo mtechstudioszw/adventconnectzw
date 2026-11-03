@@ -12,7 +12,17 @@
 /// `min_build_android`. So when you want to nudge older installs after a
 /// release, set `latest_build_android` to THIS value (10), NOT the Play Store
 /// versionCode.
-const int kAppBuildNumber = 14;
+// Release history (owner, 3 Nov 2026): build 14 = 2.0.1; build 15 = 2.0.2
+// (live on Play and in App Store review — but those binaries were built
+// while this line still said 14, so they REPORT 14). This code is the
+// next release for BOTH stores: 2.0.3, build 16 — ship only after Apple
+// approves 2.0.2, so the stores stay in step.
+//
+// Server gate: keep latest/min_build_android at 14 until 2.0.3 is live on
+// both stores, THEN set latest_build_android = 16. Setting 15 or 16 while
+// only 2.0.2 is out would tell every 2.0.2 phone to update to a version
+// that does not exist yet.
+const int kAppBuildNumber = 16;
 
 /// The version string shown to members, in ONE place.
 ///
@@ -50,7 +60,7 @@ const int kAppBuildNumber = 14;
 ///
 /// Premium: Plus / Pro / Pro-yearly, as base plans on the one live
 /// product. That is a feature release, and the version should say so.
-const String kAppVersionName = '2.0.2';
+const String kAppVersionName = '2.0.3';
 
 
 /// Play Store listing id (Android applicationId) — used to deep-link to

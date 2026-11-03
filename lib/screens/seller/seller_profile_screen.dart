@@ -102,7 +102,22 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _seller = widget.initialSeller;
+    _seller = widget.initialSeller ??
+        SellerService.cachedSeller(widget.authUserId);
+    // The shop's listings as last seen: the page opens instantly (and
+    // offline), then refreshes.
+    final cachedProducts = SellerService.cachedShopProducts(widget.authUserId);
+    if (cachedProducts != null && _seller != null) {
+      _products = [
+        for (final p in cachedProducts)
+          _seller!.businessName.isEmpty
+              ? p
+              : Product.fromJson({
+                  ...p.toJson(),
+                  'seller_name': _seller!.businessName,
+                }),
+      ];
+    }
     _bootstrap();
     _loadSaved();
   }

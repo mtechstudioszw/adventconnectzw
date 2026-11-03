@@ -184,6 +184,17 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   Future<void> _loadShops() async {
+    // Paint the shops rail from the phone first (instant, and offline),
+    // then refresh it.
+    if (_shops.isEmpty) {
+      final cached = SellerService.cachedApprovedSellers();
+      final me0 = AuthService.currentUser?.id;
+      if (cached.isNotEmpty && mounted) {
+        setState(() => _shops = cached
+            .where((s) => me0 == null || s.authUserId != me0)
+            .toList());
+      }
+    }
     try {
       final shops = await SellerService.fetchApprovedSellers();
       if (!mounted) return;

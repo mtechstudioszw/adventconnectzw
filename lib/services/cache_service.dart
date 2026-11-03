@@ -113,7 +113,9 @@ class CacheService {
             key.startsWith('reactions:') ||
             key.startsWith('stars:') ||
             // The Home feed opens from this offline (29 Oct 2026).
-            key == 'home_feed') {
+            key == 'home_feed' ||
+            // Marketplace shops and their listings (3 Nov 2026).
+            key.startsWith('market:')) {
           limit = _chatMaxAge;
         } else {
           limit = _maxAge;

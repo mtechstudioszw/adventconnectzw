@@ -1,8 +1,11 @@
+import 'dart:convert';
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/product_model.dart';
 import '../models/seller_model.dart';
 import 'analytics_service.dart';
+import 'cache_service.dart';
 import '../utils/require_changed.dart';
 
 /// All seller-side reads/writes — the application row in `sellers`, plus
@@ -21,14 +24,62 @@ class SellerService {
   /// product_details → seller_profile jump goes through this.
   static Future<Seller?> fetchSellerByAuthUserId(String authUserId) async {
     if (authUserId.isEmpty) return null;
-    final row = await _client
-        .from(_sellersTable)
-        .select()
-        .eq('auth_user_id', authUserId)
-        .maybeSingle();
-    if (row == null) return null;
-    return Seller.fromJson(row);
+    try {
+      final row = await _client
+          .from(_sellersTable)
+          .select()
+          .eq('auth_user_id', authUserId)
+          .maybeSingle();
+      unawaited(CacheService.writeString(_kSeller(authUserId), jsonEncode(row)));
+      if (row == null) return null;
+      return Seller.fromJson(row);
+    } catch (e) {
+      // Offline / flaky: the shop as last seen, if we have it.
+      final cached = cachedSeller(authUserId);
+      if (cached != null) return cached;
+      rethrow;
+    }
   }
+
+  // ---- Store cache (owner, 3 Nov 2026: "cache the stores") --------------
+  //
+  // Shops and their listings open instantly from the phone and work
+  // offline, then refresh. Raw rows are cached (the models parse them
+  // exactly as they parse the network), under `market:` keys.
+
+  static const _kShops = 'market:shops_v1';
+  static String _kSeller(String id) => 'market:seller_v1:$id';
+  static String _kShopProducts(String id) => 'market:shop_products_v1:$id';
+
+  static List<Map<String, dynamic>>? _readRows(String key) {
+    try {
+      final raw = CacheService.readStringStale(key);
+      if (raw == null) return null;
+      return (jsonDecode(raw) as List).cast<Map<String, dynamic>>();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The shops rail as last fetched, or empty.
+  static List<Seller> cachedApprovedSellers() =>
+      (_readRows(_kShops) ?? const []).map(Seller.fromJson).toList();
+
+  /// A shop as last fetched, or null.
+  static Seller? cachedSeller(String authUserId) {
+    try {
+      final raw = CacheService.readStringStale(_kSeller(authUserId));
+      if (raw == null) return null;
+      final row = jsonDecode(raw);
+      return row is Map<String, dynamic> ? Seller.fromJson(row) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// A shop's listings as last fetched, or null.
+  static List<Product>? cachedShopProducts(String authUserId) =>
+      _readRows(_kShopProducts(authUserId))?.map(Product.fromJson).toList();
 
   /// Approved, active storefronts for the buyer-facing shops rail.
   ///
@@ -36,17 +87,24 @@ class SellerService {
   /// somebody, and capped because the rail is a taster — the full list
   /// lives behind "See all".
   static Future<List<Seller>> fetchApprovedSellers({int limit = 12}) async {
-    final rows = await _client
-        .from(_sellersTable)
-        .select()
-        .eq('status', 'approved')
-        .eq('is_active', true)
-        .order('rating', ascending: false)
-        .order('created_at', ascending: false)
-        .limit(limit);
-    return (rows as List)
-        .map((row) => Seller.fromJson(row as Map<String, dynamic>))
-        .toList();
+    try {
+      final rows = await _client
+          .from(_sellersTable)
+          .select()
+          .eq('status', 'approved')
+          .eq('is_active', true)
+          .order('rating', ascending: false)
+          .order('created_at', ascending: false)
+          .limit(limit);
+      unawaited(CacheService.writeString(_kShops, jsonEncode(rows)));
+      return (rows as List)
+          .map((row) => Seller.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      final cached = cachedApprovedSellers();
+      if (cached.isNotEmpty) return cached;
+      rethrow;
+    }
   }
 
   /// Public list of an approved seller's available products. Hidden
@@ -55,15 +113,27 @@ class SellerService {
     String authUserId,
   ) async {
     if (authUserId.isEmpty) return const [];
-    final response = await _client
-        .from(_productsTable)
-        .select()
-        .eq('seller_id', authUserId)
-        .eq('status', 'available')
-        .order('created_at', ascending: false);
-    return (response as List)
-        .map((row) => Product.fromJson(row as Map<String, dynamic>))
-        .toList();
+    try {
+      final response = await _client
+          .from(_productsTable)
+          .select()
+          .eq('seller_id', authUserId)
+          .eq('status', 'available')
+          .order('created_at', ascending: false);
+      unawaited(
+        CacheService.writeString(
+          _kShopProducts(authUserId),
+          jsonEncode(response),
+        ),
+      );
+      return (response as List)
+          .map((row) => Product.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      final cached = cachedShopProducts(authUserId);
+      if (cached != null) return cached;
+      rethrow;
+    }
   }
 
   /// Returns the current user's seller row, or null if they have not

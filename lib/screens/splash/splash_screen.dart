@@ -83,7 +83,15 @@ class _SplashScreenState extends State<SplashScreen>
   /// [_minLoaderDuration] — see the note there, and the standing rule that
   /// motion must never cost the user time. Cutting the ring short on a fast
   /// launch is the correct trade; making someone watch it finish is not.
-  static const Duration _brandDuration = Duration(milliseconds: 1800);
+  ///
+  /// 900ms since 3 Nov 2026 (owner: "premium, smoother and faster"): the
+  /// launch screen now shows the same disc, so there is no entrance to wait
+  /// for — just the ring closing.
+  static const Duration _brandDuration = Duration(milliseconds: 900);
+
+  /// The warm-start hand-off into Home: the logo lifts a touch and fades
+  /// while the background stays put (no white frame), then Home.
+  static const Duration _liftDuration = Duration(milliseconds: 200);
 
   static const Duration _exitDuration = Duration(milliseconds: 320);
 
@@ -123,6 +131,8 @@ class _SplashScreenState extends State<SplashScreen>
 
   late final Animation<double> _logoScale;
   late final Animation<double> _logoOpacity;
+  late final Animation<double> _glowIn;
+  late final AnimationController _lift;
   late final Animation<double> _wordmarkOpacity;
   late final Animation<double> _wordmarkSlide;
   late final Animation<double> _taglineOpacity;
@@ -137,10 +147,8 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
     _bootStart = DateTime.now();
 
-    _entrance = AnimationController(
-      vsync: this,
-      duration: _brandDuration,
-    )..forward();
+    _entrance = AnimationController(vsync: this, duration: _brandDuration)
+      ..forward();
 
     // Not started here — didChangeDependencies owns that, because whether
     // a never-ending loop may run at all depends on MediaQuery's
@@ -150,30 +158,32 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(seconds: 14),
     );
 
-    _logoScale = Tween<double>(begin: 0.6, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _entrance,
-        curve: const Interval(0.0, 0.35, curve: Curves.easeOutBack),
-      ),
-    );
-    _logoOpacity = CurvedAnimation(
+    // Seamless with the launch screen (3 Nov 2026): the native launch
+    // screen already shows this exact disc at this exact size and place,
+    // so the disc does NOT fade or scale in — that "appear from nothing"
+    // was the jump people felt. Only its glow softens in, then the ring
+    // closes and the words rise beneath it.
+    _logoScale = const AlwaysStoppedAnimation(1.0);
+    _logoOpacity = const AlwaysStoppedAnimation(1.0);
+    _glowIn = CurvedAnimation(
       parent: _entrance,
-      curve: const Interval(0.0, 0.35, curve: Curves.easeOut),
+      curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
     );
     _wordmarkOpacity = CurvedAnimation(
       parent: _entrance,
-      curve: const Interval(0.15, 0.35, curve: Curves.easeOut),
+      curve: const Interval(0.10, 0.50, curve: Curves.easeOut),
     );
-    _wordmarkSlide = Tween<double>(begin: 16, end: 0).animate(
+    _wordmarkSlide = Tween<double>(begin: 12, end: 0).animate(
       CurvedAnimation(
         parent: _entrance,
-        curve: const Interval(0.15, 0.35, curve: Curves.easeOut),
+        curve: const Interval(0.10, 0.50, curve: Curves.easeOutCubic),
       ),
     );
     _taglineOpacity = CurvedAnimation(
       parent: _entrance,
-      curve: const Interval(0.30, 0.50, curve: Curves.easeOut),
+      curve: const Interval(0.25, 0.65, curve: Curves.easeOut),
     );
+    _lift = AnimationController(vsync: this, duration: _liftDuration);
 
     // The loader fills toward ~85% while the app actually boots (Supabase
     // session restore + cache open), then snaps to 100% the moment
@@ -236,6 +246,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void dispose() {
     _entrance.dispose();
+    _lift.dispose();
     _progress.dispose();
     _exit.dispose();
     _blossom.dispose();
@@ -321,26 +332,25 @@ class _SplashScreenState extends State<SplashScreen>
     // restart — consistent with a keystore-speed race rather than a real
     // logout. Not yet confirmed via device logs — see debugPrint below.
     final tokenReadStart = DateTime.now();
-    final tokenFuture =
-        soft(() => SecureLocalStorage().hasAccessToken(), false)
-            .timeout(
-              _tokenReadTimeout,
-              onTimeout: () {
-                debugPrint(
-                  '[auth] hasAccessToken TIMED OUT after '
-                  '${DateTime.now().difference(tokenReadStart).inMilliseconds}ms '
-                  '— would have caused a false logout under the old budget',
-                );
-                return false;
-              },
-            )
-            .then((value) {
-              debugPrint(
-                '[auth] hasAccessToken resolved to $value after '
-                '${DateTime.now().difference(tokenReadStart).inMilliseconds}ms',
-              );
-              return value;
-            });
+    final tokenFuture = soft(() => SecureLocalStorage().hasAccessToken(), false)
+        .timeout(
+          _tokenReadTimeout,
+          onTimeout: () {
+            debugPrint(
+              '[auth] hasAccessToken TIMED OUT after '
+              '${DateTime.now().difference(tokenReadStart).inMilliseconds}ms '
+              '— would have caused a false logout under the old budget',
+            );
+            return false;
+          },
+        )
+        .then((value) {
+          debugPrint(
+            '[auth] hasAccessToken resolved to $value after '
+            '${DateTime.now().difference(tokenReadStart).inMilliseconds}ms',
+          );
+          return value;
+        });
 
     final results = await Future.wait([
       soft(() => AuthService.isBannedLocally(), false),
@@ -398,8 +408,11 @@ class _SplashScreenState extends State<SplashScreen>
     // slightly slower splash for the few people already in an outage.
     // Everyone else keeps the original fast path, and it still fails open.
     final maintenanceFuture = AppBootstrap.awaitSupabaseReady()
-        .then((_) =>
-            MaintenanceService.check(timeout: MaintenanceService.splashTimeout))
+        .then(
+          (_) => MaintenanceService.check(
+            timeout: MaintenanceService.splashTimeout,
+          ),
+        )
         .catchError((_) => MaintenanceState.off);
 
     // Open the biometric platform channel NOW, while we are waiting on
@@ -596,9 +609,13 @@ class _SplashScreenState extends State<SplashScreen>
         await _fadeOutThen(() => context.goNamed('profile_setup'));
         return;
       }
-      // Warm start → home: navigate directly instead of fading the splash
-      // out first (which revealed a white frame — the "white thinking"
-      // gap). Home paints instantly from its cache.
+      // Warm start → home. Not the old whole-screen fade (it revealed a
+      // white frame — the "white thinking" gap): only the logo and words
+      // lift and fade over 200ms while the background stays opaque, so
+      // the hand-off reads as one motion. Home paints instantly from its
+      // cache.
+      if (AppMotion.enabled(context)) await _lift.forward();
+      if (!mounted) return;
       context.goNamed('home');
       return;
     }
@@ -611,10 +628,11 @@ class _SplashScreenState extends State<SplashScreen>
     // member is waiting on, and guessing wrong costs them onboarding
     // entirely. Falls back to false (show the intro) if even this fails:
     // seeing the intro twice is a nuisance, never seeing it is a bug.
-    final hasSeenOnboarding = facts.hasSeenOnboarding ??
-        await SecureStorageService.read(OnboardingScreen.onboardingFlagKey)
-            .then((v) => v == 'true')
-            .catchError((_) => false);
+    final hasSeenOnboarding =
+        facts.hasSeenOnboarding ??
+        await SecureStorageService.read(
+          OnboardingScreen.onboardingFlagKey,
+        ).then((v) => v == 'true').catchError((_) => false);
     if (!mounted) return;
 
     if (!hasSeenOnboarding) {
@@ -654,21 +672,53 @@ class _SplashScreenState extends State<SplashScreen>
           child: Stack(
             children: [
               _buildAtmosphereOverlay(),
+              // The disc sits at the exact centre of the WHOLE screen (not
+              // the safe area) — where the native launch screen draws the
+              // same disc — so launch → splash has no jump. The words hang
+              // below it. On a warm start into Home, all of it lifts and
+              // fades together (_lift) over an opaque background.
+              Positioned.fill(
+                child: LayoutBuilder(
+                  builder: (context, box) => AnimatedBuilder(
+                    animation: _lift,
+                    builder: (context, child) {
+                      final t = Curves.easeIn.transform(_lift.value);
+                      return Opacity(
+                        opacity: 1 - t,
+                        child: Transform.translate(
+                          offset: Offset(0, -16 * t),
+                          child: Transform.scale(
+                            scale: 1 - 0.06 * t,
+                            child: child,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Stack(
+                      children: [
+                        Center(child: _buildLogoTile()),
+                        Positioned(
+                          left: 24,
+                          right: 24,
+                          // Half the 148dp logo tile, then the old 28dp gap.
+                          top: box.maxHeight / 2 + 74 + 28,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildWordmark(),
+                              const SizedBox(height: 12),
+                              _buildTagline(),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
               SafeArea(
                 child: Stack(
                   children: [
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _buildLogoTile(),
-                          const SizedBox(height: 28),
-                          _buildWordmark(),
-                          const SizedBox(height: 12),
-                          _buildTagline(),
-                        ],
-                      ),
-                    ),
                     Positioned(
                       left: 0,
                       right: 0,
@@ -752,10 +802,11 @@ class _SplashScreenState extends State<SplashScreen>
         // the same ring motif that runs through the intro film, the
         // unlock screen and the Sabbath timer.
         final ringSweep = const Interval(
-          0.30,
+          0.0,
           1.0,
           curve: Curves.easeInOutCubic,
         ).transform(_entrance.value);
+        final glow = _glowIn.value;
         return Opacity(
           opacity: opacity,
           child: Transform.scale(
@@ -782,13 +833,18 @@ class _SplashScreenState extends State<SplashScreen>
                       shape: BoxShape.circle,
                       gradient: AppColors.primaryGradient,
                       boxShadow: [
+                        // Faded in: the launch screen's disc has no glow.
                         BoxShadow(
-                          color: AppColors.goldAccent.withValues(alpha: 0.30),
+                          color: AppColors.goldAccent.withValues(
+                            alpha: 0.30 * glow,
+                          ),
                           blurRadius: 28,
                           spreadRadius: 1,
                         ),
                         BoxShadow(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.35),
+                          color: AppColors.primaryBlue.withValues(
+                            alpha: 0.35 * glow,
+                          ),
                           blurRadius: 24,
                           offset: const Offset(0, 10),
                         ),

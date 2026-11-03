@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ system splash icon. The system lays the icon out in a
+     288dp square (no icon background), so the disc sits at 116dp in the
+     middle of it — the same size and place as the Flutter splash. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:width="288dp" android:height="288dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+    <item
+        android:width="116dp"
+        android:height="116dp"
+        android:gravity="center"
+        android:drawable="@drawable/splash_disc" />
+</layer-list>

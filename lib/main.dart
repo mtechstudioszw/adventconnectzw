@@ -159,6 +159,14 @@ void main() async {
     ]),
   );
 
+  // Seamless launch (3 Nov 2026): the launch screen shows the splash's
+  // logo disc, and the splash starts with that same disc already there.
+  // If the logo bitmap isn't decoded by the first frame, the splash would
+  // paint an EMPTY blue disc for a moment. So hold the first frame — the
+  // native launch screen stays up meanwhile — until the logo is decoded,
+  // never longer than 400ms. Same ResizeImage key as the splash's
+  // Image.asset(cacheWidth: 264), so it lands in the cache it reads from.
+  _holdFirstFrameForSplashLogo();
   runApp(const AdventConnectApp());
 
   // Anything that doesn't gate the splash's routing decision happens
@@ -258,9 +266,7 @@ Future<void> _initBackgroundServices() async {
           // setup to reach their inbox, and if it fails the app simply
           // keeps sending the way every previous build did.
           unawaited(
-            E2eeService.start(
-              data.session!.user.id,
-            ).then((_) {
+            E2eeService.start(data.session!.user.id).then((_) {
               unawaited(E2eeService.serveResends());
               // Daily encrypted chat backup, if the member turned it on.
               unawaited(ChatBackupService.autoBackup());
@@ -821,5 +827,38 @@ class _AdventConnectAppState extends State<AdventConnectApp>
         );
       },
     );
+  }
+}
+
+void _holdFirstFrameForSplashLogo() {
+  final binding = WidgetsBinding.instance;
+  binding.deferFirstFrame();
+  var released = false;
+  void release() {
+    if (released) return;
+    released = true;
+    binding.allowFirstFrame();
+  }
+
+  Timer(const Duration(milliseconds: 400), release);
+  try {
+    final stream = ResizeImage(
+      const AssetImage('assets/icon/logo.png'),
+      width: 264,
+    ).resolve(ImageConfiguration.empty);
+    late final ImageStreamListener listener;
+    listener = ImageStreamListener(
+      (_, _) {
+        stream.removeListener(listener);
+        release();
+      },
+      onError: (_, _) {
+        stream.removeListener(listener);
+        release();
+      },
+    );
+    stream.addListener(listener);
+  } catch (_) {
+    release();
   }
 }

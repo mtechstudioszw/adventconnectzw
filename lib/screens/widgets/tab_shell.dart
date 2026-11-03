@@ -5,6 +5,7 @@ import '../../services/messaging_service.dart';
 import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/motion/hide_on_scroll.dart';
 import '../../widgets/home/composer_entry.dart';
+import '../../widgets/home/island_create_fab.dart';
 import '../../widgets/home/create_sheet.dart' show CreateRequest;
 import 'main_bottom_nav.dart';
 
@@ -85,7 +86,7 @@ class _TabShellState extends State<TabShell> with NavVisibilityMixin {
         if (mounted) TabShell.activeIndex.value = widget.shell.currentIndex;
       });
     }
-    return Scaffold(
+    final scaffold = Scaffold(
       backgroundColor: Colors.transparent,
       // Home's feed runs full-height under the frosted island and reserves
       // its own 96dp at the end. The other tabs lay out above the island,
@@ -110,25 +111,38 @@ class _TabShellState extends State<TabShell> with NavVisibilityMixin {
               valueListenable: MessagingService.unreadTotal,
               builder: (context, unread, _) => ValueListenableBuilder<int>(
                 valueListenable: TabShell.pendingFriendRequests,
-                builder: (context, requests, _) =>
-                    ValueListenableBuilder<void Function(CreateRequest)?>(
-                      valueListenable: HomeCreateBridge.handler,
-                      builder: (context, create, _) => MainBottomNav(
-                        currentIndex: index,
-                        onTabSelected: _select,
-                        onReselect: _reselect,
-                        badges: {MainBottomNav.chatIndex: unread + requests},
-                        // Home's "+" joins the island (3 Nov 2026).
-                        onCreate: index == TabShell.homeIndex && create != null
-                            ? () => HomeCreateBridge.open(context)
-                            : null,
-                      ),
-                    ),
+                builder: (context, requests, _) => MainBottomNav(
+                  currentIndex: index,
+                  onTabSelected: _select,
+                  onReselect: _reselect,
+                  badges: {MainBottomNav.chatIndex: unread + requests},
+                ),
               ),
             ),
           ],
         ),
       ),
+    );
+    // Home's floating "+" (3 Nov 2026): above the island, draggable, and
+    // dropping into the island's place while it is hidden. Stacked over
+    // the whole Scaffold rather than inside the body, because the body's
+    // MediaQuery already counts the island's height (extendBody).
+    return Stack(
+      children: [
+        scaffold,
+        if (index == TabShell.homeIndex)
+          Positioned.fill(
+            child: ValueListenableBuilder<void Function(CreateRequest)?>(
+              valueListenable: HomeCreateBridge.handler,
+              builder: (context, create, _) => create == null
+                  ? const SizedBox.shrink()
+                  : IslandCreateFab(
+                      islandVisible: navVisible,
+                      onTap: () => HomeCreateBridge.open(context),
+                    ),
+            ),
+          ),
+      ],
     );
   }
 }

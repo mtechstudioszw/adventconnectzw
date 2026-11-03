@@ -67,13 +67,7 @@ class MainBottomNav extends StatelessWidget {
     this.badges = const <int, int>{},
     this.onReselect,
     this.onTabSelected,
-    this.onCreate,
   });
-
-  /// When set, a round frosted "+" joins the island on its right — same
-  /// height and glass — and this runs on tap (owner, 3 Nov 2026). TabShell
-  /// passes it only on Home.
-  final VoidCallback? onCreate;
 
   /// Index of the Chat tab, which merges in the app-wide unread count.
   static const int chatIndex = 2;
@@ -318,100 +312,18 @@ class MainBottomNav extends StatelessWidget {
                 ),
               ),
             ),
-            if (onCreate != null) ...[
-              const SizedBox(width: AppSpace.sm),
-              _CreateButton(
-                onTap: onCreate!,
-                blurring: blurring,
-                border: glassBorder(),
-                fill: glassFill(),
-              ),
-            ],
           ],
         ),
       ),
     );
   }
 
-  /// The island's height; the "+" matches it.
+  /// The island's height (IslandCreateFab rests just above it).
   static const double _height = 62;
 
   /// Below this inner width the active tab drops its label. Four 46dp icon
   /// slots plus a pill that can show a short label ("Home", "Chat").
   static const double _labelledMinWidth = 4 * 46 + 100;
-}
-
-/// The round frosted "+" that sits beside the island on Home: same glass,
-/// border, shadow and height as the island, with the brand-blue disc the
-/// active tab uses, so the two read as one piece.
-class _CreateButton extends StatelessWidget {
-  const _CreateButton({
-    required this.onTap,
-    required this.blurring,
-    required this.border,
-    required this.fill,
-  });
-
-  final VoidCallback onTap;
-  final bool blurring;
-  final BoxBorder border;
-  final Gradient fill;
-
-  @override
-  Widget build(BuildContext context) {
-    const size = MainBottomNav._height;
-    Widget glass = Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: border,
-        gradient: fill,
-      ),
-      child: Container(
-        width: 46,
-        height: 46,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: AppColors.primaryGradient,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryBlue.withValues(alpha: 0.34),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: const Icon(Icons.add_rounded, color: AppColors.white, size: 28),
-      ),
-    );
-    if (blurring) {
-      glass = BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: glass,
-      );
-    }
-    return Semantics(
-      button: true,
-      label: 'Create a post',
-      child: Tooltip(
-        message: 'Create a post',
-        child: Pressable(
-          haptics: true,
-          pressedScale: 0.92,
-          onTap: onTap,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: AppShadows.floating(context),
-            ),
-            child: ClipOval(child: glass),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _NavItem extends StatelessWidget {

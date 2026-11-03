@@ -44,6 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _biometricAvailable = false;
   bool _biometricEnabled = BiometricService.enabledCached ?? false;
   bool _biometricBusy = false;
+  BiometricKind? _biometricKind = BiometricService.kindCached;
 
   @override
   void initState() {
@@ -79,11 +80,32 @@ class _SettingsScreenState extends State<SettingsScreen>
       BiometricService.isAvailable(),
       BiometricService.isEnabled(),
     ]);
+    final kind = results[0] ? await BiometricService.primaryKind() : null;
     if (!mounted) return;
     setState(() {
       _biometricAvailable = results[0];
       _biometricEnabled = results[1];
+      _biometricKind = kind;
     });
+  }
+
+  /// "Face ID" / "Touch ID" on iPhone, "Face unlock" / "Fingerprint
+  /// unlock" on Android — named for the sensor the member actually has
+  /// (3 Nov 2026; it said "Biometric unlock" with a fingerprint on iPhone).
+  (IconData, String) get _biometricLabel {
+    final ios = Theme.of(context).platform == TargetPlatform.iOS;
+    return switch (_biometricKind) {
+      BiometricKind.face => (
+        Icons.face_rounded,
+        ios ? 'Face ID' : 'Face unlock',
+      ),
+      BiometricKind.iris => (Icons.remove_red_eye_rounded, 'Iris unlock'),
+      BiometricKind.fingerprint => (
+        Icons.fingerprint,
+        ios ? 'Touch ID' : 'Fingerprint unlock',
+      ),
+      null => (Icons.fingerprint, 'Biometric unlock'),
+    };
   }
 
   Future<void> _toggleBiometric(bool next) async {
@@ -791,8 +813,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                           if (_biometricAvailable) ...[
                             const _Divider(),
                             _ToggleRow(
-                              icon: Icons.fingerprint,
-                              label: 'Biometric unlock',
+                              icon: _biometricLabel.$1,
+                              label: _biometricLabel.$2,
                               value: _biometricEnabled,
                               onChanged: _biometricBusy
                                   ? null

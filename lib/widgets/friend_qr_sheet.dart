@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../config/share_config.dart';
@@ -500,6 +501,40 @@ class _ScanFriendScreenState extends State<ScanFriendScreen> {
     super.dispose();
   }
 
+  bool _readingPhoto = false;
+
+  /// "Upload a photo" (owner, 3 Nov 2026): read a friend code from a
+  /// picture — a screenshot someone sent, or a photo of a printed code —
+  /// instead of the live camera. Same handling as a live scan.
+  Future<void> _scanFromPhoto() async {
+    if (_readingPhoto || _handled) return;
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked == null || !mounted) return;
+    setState(() {
+      _readingPhoto = true;
+      _message = 'Reading the code…';
+    });
+    BarcodeCapture? capture;
+    try {
+      capture = await _controller.analyzeImage(
+        picked.path,
+        formats: const [BarcodeFormat.qrCode],
+      );
+    } catch (_) {
+      capture = null;
+    }
+    if (!mounted) return;
+    setState(() => _readingPhoto = false);
+    if (capture == null || capture.barcodes.isEmpty) {
+      setState(
+        () => _message =
+            "Couldn't find a QR code in that picture. Try a clearer one.",
+      );
+      return;
+    }
+    _onDetect(capture);
+  }
+
   void _onDetect(BarcodeCapture capture) {
     if (_handled) return;
     for (final barcode in capture.barcodes) {
@@ -579,6 +614,29 @@ class _ScanFriendScreenState extends State<ScanFriendScreen> {
                       Shadow(blurRadius: 8, color: Colors.black54),
                     ],
                   ),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: _readingPhoto ? null : _scanFromPhoto,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.white,
+                    foregroundColor: AppColors.darkNavy,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  icon: _readingPhoto
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.photo_library_outlined),
+                  label: const Text('Upload a photo of a QR code'),
                 ),
               ],
             ),

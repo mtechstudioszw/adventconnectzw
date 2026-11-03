@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../models/bible_translation.dart';
+import '../../../services/bible_catalog.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_motion.dart';
 import '../../../theme/app_text_styles.dart';
@@ -62,10 +63,64 @@ class _TranslationPickerState extends State<TranslationPicker>
 
   String? _chosenId;
 
+  /// Every openly licensed translation online (BibleCatalog, 3 Nov 2026).
+  List<BibleTranslation> _catalog = BibleTranslations.catalog.toList();
+  bool _catalogLoading = false;
+  String _query = '';
+  final _search = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCatalog();
+  }
+
+  Future<void> _loadCatalog() async {
+    setState(() => _catalogLoading = _catalog.isEmpty);
+    final list = await BibleCatalog.load();
+    if (!mounted) return;
+    setState(() {
+      if (list.isNotEmpty) _catalog = list;
+      _catalogLoading = false;
+    });
+  }
+
   @override
   void dispose() {
     _c.dispose();
+    _search.dispose();
     super.dispose();
+  }
+
+  bool _matches(BibleTranslation t, String q) {
+    if (q.isEmpty) return true;
+    bool has(String? s) => s != null && s.toLowerCase().contains(q);
+    return has(t.name) ||
+        has(t.nativeName) ||
+        has(t.languageLabel) ||
+        has(t.languageEnglish) ||
+        has(t.id);
+  }
+
+  /// Rows: a String is a section heading, a translation is a card.
+  List<Object> get _rows {
+    final q = _query.trim().toLowerCase();
+    final rows = <Object>[];
+    final pinned = BibleTranslations.all.where((t) => _matches(t, q)).toList();
+    if (pinned.isNotEmpty) {
+      rows.add(q.isEmpty ? 'Featured' : 'Featured matches');
+      rows.addAll(pinned);
+    }
+    String? lang;
+    for (final t in _catalog) {
+      if (!_matches(t, q)) continue;
+      if (t.languageEnglish != lang) {
+        lang = t.languageEnglish;
+        rows.add(lang ?? 'Other');
+      }
+      rows.add(t);
+    }
+    return rows;
   }
 
   Future<void> _choose(BibleTranslation t) async {
@@ -111,13 +166,31 @@ class _TranslationPickerState extends State<TranslationPicker>
             child: Column(
               children: [
                 _header(context),
+                _searchField(),
                 Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(18, 6, 18, 28),
-                    itemCount: BibleTranslations.all.length,
-                    itemBuilder: (context, i) {
-                      final t = BibleTranslations.all[i];
-                      return _card(t, i, animate);
+                  child: Builder(
+                    builder: (context) {
+                      final rows = _rows;
+                      return ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(18, 6, 18, 28),
+                        itemCount: rows.length + (_catalogLoading ? 1 : 0),
+                        itemBuilder: (context, i) {
+                          if (i >= rows.length) {
+                            return const Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.goldAccent,
+                                ),
+                              ),
+                            );
+                          }
+                          final r = rows[i];
+                          if (r is String) return _section(r);
+                          return _card(r as BibleTranslation, i, animate);
+                        },
+                      );
                     },
                   ),
                 ),
@@ -164,6 +237,62 @@ class _TranslationPickerState extends State<TranslationPicker>
             onPressed: () => Navigator.of(context).maybePop(),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _searchField() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 6),
+      child: TextField(
+        controller: _search,
+        onChanged: (v) => setState(() => _query = v),
+        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+        cursorColor: AppColors.goldAccent,
+        decoration: InputDecoration(
+          hintText: 'Search a language or translation',
+          hintStyle: AppTextStyles.bodyMedium.copyWith(
+            color: AppColors.white.withValues(alpha: 0.5),
+          ),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: AppColors.white.withValues(alpha: 0.7),
+          ),
+          suffixIcon: _query.isEmpty
+              ? null
+              : IconButton(
+                  icon: Icon(
+                    Icons.close_rounded,
+                    color: AppColors.white.withValues(alpha: 0.7),
+                  ),
+                  onPressed: () {
+                    _search.clear();
+                    setState(() => _query = '');
+                  },
+                ),
+          filled: true,
+          fillColor: AppColors.white.withValues(alpha: 0.08),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _section(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+      child: Text(
+        title.toUpperCase(),
+        style: AppTextStyles.overline.copyWith(
+          color: AppColors.goldAccent,
+          fontSize: 10.5,
+          letterSpacing: 1.6,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

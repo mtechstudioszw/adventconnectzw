@@ -21,7 +21,12 @@ class BibleTranslation {
     this.note,
     this.assetPath,
     this.attribution,
+    this.languageEnglish,
   });
+
+  /// The language's English name ("Ndebele", "Swahili"), for search and
+  /// grouping in the picker. Null for the curated set, which is pinned.
+  final String? languageEnglish;
 
   /// API translation id, or `kjv` for the bundled asset.
   final String id;
@@ -74,11 +79,20 @@ class BibleTranslation {
   bool get isRemote => !isBundled;
 
   /// True when [bookIndex] (0-based, Genesis..Revelation) exists here.
-  bool hasBook(int bookIndex) => switch (coverage) {
-        TranslationCoverage.whole => true,
-        TranslationCoverage.oldTestament => bookIndex < 39,
-        TranslationCoverage.newTestament => bookIndex >= 39,
-      };
+  bool hasBook(int bookIndex) {
+    // Catalogue translations report their real book list once fetched
+    // (BibleCatalog.ensureBooks) — exact for partial Bibles too.
+    final known = BibleTranslations._books[id];
+    if (known != null) {
+      final code = BibleTranslations.codeFor(bookIndex);
+      return code != null && known.contains(code);
+    }
+    return switch (coverage) {
+      TranslationCoverage.whole => true,
+      TranslationCoverage.oldTestament => bookIndex < 39,
+      TranslationCoverage.newTestament => bookIndex >= 39,
+    };
+  }
 }
 
 enum TranslationCoverage { whole, oldTestament, newTestament }
@@ -201,8 +215,30 @@ class BibleTranslations {
     septuagint,
   ];
 
+  /// Every other openly licensed translation, from the online catalogue
+  /// (BibleCatalog, 3 Nov 2026 — owner: "add many Bible translations, as
+  /// many languages as possible"). Registered at runtime.
+  static final Map<String, BibleTranslation> _catalog = {};
+
+  /// Real book lists for catalogue translations (API book codes).
+  static final Map<String, Set<String>> _books = {};
+
+  static void registerCatalog(Iterable<BibleTranslation> list) {
+    for (final t in list) {
+      _catalog[t.id] = t;
+    }
+  }
+
+  static void registerBooks(String id, Set<String> codes) =>
+      _books[id] = codes;
+
+  static Iterable<BibleTranslation> get catalog => _catalog.values;
+
   static BibleTranslation byId(String id) =>
-      all.firstWhere((t) => t.id == id, orElse: () => kjv);
+      all.firstWhere(
+        (t) => t.id == id,
+        orElse: () => _catalog[id] ?? kjv,
+      );
 
   /// Three-letter API book codes in canonical order, so a bundled-KJV book
   /// index maps straight onto the remote API's book id.

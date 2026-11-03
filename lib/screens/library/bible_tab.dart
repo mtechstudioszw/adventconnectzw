@@ -1123,6 +1123,16 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
           : AppBar(
               backgroundColor: paper.bg,
               foregroundColor: paper.fg,
+              // Explicit, not inherited: the app-wide AppBarTheme still
+              // carries a light icon colour from the old navy headers, and
+              // an AppBarTheme iconTheme beats foregroundColor — so on the
+              // white page the back arrow, Tt and full-screen icons were
+              // pale grey on white (owner screenshot, 3 Nov 2026).
+              iconTheme: IconThemeData(color: paper.fg),
+              actionsIconTheme: IconThemeData(color: paper.fg),
+              systemOverlayStyle: paper.bg.computeLuminance() > 0.5
+                  ? SystemUiOverlayStyle.dark
+                  : SystemUiOverlayStyle.light,
               elevation: 0,
               scrolledUnderElevation: 0,
               title: GestureDetector(

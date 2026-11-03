@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../models/bible_translation.dart';
+import 'bible_catalog.dart';
 import 'cache_service.dart';
 
 /// One chapter in a non-bundled translation.
@@ -70,14 +71,22 @@ class BibleTranslationService {
 
   /// Restores the saved translation. Call once when the Bible tab mounts.
   static void restore() {
+    // A saved catalogue pick (say, Ndebele) must resolve before byId runs.
+    BibleCatalog.restoreCached();
     active.value =
         CacheService.readPref(_kActive) ?? BibleTranslations.kjv.id;
   }
 
-  static BibleTranslation get current =>
-      BibleTranslations.byId(active.value);
+  static BibleTranslation get current {
+    final t = BibleTranslations.byId(active.value);
+    // Load the book list once for a restored catalogue pick.
+    if (t.languageEnglish != null) unawaited(BibleCatalog.ensureBooks(t));
+    return t;
+  }
 
   static Future<void> setActive(BibleTranslation translation) async {
+    // Partial Bibles: learn which books exist before the reader asks.
+    await BibleCatalog.ensureBooks(translation);
     active.value = translation.id;
     await CacheService.writePref(_kActive, translation.id);
   }

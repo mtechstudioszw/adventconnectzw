@@ -132,6 +132,9 @@ flutter:
     - assets/bible/
     - assets/hymns/
     - assets/sounds/quiz/
+    # The caller's ringback (CallTones). Missing until 3 Nov 2026, so the
+    # tone failed silently and callers heard nothing while it rang.
+    - assets/sounds/call/
     - assets/fonts/
     - assets/geo/
 

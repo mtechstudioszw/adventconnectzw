@@ -432,6 +432,14 @@ class CallService {
       _armConnectTimeout();
     } on CallFailure catch (e) {
       if (generation != _generation) return;
+      // Answering failed, so this phone is giving up on the call — tell
+      // the server, or the CALLER keeps hearing it ring until the ring
+      // timeout (owner's test, 3 Nov 2026: "his phone said connection
+      // failed, mine kept saying ringing"). A call already over needs
+      // nothing.
+      if (e.code != 'CALL_OVER') {
+        unawaited(_safe(() => CallApi.reject(session.id)));
+      }
       await _finish(
         e.code == 'CALL_OVER' ? CallPhase.missed : CallPhase.failed,
         message: e.message,

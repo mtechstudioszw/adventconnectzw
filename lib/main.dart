@@ -42,6 +42,7 @@ import 'theme/app_theme.dart';
 import 'widgets/ambient_background.dart';
 import 'widgets/offline_banner.dart';
 import 'widgets/global_media_bars.dart';
+import 'widgets/ongoing_call_bar.dart';
 import 'widgets/voice_mini_bar.dart';
 
 void main() async {
@@ -807,6 +808,12 @@ class _AdventConnectAppState extends State<AdventConnectApp>
                             Align(
                               alignment: Alignment.topCenter,
                               child: VoiceMiniBar(),
+                            ),
+                            // "Tap to return to call" while a call is live
+                            // and its screen is not on top.
+                            Align(
+                              alignment: Alignment.topCenter,
+                              child: OngoingCallBar(),
                             ),
                             // Docked video + music windows — whatever is still
                             // playing stays reachable from anywhere.

@@ -37,6 +37,10 @@ import '../../widgets/user_avatar.dart';
 class CallScreen extends StatefulWidget {
   const CallScreen({super.key});
 
+  /// True while the call screen is on top. The "Return to call" bar
+  /// ([OngoingCallBar]) shows when a call is live and this is false.
+  static final ValueNotifier<bool> onScreen = ValueNotifier<bool>(false);
+
   @override
   State<CallScreen> createState() => _CallScreenState();
 }
@@ -53,6 +57,7 @@ class _CallScreenState extends State<CallScreen> {
   @override
   void initState() {
     super.initState();
+    CallScreen.onScreen.value = true;
     CallService.state.addListener(_onCallState);
     // A call screen that lets the phone sleep is a call screen that
     // vanishes mid-conversation. Released in dispose.
@@ -63,6 +68,7 @@ class _CallScreenState extends State<CallScreen> {
   @override
   void dispose() {
     _dismissTimer?.cancel();
+    CallScreen.onScreen.value = false;
     CallService.state.removeListener(_onCallState);
     unawaited(_setWakeLock(false));
     super.dispose();
@@ -121,10 +127,17 @@ class _CallScreenState extends State<CallScreen> {
     final palette = context.palette;
 
     return PopScope(
-      // Back must not dismiss a live call — that is how a member ends up
-      // on the home screen with a call still running and no way back to
-      // it. Hanging up is an explicit act.
-      canPop: !state.phase.isLive,
+      // Back LEAVES the call screen and the call carries on (owner, 3 Nov
+      // 2026: "if u back on a call it dosent back u have to close the
+      // entire app"). It used to be blocked so a member could not end up
+      // in the app with a call running and no way back to it — that way
+      // back is now the "Return to call" bar ([OngoingCallBar]), shown at
+      // the top of every screen while a call is live, as WhatsApp does.
+      // Hanging up stays an explicit act.
+      canPop: true,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) _popped = true;
+      },
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: SafeArea(
@@ -239,11 +252,7 @@ class _StatusLine extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.lock_outline,
-                size: 12,
-                color: palette.textMuted,
-              ),
+              Icon(Icons.lock_outline, size: 12, color: palette.textMuted),
               const SizedBox(width: 4),
               Text(
                 verified ? 'End-to-end encrypted' : 'Encrypted',
@@ -855,7 +864,10 @@ class _AudioRouteButton extends StatelessWidget {
                 ),
                 title: Text(route.label, style: AppTextStyles.bodyMedium),
                 trailing: route == current
-                    ? const Icon(Icons.check_rounded, color: AppColors.primaryBlue)
+                    ? const Icon(
+                        Icons.check_rounded,
+                        color: AppColors.primaryBlue,
+                      )
                     : null,
                 onTap: () => Navigator.of(context).pop(route),
               ),

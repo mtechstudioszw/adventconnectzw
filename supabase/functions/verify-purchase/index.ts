@@ -42,7 +42,11 @@ function json(body: unknown, status = 200): Response {
 /// the store charged is what the store's own receipt says, so ours
 /// describes the subscription and the dates instead of guessing an
 /// amount we may have wrong in the user's currency.
-function receiptBody(expiry: string | null, isRenewal: boolean): string {
+function receiptBody(
+  expiry: string | null,
+  isRenewal: boolean,
+  productId: string,
+): string {
   const when = expiry
     ? new Date(expiry).toLocaleDateString("en-GB", {
       day: "numeric",
@@ -50,6 +54,18 @@ function receiptBody(expiry: string | null, isRenewal: boolean): string {
       year: "numeric",
     })
     : null;
+  // patch 309: the $1 Verified plan is its own subscription and buys the
+  // gold tick only — the receipt must not promise Premium or "ads off".
+  if (productId === "verified_monthly") {
+    const head = isRenewal
+      ? "Your Verified plan renewed."
+      : "Thank you — your Verified plan is active. Your gold tick shows " +
+        "once your ID check is approved.";
+    return when
+      ? `${head} It renews on ${when}. Google Play has emailed you the ` +
+        `payment receipt.`
+      : `${head} Google Play has emailed you the payment receipt.`;
+  }
   const head = isRenewal
     ? "Your Adventist Super App Premium subscription renewed."
     : "Thank you — your Adventist Super App Premium subscription is active.";
@@ -224,7 +240,7 @@ Deno.serve(async (req) => {
     const { error: notifyErr } = await admin.from("notifications").insert({
       user_id: user.id,
       title: "Payment received",
-      body: receiptBody(sub.expiryTime, false),
+      body: receiptBody(sub.expiryTime, false, productId),
       type: "payment_receipt",
       reference_type: "subscription",
       reference_id: subscriptionId,

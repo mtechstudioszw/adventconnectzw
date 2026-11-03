@@ -47,6 +47,12 @@ const PACKS: Record<string, { minutes: number; days: number }> = {
   call_minutes_1200: { minutes: 1200, days: 30 },
 };
 
+// Advent AI question packs (patch 309): questions the member keeps until
+// used, spent after their free and Premium questions.
+const AI_PACKS: Record<string, { units: number }> = {
+  ai_questions_50: { units: 50 },
+};
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -93,11 +99,14 @@ Deno.serve(async (req) => {
   const purchaseToken = String(body?.purchase_token ?? "");
   const sku = SKUS[productId];
   const pack = PACKS[productId];
+  const aiPack = AI_PACKS[productId];
 
   if (platform !== "google_play") {
     return json({ ok: false, error: "unsupported_platform" }, 400);
   }
-  if (!sku && !pack) return json({ ok: false, error: "unknown_product" }, 400);
+  if (!sku && !pack && !aiPack) {
+    return json({ ok: false, error: "unknown_product" }, 400);
+  }
   if (!purchaseToken) return json({ ok: false, error: "missing_token" }, 400);
 
   let purchase;
@@ -113,6 +122,36 @@ Deno.serve(async (req) => {
   }
   if (purchase.purchaseState !== 0) {
     return json({ ok: false, error: "invalid_purchase" }, 400);
+  }
+
+  // ---- Advent AI question pack: credit the buyer --------------------
+  if (aiPack) {
+    const { data: left, error: aiErr } = await admin.rpc(
+      "grant_ai_questions",
+      {
+        p_user: user.id,
+        p_product: productId,
+        p_units: aiPack.units,
+        p_token: purchaseToken,
+        p_order: purchase.orderId,
+      },
+    );
+    if (aiErr) {
+      // Not acknowledged, so Play refunds it within 3 days.
+      console.error("grant_ai_questions failed:", aiErr);
+      return json({ ok: false, error: "write_failed" }, 500);
+    }
+    try {
+      await acknowledgePlayProductPurchase(productId, purchaseToken);
+    } catch (e) {
+      console.error("acknowledge failed:", e);
+    }
+    return json({
+      ok: true,
+      questions: aiPack.units,
+      questions_left: left,
+      test_purchase: purchase.isTestPurchase,
+    });
   }
 
   // ---- call-minute pack: credit the caller, no target ---------------

@@ -117,15 +117,16 @@ class SabbathSchoolService {
   // ---- Fetch primitives ---------------------------------------------------
 
   /// GETs [path] (relative to the API root) and decodes JSON.
-  static Future<dynamic> _get(String path) async {
-    final client = HttpClient()..connectionTimeout = _timeout;
+  static Future<dynamic> _get(String path, {Duration? timeout}) async {
+    final t = timeout ?? _timeout;
+    final client = HttpClient()..connectionTimeout = t;
     try {
       final req = await client.getUrl(Uri.parse('$_base/$path'));
-      final resp = await req.close().timeout(_timeout);
+      final resp = await req.close().timeout(t);
       if (resp.statusCode != 200) {
         throw HttpException('HTTP ${resp.statusCode} for $path');
       }
-      final body = await resp.transform(utf8.decoder).join().timeout(_timeout);
+      final body = await resp.transform(utf8.decoder).join().timeout(t);
       return jsonDecode(body);
     } finally {
       client.close(force: true);
@@ -153,8 +154,15 @@ class SabbathSchoolService {
   static Future<List<Quarterly>> quarterlies({String? lang}) async {
     final code = lang ?? language();
     final key = 'ss:quarterlies:$code';
+    // Offline-first (3 Nov 2026): with a saved shelf, a weak signal gets 5 s
+    // before we show it, not 15. The shelf changes once a quarter, so it
+    // still asks the network first to pick up a new quarter promptly.
+    final hasCopy = _readCache(key) is List;
     try {
-      final data = await _get('$code/quarterlies/index.json');
+      final data = await _get(
+        '$code/quarterlies/index.json',
+        timeout: hasCopy ? _savedCopyTimeout : null,
+      );
       final list = (data as List)
           .map((e) => Quarterly.fromJson(e as Map<String, dynamic>))
           .toList();
@@ -199,6 +207,15 @@ class SabbathSchoolService {
   }) async {
     final code = lang ?? language();
     final key = 'ss:lessons:$code:$quarterlyId';
+    // Offline-first (3 Nov 2026): a quarter's week list is fixed once it is
+    // published, so a saved copy opens instantly and refreshes behind it.
+    final saved = _readCache(key);
+    if (saved is List && saved.isNotEmpty) {
+      unawaited(_refreshLessons(quarterlyId, code, key));
+      return saved
+          .map((e) => SsLesson.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
     try {
       final data = await _get('$code/quarterlies/$quarterlyId/index.json');
       final raw =
@@ -236,6 +253,13 @@ class SabbathSchoolService {
   }) async {
     final code = lang ?? language();
     final key = 'ss:days:$code:$quarterlyId:$lessonId';
+    final saved = _readCache(key);
+    if (saved is List && saved.isNotEmpty) {
+      unawaited(_refreshDays(quarterlyId, lessonId, code, key));
+      return saved
+          .map((e) => SsDay.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
     try {
       final data = await _get(
         '$code/quarterlies/$quarterlyId/lessons/$lessonId/index.json',
@@ -261,6 +285,53 @@ class SabbathSchoolService {
       }
       return const [];
     }
+  }
+
+  /// How long to wait for the network when a saved copy can be shown.
+  static const _savedCopyTimeout = Duration(seconds: 5);
+
+  static Future<void> _refreshLessons(
+    String quarterlyId,
+    String code,
+    String key,
+  ) async {
+    try {
+      final data = await _get('$code/quarterlies/$quarterlyId/index.json');
+      final raw =
+          (data as Map<String, dynamic>)['lessons'] as List? ?? const [];
+      if (raw.isEmpty) return;
+      await CacheService.writeString(
+        key,
+        jsonEncode([
+          for (final e in raw)
+            SsLesson.fromJson(e as Map<String, dynamic>).toJson(),
+        ]),
+      );
+    } catch (_) {
+      // Silent — the saved copy was already shown.
+    }
+  }
+
+  static Future<void> _refreshDays(
+    String quarterlyId,
+    String lessonId,
+    String code,
+    String key,
+  ) async {
+    try {
+      final data = await _get(
+        '$code/quarterlies/$quarterlyId/lessons/$lessonId/index.json',
+      );
+      final raw = (data as Map<String, dynamic>)['days'] as List? ?? const [];
+      if (raw.isEmpty) return;
+      await CacheService.writeString(
+        key,
+        jsonEncode([
+          for (final e in raw)
+            SsDay.fromJson(e as Map<String, dynamic>).toJson(),
+        ]),
+      );
+    } catch (_) {}
   }
 
   // ---- Day content --------------------------------------------------------

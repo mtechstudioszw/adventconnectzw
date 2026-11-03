@@ -58,8 +58,9 @@ class PremiumService {
   /// The level currently in force. [PremiumTier.none] whenever
   /// [isPremium] is false — the two can never disagree, because [_apply]
   /// derives both from the same evaluation.
-  static final ValueNotifier<PremiumTier> _tier =
-      ValueNotifier<PremiumTier>(PremiumTier.none);
+  static final ValueNotifier<PremiumTier> _tier = ValueNotifier<PremiumTier>(
+    PremiumTier.none,
+  );
 
   /// What the server last said, before expiry is applied.
   static PremiumTier _storedTier = PremiumTier.none;
@@ -69,6 +70,13 @@ class PremiumService {
   /// [clear] (sign-out) and the debug seam below. Nothing in the app may
   /// promote itself.
   static ValueListenable<bool> get isPremium => _isPremium;
+
+  /// The separate US$1/month Verified plan (patch 309) is running. It
+  /// buys the gold tick only — deliberately NOT part of [isPremium], so
+  /// ads, call minutes and the AI allowance are untouched by it.
+  static final ValueNotifier<bool> _verifiedPlan = ValueNotifier<bool>(false);
+  static ValueListenable<bool> get verifiedPlan => _verifiedPlan;
+  static bool get hasVerifiedPlan => _verifiedPlan.value;
 
   /// Convenience for non-widget code (services, managers).
   static bool get isActive => _isPremium.value;
@@ -149,9 +157,18 @@ class PremiumService {
       // that is why the column is added there and not casually here.
       final row = await _client
           .from('profiles')
-          .select('premium_until, premium_tier')
+          // verified_until: the $1 Verified plan (patch 309, SELECT
+          // granted there). Never part of isPremium.
+          .select('premium_until, premium_tier, verified_until')
           .eq('id', userId)
           .maybeSingle();
+      final rawVerified = row?['verified_until'];
+      final verifiedUntil = rawVerified == null
+          ? null
+          : DateTime.tryParse('$rawVerified')?.toUtc();
+      _verifiedPlan.value =
+          verifiedUntil != null &&
+          verifiedUntil.isAfter(DateTime.now().toUtc());
       final raw = row?['premium_until'];
       final until = raw == null ? null : DateTime.tryParse('$raw')?.toUtc();
       await _store(
@@ -175,6 +192,7 @@ class PremiumService {
     _storedTier = PremiumTier.none;
     _isPremium.value = false;
     _tier.value = PremiumTier.none;
+    _verifiedPlan.value = false;
     try {
       await SecureStorageService.delete(_kUntilKey);
       await SecureStorageService.delete(_kOwnerKey);
@@ -258,9 +276,12 @@ class PremiumService {
     required String? owner,
     required String? currentUserId,
     required DateTime now,
-  }) =>
-      _evaluate(
-          until: until, owner: owner, currentUserId: currentUserId, now: now);
+  }) => _evaluate(
+    until: until,
+    owner: owner,
+    currentUserId: currentUserId,
+    now: now,
+  );
 
   static bool _evaluate({
     required DateTime? until,

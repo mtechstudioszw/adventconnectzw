@@ -679,6 +679,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // are, premium says you support the app — paid is not verified.
         badges: [
           if (isPremium) const PremiumBadge(size: 20),
+          // Your own profile only: a quiet outlined tick that goes to the
+          // ID check, until the real gold tick replaces it (patch 309).
+          if (!kHidePayments && !_isVerified)
+            Tooltip(
+              message: 'Get the gold tick',
+              child: InkResponse(
+                radius: 18,
+                onTap: () => context.pushNamed('get_verified'),
+                child: Icon(
+                  Icons.verified_outlined,
+                  size: 19,
+                  color: context.palette.textMuted,
+                ),
+              ),
+            ),
           if (row?.isPrivate ?? false)
             Icon(
               Icons.lock_outline_rounded,

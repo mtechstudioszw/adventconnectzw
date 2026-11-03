@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../services/billing/ai_pack_service.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../config/platform_flags.dart';
@@ -24,7 +26,11 @@ import '../ai_gate_copy.dart';
 ///    Two states deliberately have nothing to sell — a subscriber who
 ///    has spent their allowance, and a service that is currently down —
 ///    and the sheet cannot invent a button for them.
-Future<void> showAiGateSheet(BuildContext context, AiGateCopy copy) {
+Future<void> showAiGateSheet(
+  BuildContext context,
+  AiGateCopy copy, {
+  bool offerPack = false,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -33,13 +39,17 @@ Future<void> showAiGateSheet(BuildContext context, AiGateCopy copy) {
       borderRadius:
           BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
     ),
-    builder: (context) => _GateSheet(copy: copy),
+    builder: (context) => _GateSheet(copy: copy, offerPack: offerPack),
   );
 }
 
 class _GateSheet extends StatelessWidget {
-  const _GateSheet({required this.copy});
+  const _GateSheet({required this.copy, this.offerPack = false});
   final AiGateCopy copy;
+
+  /// Out of questions: offer the US$1 pack of 50 (patch 309) beside
+  /// Premium, for members who only want a few more.
+  final bool offerPack;
 
   @override
   Widget build(BuildContext context) {
@@ -126,6 +136,8 @@ class _GateSheet extends StatelessWidget {
                 },
               ),
 
+            if (offerPack && !kHidePayments) const _AiPackButton(),
+
             if (copy.secondaryLabel != null)
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -179,6 +191,73 @@ class _PrimaryButton extends StatelessWidget {
               label,
               style: AppTextStyles.titleSmall.copyWith(color: Colors.white),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "50 more questions · $1". Loads Play's price; shows nothing while Advent
+/// AI is switched off or the product isn't on sale, so it can never sell
+/// something that does not work.
+class _AiPackButton extends StatefulWidget {
+  const _AiPackButton();
+
+  @override
+  State<_AiPackButton> createState() => _AiPackButtonState();
+}
+
+class _AiPackButtonState extends State<_AiPackButton> {
+  @override
+  void initState() {
+    super.initState();
+    AiPackService.loadOffer();
+    AiPackService.state.addListener(_onState);
+  }
+
+  @override
+  void dispose() {
+    AiPackService.state.removeListener(_onState);
+    super.dispose();
+  }
+
+  void _onState() {
+    if (!mounted) return;
+    if (AiPackService.state.value == AiPackFlow.success) {
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.of(context).pop();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('50 questions added. Ask away!')),
+      );
+      return;
+    }
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final flow = AiPackService.state.value;
+    final ready = AiPackService.offer != null &&
+        flow != AiPackFlow.loading &&
+        flow != AiPackFlow.unavailable;
+    if (!ready) return const SizedBox.shrink();
+    final busy =
+        flow == AiPackFlow.purchasing || flow == AiPackFlow.verifying;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpace.sm),
+      child: OutlinedButton.icon(
+        onPressed: busy ? null : AiPackService.buy,
+        icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+        label: Text(
+          busy
+              ? 'One moment…'
+              : 'Just 50 more questions · ${AiPackService.priceLabel}',
+        ),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
           ),
         ),
       ),

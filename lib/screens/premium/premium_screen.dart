@@ -12,6 +12,7 @@ import '../../widgets/motion/motion.dart';
 import '../../widgets/premium/premium_badge.dart';
 import '../../widgets/screen_shell.dart';
 import 'widgets/advent_ai_offer_card.dart';
+import 'widgets/pay_as_you_go_card.dart';
 import 'widgets/plan_perks_card.dart';
 import 'widgets/plan_picker.dart';
 
@@ -242,6 +243,10 @@ class _OfferView extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               StaggeredReveal(index: 2, child: const _ComparisonCard()),
+              const SizedBox(height: 12),
+              // patch 309: the single features, for members who will never
+              // want a monthly bundle.
+              StaggeredReveal(index: 2, child: const PayAsYouGoCard()),
               const SizedBox(height: 12),
               StaggeredReveal(index: 2, child: const GoldTickPromoCard()),
               const SizedBox(height: 12),

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/billing/premium_tier.dart';
+import '../../services/billing/verified_plan_service.dart';
 import '../../services/premium_service.dart';
 import '../../services/verification_service.dart';
 import '../../theme/app_colors.dart';
@@ -63,6 +64,12 @@ class _GetVerifiedScreenState extends State<GetVerifiedScreen> {
     super.initState();
     if (_isPage) _category = VerifyCategory.ministry;
     _load();
+    // The $1 plan's price, in the member's own currency, for the copy.
+    if (!_isPage) {
+      VerifiedPlanService.loadOffer().then((_) {
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   @override
@@ -199,11 +206,17 @@ class _GetVerifiedScreenState extends State<GetVerifiedScreen> {
                       _WhatItMeans(isPage: _isPage, tier: _neededTier),
                       const SizedBox(height: 16),
                       if (_request != null && !_reapplying)
-                        _StatusCard(
-                          request: _request!,
-                          tier: _neededTier,
-                          onWithdraw: _withdraw,
-                          onReapply: () => setState(() => _reapplying = true),
+                        // Rebuilds the moment a Verified plan lands, so
+                        // "waiting for a plan" turns into "you are verified".
+                        ValueListenableBuilder<bool>(
+                          valueListenable: PremiumService.verifiedPlan,
+                          builder: (context, _, _) => _StatusCard(
+                            request: _request!,
+                            tier: _neededTier,
+                            onWithdraw: _withdraw,
+                            onReapply: () =>
+                                setState(() => _reapplying = true),
+                          ),
                         )
                       else
                         _form(context),
@@ -341,7 +354,9 @@ class _WhatItMeans extends StatelessWidget {
           for (final line in [
             'We checked an ID — this ${isPage ? 'Page belongs to a real, named person' : 'account is really the person it says'}.',
             'It shows beside ${isPage ? 'the Page' : 'your name'} everywhere: posts, comments, chats and search.',
-            'It needs ${tier.label}${tier == PremiumTier.plus ? ' or above' : ''} to stay on. If the plan ends, the tick hides until you renew — no need to apply again.',
+            isPage
+                ? 'It needs ${tier.label} to stay on. If the plan ends, the tick hides until you renew — no need to apply again.'
+                : 'It needs the Verified plan (${VerifiedPlanService.priceLabel} a month) or any Premium plan to stay on. If the plan ends, the tick hides until you renew — no need to apply again.',
             'Fake accounts and scams get reported and the tick is removed.',
           ])
             Padding(
@@ -394,7 +409,10 @@ class _StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final paying = PremiumService.hasTier(tier);
+    // A member's own tick (tier Plus) also stays on with the $1 Verified
+    // plan (patch 309); a Page's needs Business.
+    final paying = PremiumService.hasTier(tier) ||
+        (tier == PremiumTier.plus && PremiumService.hasVerifiedPlan);
     final (IconData icon, Color tone, String title, String body) =
         switch (request.status) {
           VerifyStatus.pending => (
@@ -467,12 +485,50 @@ class _StatusCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 14),
-          if (request.status == VerifyStatus.approved && !paying)
-            PrimaryGradientButton(
-              label: 'See plans',
-              icon: Icons.workspace_premium_outlined,
-              onTap: () => context.pushNamed('premium'),
+          if (request.status == VerifyStatus.approved && !paying) ...[
+            if (tier == PremiumTier.plus)
+              ValueListenableBuilder<VerifiedPlanFlow>(
+                valueListenable: VerifiedPlanService.state,
+                builder: (context, flow, _) {
+                  final busy = flow == VerifiedPlanFlow.purchasing ||
+                      flow == VerifiedPlanFlow.verifying ||
+                      flow == VerifiedPlanFlow.loading;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      PrimaryGradientButton(
+                        label: busy
+                            ? 'One moment…'
+                            : 'Turn on my tick · ${VerifiedPlanService.priceLabel}/month',
+                        icon: Icons.verified_rounded,
+                        onTap: busy ? null : VerifiedPlanService.buy,
+                      ),
+                      if (VerifiedPlanService.message != null &&
+                          (flow == VerifiedPlanFlow.failed ||
+                              flow == VerifiedPlanFlow.unavailable ||
+                              flow == VerifiedPlanFlow.pendingPayment))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            VerifiedPlanService.message!,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: context.palette.textMuted,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            TextButton(
+              onPressed: () => context.pushNamed('premium'),
+              child: Text(
+                tier == PremiumTier.plus
+                    ? 'Or get it with a Premium plan'
+                    : 'See plans',
+              ),
             ),
+          ],
           if (request.status == VerifyStatus.pending)
             TextButton(
               onPressed: onWithdraw,

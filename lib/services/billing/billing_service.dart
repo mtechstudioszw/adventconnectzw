@@ -10,7 +10,10 @@ import 'boost_catalog.dart';
 import 'boost_service.dart';
 import 'play_billing_platform.dart';
 import 'call_pack_catalog.dart';
+import 'ai_pack_service.dart';
 import 'call_pack_service.dart';
+import 'small_products.dart';
+import 'verified_plan_service.dart';
 import 'premium_tier.dart';
 
 /// Where the purchase flow currently is. The Premium screen renders
@@ -275,6 +278,17 @@ class BillingService {
         await CallPackService.onPurchase(purchase);
         continue;
       }
+      // patch 309: the $1 Verified plan is a subscription of its own and
+      // must never move the Premium screen's state; the AI question pack
+      // is one-off and consumed, like the call packs.
+      if (SmallProducts.isVerifiedSku(purchase.productId)) {
+        await VerifiedPlanService.onPurchase(purchase);
+        continue;
+      }
+      if (SmallProducts.isAiPackSku(purchase.productId)) {
+        await AiPackService.onPurchase(purchase);
+        continue;
+      }
       switch (purchase.outcome) {
         case PurchaseOutcome.pending:
           state.value = PremiumFlowState.pendingPayment;
@@ -334,6 +348,12 @@ class BillingService {
     await PremiumService.refresh();
     state.value = PremiumFlowState.success;
   }
+
+  /// Server-verifies any subscription purchase (Premium or the Verified
+  /// plan — verify-purchase files each under the right column).
+  static Future<VerificationResult> verifySubscription(
+    BillingPurchase purchase,
+  ) => _verify(purchase);
 
   /// The real verifier: hands the token to our Edge Function, which asks
   /// the store and writes `profiles.premium_until` with the service role.

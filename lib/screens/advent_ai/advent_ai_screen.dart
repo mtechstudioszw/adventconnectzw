@@ -231,6 +231,8 @@ class _AdventAiScreenState extends State<AdventAiScreen> {
         resetsOn: balance.resetsOn,
         used: balance.grant > 0 ? balance.grant - balance.remaining : null,
       ),
+      // Out of questions: the $1 pack sits beside Premium (patch 309).
+      offerPack: reason == AiGateReason.outOfFree,
     );
   }
 

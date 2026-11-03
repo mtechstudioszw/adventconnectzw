@@ -22,6 +22,7 @@ class QuizRoom {
     required this.myChoice,
     required this.players,
     required this.clockSkew,
+    this.review = const [],
   });
 
   static const int maxPlayers = 5;
@@ -51,6 +52,10 @@ class QuizRoom {
 
   /// Sorted by score, best first.
   final List<QuizRoomPlayer> players;
+
+  /// Only once the game is over (patch_308): per question, what this
+  /// player chose and what was right. Empty mid-game, by design.
+  final List<QuizRoomReviewItem> review;
 
   /// `serverNow - deviceNow` when this snapshot was parsed, so every phone
   /// counts down from the server's clock, not its own.
@@ -153,6 +158,14 @@ class QuizRoom {
       clockSkew: serverNow == null
           ? Duration.zero
           : serverNow.difference(DateTime.now()),
+      review: json['review'] is List
+          ? (json['review'] as List)
+                .map(
+                  (e) =>
+                      QuizRoomReviewItem.fromJson(Map<String, dynamic>.from(e)),
+                )
+                .toList()
+          : const [],
     );
   }
 
@@ -212,4 +225,34 @@ class QuizRoomPlayer {
     left: json['left'] == true,
     isMe: json['is_me'] == true,
   );
+}
+
+/// One line of the end-of-game "Your answers" list.
+class QuizRoomReviewItem {
+  const QuizRoomReviewItem({
+    required this.index,
+    required this.correctIndex,
+    required this.myChoice,
+    required this.correct,
+    required this.points,
+  });
+
+  final int index;
+  final int correctIndex;
+
+  /// null or -1: no answer (the clock ran out, or they had dropped out).
+  final int? myChoice;
+  final bool correct;
+  final int points;
+
+  bool get answered => myChoice != null && myChoice! >= 0;
+
+  factory QuizRoomReviewItem.fromJson(Map<String, dynamic> json) =>
+      QuizRoomReviewItem(
+        index: QuizRoom._int(json['index']) ?? 0,
+        correctIndex: QuizRoom._int(json['correct_index']) ?? -1,
+        myChoice: QuizRoom._int(json['my_choice']),
+        correct: json['correct'] == true,
+        points: QuizRoom._int(json['points']) ?? 0,
+      );
 }

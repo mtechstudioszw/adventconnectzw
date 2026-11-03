@@ -209,5 +209,26 @@ void main() {
       expect(t.takeException(), isNull);
       expect(find.text('You came 4th'), findsOneWidget);
     });
+
+    testWidgets('podium lists your answers at the end', (t) async {
+      final view = _view(status: 'complete', players: five())
+        ..['review'] = [
+          {
+            'index': 0,
+            'correct_index': 0,
+            'my_choice': 2,
+            'correct': false,
+            'points': 0,
+          },
+        ];
+      final r = QuizRoom.fromJson(view);
+      expect(r.review.single.answered, isTrue);
+      await pump(t, QuizRoomScreen.debugPodium(r));
+      await t.scrollUntilVisible(find.text('Answer: Noah'), 200);
+      expect(t.takeException(), isNull);
+      expect(find.text('YOUR ANSWERS'), findsOneWidget);
+      expect(find.text('You said: David'), findsOneWidget);
+      expect(find.text('Answer: Noah'), findsOneWidget);
+    });
   });
 }

@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../models/quiz_match.dart';
+import '../../../models/quiz_question_model.dart';
 import '../../../models/quiz_room.dart';
 import '../../../services/quiz_match_service.dart';
 import '../../../services/quiz_music.dart';
@@ -1100,6 +1101,28 @@ class _Podium extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 8),
             child: _RankRow(place: room.placeOf(p), player: p),
           ),
+        if (room.review.isNotEmpty) ...[
+          const SizedBox(height: 22),
+          Text(
+            'YOUR ANSWERS',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: ArenaTheme.gold,
+              letterSpacing: 1.6,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (final item in room.review)
+            if (item.index < room.questions.length)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _ReviewCard(
+                  number: item.index + 1,
+                  question: room.questions[item.index],
+                  item: item,
+                ),
+              ),
+        ],
         const SizedBox(height: 18),
         _StartButton(enabled: true, busy: false, label: 'Done', onTap: onDone),
       ],
@@ -1359,6 +1382,120 @@ class _QuizRoomJoinScreenState extends State<QuizRoomJoinScreen> {
               child: CircularProgressIndicator(color: ArenaTheme.gold),
             )
           : _Notice(text: _error!),
+    );
+  }
+}
+
+/// One question in the end-of-game review: what you picked, and the right
+/// answer when that wasn't it.
+class _ReviewCard extends StatelessWidget {
+  const _ReviewCard({
+    required this.number,
+    required this.question,
+    required this.item,
+  });
+
+  final int number;
+  final QuizQuestion question;
+  final QuizRoomReviewItem item;
+
+  String? _option(int? i) => i != null && i >= 0 && i < question.options.length
+      ? question.options[i]
+      : null;
+
+  @override
+  Widget build(BuildContext context) {
+    final mine = _option(item.myChoice);
+    final right = _option(item.correctIndex);
+    final colour = item.correct
+        ? ArenaTheme.correctOnNavy
+        : ArenaTheme.wrongOnNavy;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: ArenaTheme.glass,
+        borderRadius: ArenaTheme.tileRadius,
+        border: Border.all(color: ArenaTheme.glassBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                item.correct
+                    ? Icons.check_circle_rounded
+                    : Icons.cancel_rounded,
+                color: colour,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$number. ${question.question}',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: ArenaTheme.textOnNavy,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+              if (item.points > 0) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '+${item.points}',
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: ArenaTheme.correctOnNavy,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(left: 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  mine == null
+                      ? "You didn't answer in time"
+                      : 'You said: $mine',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: item.correct
+                        ? ArenaTheme.correctOnNavy
+                        : ArenaTheme.textMutedOnNavy,
+                    fontWeight: item.correct ? FontWeight.w700 : null,
+                  ),
+                ),
+                if (!item.correct && right != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(
+                      'Answer: $right',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: ArenaTheme.correctOnNavy,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                if ((question.reference ?? '').isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(
+                      question.reference!,
+                      style: AppTextStyles.caption.copyWith(
+                        color: ArenaTheme.textFaintOnNavy,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

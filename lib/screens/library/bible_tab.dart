@@ -1730,19 +1730,39 @@ class _ChapterPageState extends State<_ChapterPage> {
   /// Jump to the verse a link opened. For any translation that loads
   /// (BSB, Shona, Greek…) this must wait until the verses exist — it used
   /// to run on the first frame, before they did, and silently did nothing.
+  ///
+  /// It also runs more than once (3 Nov 2026). The first layout is not the
+  /// last: reading settings and fonts arrive a moment later and reflow the
+  /// chapter, so a single jump landed hundreds of pixels past the verse.
+  /// It re-aims as the page settles, and stops the moment the reader
+  /// scrolls by hand.
   void _scrollToTarget() {
     if (widget.scrollToVerse == null) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _userScrolled = false;
+    void aim(Duration duration) {
+      if (!mounted || _userScrolled) return;
       final ctx = _verseKeys[widget.scrollToVerse]?.currentContext;
-      if (ctx != null) {
-        Scrollable.ensureVisible(
-          ctx,
-          duration: AppMotion.standard,
-          alignment: 0.15,
-        );
+      if (ctx == null) return;
+      Scrollable.ensureVisible(ctx, duration: duration, alignment: 0.15);
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      aim(AppMotion.standard);
+      for (final ms in const [450, 1000, 1800]) {
+        Future<void>.delayed(Duration(milliseconds: ms), () {
+          if (!mounted) return;
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => aim(const Duration(milliseconds: 160)),
+          );
+          WidgetsBinding.instance.scheduleFrame();
+        });
       }
     });
   }
+
+  /// Set once the reader drags the chapter, so a late re-aim of
+  /// [_scrollToTarget] never fights their finger.
+  bool _userScrolled = false;
 
   @override
   void dispose() {
@@ -1820,47 +1840,62 @@ class _ChapterPageState extends State<_ChapterPage> {
     final verses = _verses;
     final headings = _headings;
 
+    // A Column, not a ListView (3 Nov 2026). ListView only builds what is
+    // near the screen, so a verse further down — John 3:16 from the
+    // devotion — had no widget yet, `_scrollToTarget` found no context
+    // and the jump silently did nothing: the verse was highlighted, off
+    // screen. A chapter is at most 176 verses (Psalm 119); building them
+    // all is cheap and makes every verse reachable.
     return TranslationCrossfade(
       translationId: t.id,
-      child: ListView(
-        controller: _scrollCtrl,
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
-        children: [
-          _chapterHeading(t),
-          const SizedBox(height: 14),
-          for (var i = 0; i < verses.length; i++) ...[
-            if (headings[i] != null) _sectionHeading(headings[i]!),
-            _verse(context, i, verses[i]),
-          ],
-          if (t.attribution != null) ...[
-            const SizedBox(height: 22),
-            Text(
-              t.attribution!,
-              style: AppTextStyles.labelSmall.copyWith(
-                color: widget.paper.muted,
-                fontSize: 10.5,
-                height: 1.45,
-              ),
-            ),
-          ],
-          const SizedBox(height: 28),
-          GestureDetector(
-            onTap: widget.onTapEmptySpace,
-            behavior: HitTestBehavior.opaque,
-            child: SizedBox(
-              height: 60,
-              child: Center(
-                child: Text(
-                  'Swipe for the next chapter',
+      child: NotificationListener<UserScrollNotification>(
+        onNotification: (_) {
+          _userScrolled = true;
+          return false;
+        },
+        child: SingleChildScrollView(
+          controller: _scrollCtrl,
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _chapterHeading(t),
+              const SizedBox(height: 14),
+              for (var i = 0; i < verses.length; i++) ...[
+                if (headings[i] != null) _sectionHeading(headings[i]!),
+                _verse(context, i, verses[i]),
+              ],
+              if (t.attribution != null) ...[
+                const SizedBox(height: 22),
+                Text(
+                  t.attribution!,
                   style: AppTextStyles.labelSmall.copyWith(
                     color: widget.paper.muted,
-                    fontSize: 11,
+                    fontSize: 10.5,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 28),
+              GestureDetector(
+                onTap: widget.onTapEmptySpace,
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  height: 60,
+                  child: Center(
+                    child: Text(
+                      'Swipe for the next chapter',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: widget.paper.muted,
+                        fontSize: 11,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

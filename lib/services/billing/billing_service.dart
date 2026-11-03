@@ -9,6 +9,8 @@ import 'billing_platform.dart';
 import 'boost_catalog.dart';
 import 'boost_service.dart';
 import 'play_billing_platform.dart';
+import 'call_pack_catalog.dart';
+import 'call_pack_service.dart';
 import 'premium_tier.dart';
 
 /// Where the purchase flow currently is. The Premium screen renders
@@ -61,8 +63,8 @@ class VerificationResult {
 
 /// Verifies a purchase server-side. Injectable so the whole flow can be
 /// tested without a store or a network.
-typedef PurchaseVerifier = Future<VerificationResult> Function(
-    BillingPurchase purchase);
+typedef PurchaseVerifier =
+    Future<VerificationResult> Function(BillingPurchase purchase);
 
 /// Drives the purchase flow and nothing else.
 ///
@@ -118,10 +120,12 @@ class BillingService {
   /// rounding-heavy currency, and matching loosely would let a Pro
   /// selection resolve to the Plus offer object.
   static void selectPlan(PremiumOffer plan) {
-    final known = offers.any((o) =>
-        o.productId == plan.productId &&
-        o.basePlanId == plan.basePlanId &&
-        o.rawPrice == plan.rawPrice);
+    final known = offers.any(
+      (o) =>
+          o.productId == plan.productId &&
+          o.basePlanId == plan.basePlanId &&
+          o.rawPrice == plan.rawPrice,
+    );
     if (!known) return;
     offer = plan;
     planRevision.value++;
@@ -166,7 +170,8 @@ class BillingService {
 
     if (!await _store.isAvailable()) {
       state.value = PremiumFlowState.unavailable;
-      errorMessage = 'Subscriptions need the Google Play Store, which '
+      errorMessage =
+          'Subscriptions need the Google Play Store, which '
           "isn't available on this device.";
       return;
     }
@@ -176,7 +181,8 @@ class BillingService {
     final loaded = await _store.loadOffers(BillingConfig.monthlyProductId);
     if (loaded.isEmpty) {
       state.value = PremiumFlowState.unavailable;
-      errorMessage = "Premium isn't available just yet. Please try again "
+      errorMessage =
+          "Premium isn't available just yet. Please try again "
           'a little later.';
       return;
     }
@@ -264,6 +270,11 @@ class BillingService {
         await BoostService.onPurchase(purchase);
         continue;
       }
+      // Call-minute packs (patch 305): also one-off and consumed.
+      if (CallPack.isPackSku(purchase.productId)) {
+        await CallPackService.onPurchase(purchase);
+        continue;
+      }
       switch (purchase.outcome) {
         case PurchaseOutcome.pending:
           state.value = PremiumFlowState.pendingPayment;
@@ -290,7 +301,8 @@ class BillingService {
     final token = purchase.verificationToken;
     if (token == null || token.isEmpty) {
       state.value = PremiumFlowState.failed;
-      errorMessage = 'That purchase came back without a receipt. If you '
+      errorMessage =
+          'That purchase came back without a receipt. If you '
           'were charged, tap Restore.';
       return;
     }
@@ -301,7 +313,8 @@ class BillingService {
 
     if (!result.ok) {
       state.value = PremiumFlowState.failed;
-      errorMessage = result.message ??
+      errorMessage =
+          result.message ??
           "We couldn't confirm that payment. If you were charged, it will "
               'appear shortly — or tap Restore.';
       // Deliberately NOT completed. Leaving it unacknowledged means Play
@@ -325,11 +338,13 @@ class BillingService {
   /// The real verifier: hands the token to our Edge Function, which asks
   /// the store and writes `profiles.premium_until` with the service role.
   static Future<VerificationResult> _verifyWithServer(
-      BillingPurchase purchase) async {
+    BillingPurchase purchase,
+  ) async {
     final token = purchase.verificationToken;
     if (token == null || token.isEmpty) {
       return const VerificationResult.failure(
-          'That purchase came back without a receipt.');
+        'That purchase came back without a receipt.',
+      );
     }
     try {
       final res = await Supabase.instance.client.functions.invoke(
@@ -370,10 +385,12 @@ class BillingService {
       debugPrint('verify-purchase rejected: status=${e.status} error=$code');
 
       final message = switch (code) {
-        'already_claimed' => 'That subscription is already linked to '
-            'another Adventist Super App account.',
-        'invalid_purchase' => "That purchase doesn't look valid to Google "
-            'Play. If you were charged, tap Restore or contact support.',
+        'already_claimed' =>
+          'That subscription is already linked to '
+              'another Adventist Super App account.',
+        'invalid_purchase' =>
+          "That purchase doesn't look valid to Google "
+              'Play. If you were charged, tap Restore or contact support.',
         'unauthenticated' =>
           'Please sign in again, then try Restore from the Premium screen.',
         // 503 verification_unavailable: OUR server reached Play (or tried
@@ -386,8 +403,9 @@ class BillingService {
           "Google Play didn't respond in time. If you were charged, this "
               'will resolve itself automatically the next time you open '
               'the app — no need to buy it again.',
-        _ => "We couldn't confirm that payment (error $code). If you were "
-            'charged, it will be retried automatically, or tap Restore.',
+        _ =>
+          "We couldn't confirm that payment (error $code). If you were "
+              'charged, it will be retried automatically, or tap Restore.',
       };
       return VerificationResult.failure(message);
     } catch (e) {
@@ -396,15 +414,17 @@ class BillingService {
       // finally describing what actually happened.
       debugPrint('verify-purchase call failed (network): $e');
       return const VerificationResult.failure(
-          "We couldn't reach the server to confirm that payment. It will "
-          'be retried automatically.');
+        "We couldn't reach the server to confirm that payment. It will "
+        'be retried automatically.',
+      );
     }
   }
 
   static void reset() {
     errorMessage = null;
-    state.value =
-        PremiumService.isActive ? PremiumFlowState.success : PremiumFlowState.idle;
+    state.value = PremiumService.isActive
+        ? PremiumFlowState.success
+        : PremiumFlowState.idle;
   }
 
   static Future<void> dispose() async {

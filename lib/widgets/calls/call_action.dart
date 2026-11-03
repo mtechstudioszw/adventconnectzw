@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../config/platform_flags.dart';
 import '../../models/call_model.dart';
+import '../../screens/calls/widgets/call_pack_sheet.dart';
 import '../../screens/calls/call_screen.dart' show showMicrophoneDeniedDialog;
 import '../../services/calls/call_config.dart';
 import '../../services/calls/call_service.dart';
@@ -141,6 +143,7 @@ class CallActions {
     // SnackBar that vanishes in three seconds is not where someone
     // learns they are out of minutes for the day.
     if (failure.isQuota) {
+      final outer = context;
       unawaited(
         showDialog<void>(
           context: context,
@@ -152,6 +155,15 @@ class CallActions {
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('OK'),
               ),
+              // A remedy, not just a reason (patch 305). Android only.
+              if (!kHidePayments)
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    unawaited(CallPackSheet.show(outer));
+                  },
+                  child: const Text('Get more minutes'),
+                ),
             ],
           ),
         ),
@@ -224,9 +236,7 @@ class CallIconButton extends StatelessWidget {
                   child: Icon(
                     Icons.call_rounded,
                     size: size * 0.5,
-                    color: busy
-                        ? AppColors.textMuted
-                        : AppColors.primaryBlue,
+                    color: busy ? AppColors.textMuted : AppColors.primaryBlue,
                   ),
                 ),
               ),

@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../models/call_model.dart';
 import '../../services/calls/call_api.dart';
+import '../../config/platform_flags.dart';
+import '../../services/billing/call_pack_service.dart';
 import '../../services/billing/premium_tier.dart';
+import 'widgets/call_pack_sheet.dart';
 import '../../services/calls/missed_call_badge.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
@@ -56,10 +59,18 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
     // Cleared here rather than in dispose so the dot is gone the moment
     // they arrive, not when they leave.
     unawaited(MissedCallBadge.markSeen());
+    CallPackService.revision.addListener(_onPackBought);
+  }
+
+  /// A bought pack raises today's limit: refresh the minutes strip.
+  Future<void> _onPackBought() async {
+    final usage = await CallApi.usage();
+    if (mounted) setState(() => _usage = usage);
   }
 
   @override
   void dispose() {
+    CallPackService.revision.removeListener(_onPackBought);
     _scroll.removeListener(_onScroll);
     _scroll.dispose();
     super.dispose();
@@ -67,7 +78,8 @@ class _CallHistoryScreenState extends State<CallHistoryScreen> {
 
   void _onScroll() {
     if (!_scroll.hasClients) return;
-    final remaining = _scroll.position.maxScrollExtent - _scroll.position.pixels;
+    final remaining =
+        _scroll.position.maxScrollExtent - _scroll.position.pixels;
     if (remaining < 400) unawaited(_loadMore());
   }
 
@@ -283,7 +295,11 @@ class _UsageStrip extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.schedule_rounded, size: 16, color: palette.textMuted),
+                Icon(
+                  Icons.schedule_rounded,
+                  size: 16,
+                  color: palette.textMuted,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   '$minutes of $limit minutes today',
@@ -313,11 +329,33 @@ class _UsageStrip extends StatelessWidget {
                 valueColor: AlwaysStoppedAnimation(accent),
               ),
             ),
+            if (usage.packSeconds > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Includes ${usage.packSeconds ~/ 60} top-up minutes'
+                '${usage.packExpiresAt == null ? '' : ', until ${_shortDate(usage.packExpiresAt!)}'}.',
+                style: AppTextStyles.caption.copyWith(color: palette.textMuted),
+              ),
+            ],
             if (usage.dailyExhausted) ...[
               const SizedBox(height: 10),
               Text(
                 'You have used today\'s call minutes. They reset at midnight.',
                 style: AppTextStyles.caption.copyWith(color: AppColors.red),
+              ),
+            ],
+            // Top-up (patch 305): offered once the day is mostly used,
+            // to free and Premium members alike. Android only.
+            if (!kHidePayments &&
+                (usage.dailyExhausted || usage.dailyFraction >= 0.6)) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: () => CallPackSheet.show(context),
+                  icon: const Icon(Icons.add_call, size: 18),
+                  label: const Text('Get more minutes'),
+                ),
               ),
             ],
             if (showUpgrade) ...[
@@ -572,4 +610,22 @@ String _formatDuration(Duration d) {
   if (hours > 0) return '${hours}h ${minutes}m';
   if (minutes > 0) return '${minutes}m ${seconds}s';
   return '${seconds}s';
+}
+
+String _shortDate(DateTime d) {
+  const m = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${d.day} ${m[d.month - 1]}';
 }

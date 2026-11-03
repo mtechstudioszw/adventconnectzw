@@ -150,7 +150,8 @@ class CallParticipant {
 
   /// Still being alerted — the caller's screen shows these as "Ringing…".
   bool get isPending =>
-      status == ParticipantStatus.invited || status == ParticipantStatus.ringing;
+      status == ParticipantStatus.invited ||
+      status == ParticipantStatus.ringing;
 
   /// Gone, one way or another. Terminal.
   bool get isGone => !isActive && !isPending;
@@ -374,7 +375,16 @@ class CallUsage {
     required this.dailyLimitSeconds,
     required this.monthlyLimitSeconds,
     required this.premium,
+    this.packSeconds = 0,
+    this.packExpiresAt,
   });
+
+  /// Bought call minutes left (patch 305) — already included in the
+  /// limits above. Spent only after the plan's own allowance.
+  final int packSeconds;
+
+  /// When the soonest-expiring pack runs out.
+  final DateTime? packExpiresAt;
 
   final int todaySeconds;
   final int monthSeconds;
@@ -408,5 +418,9 @@ class CallUsage {
     monthlyLimitSeconds:
         (json['monthly_limit_seconds'] as num?)?.toInt() ?? 90000,
     premium: json['premium'] == true,
+    packSeconds: (json['pack_seconds'] as num?)?.toInt() ?? 0,
+    packExpiresAt: DateTime.tryParse(
+      json['pack_expires_at']?.toString() ?? '',
+    )?.toLocal(),
   );
 }

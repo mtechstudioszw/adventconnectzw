@@ -119,7 +119,7 @@ class _StoriesRailState extends State<StoriesRail> {
               onView: ownStories == null
                   ? null
                   : () =>
-                      widget.onAuthorTapped(viewerId, playOrder(ownStories)),
+                        widget.onAuthorTapped(viewerId, playOrder(ownStories)),
             );
           }
           final authorId = otherAuthors[index - 1];
@@ -130,8 +130,7 @@ class _StoriesRailState extends State<StoriesRail> {
             viewed: authorViewed(authorId),
             scroll: _scroll,
             index: index,
-            onTap: () =>
-                widget.onAuthorTapped(authorId, reelFrom(index - 1)),
+            onTap: () => widget.onAuthorTapped(authorId, reelFrom(index - 1)),
           );
         },
       ),
@@ -178,66 +177,76 @@ class _YourStoryCard extends StatelessWidget {
                 // tiny "+" badge in the top-right adds another.
                 onTap: _hasStory ? onView : onAdd,
                 child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Column(
-                      children: [
-                        // Top: ~70% image / avatar.
-                        Expanded(
-                          flex: 7,
-                          child: !_hasStory
-                              ? _avatarBackground()
-                              : ownStories!.first.isText
-                              ? Container(
-                                  width: double.infinity,
-                                  color: _storyBg(
-                                    ownStories!.first.backgroundColor,
-                                  ),
-                                  alignment: Alignment.center,
-                                  padding: const EdgeInsets.all(6),
-                                  child: Text(
-                                    ownStories!.first.textContent ?? '',
-                                    textAlign: TextAlign.center,
-                                    maxLines: 3,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: AppColors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
+                    // With a story: full-bleed like a friend's card (3 Nov
+                    // 2026 — the old 70/30 split left the photo looking cut
+                    // off next to everyone else's). Without one: the
+                    // avatar + "Create story" banner.
+                    if (_hasStory)
+                      ..._postedLayers(context)
+                    else
+                      Column(
+                        children: [
+                          // Top: ~70% image / avatar.
+                          Expanded(
+                            flex: 7,
+                            child: !_hasStory
+                                ? _avatarBackground()
+                                : ownStories!.first.isText
+                                ? Container(
+                                    width: double.infinity,
+                                    color: _storyBg(
+                                      ownStories!.first.backgroundColor,
                                     ),
+                                    alignment: Alignment.center,
+                                    padding: const EdgeInsets.all(6),
+                                    child: Text(
+                                      ownStories!.first.textContent ?? '',
+                                      textAlign: TextAlign.center,
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: AppColors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  )
+                                : StoryMedia(
+                                    story: ownStories!.first,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    compact: true,
+                                    errorBuilder: (_) => _avatarBackground(),
                                   ),
-                                )
-                              : StoryMedia(
-                                  story: ownStories!.first,
-                                  fit: BoxFit.cover,
-                                  width: double.infinity,
-                                  compact: true,
-                                  errorBuilder: (_) => _avatarBackground(),
+                          ),
+                          // Bottom: white banner with label only — no overlay
+                          // button to avoid the double-tap target the old
+                          // layout had.
+                          Expanded(
+                            flex: 3,
+                            child: Container(
+                              color: context.palette.card,
+                              alignment: Alignment.center,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                              ),
+                              child: Text(
+                                _hasStory ? 'Your story' : 'Create story',
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.labelMedium.copyWith(
+                                  color: context.palette.text,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
                                 ),
-                        ),
-                        // Bottom: white banner with label only — no overlay
-                        // button to avoid the double-tap target the old
-                        // layout had.
-                        Expanded(
-                          flex: 3,
-                          child: Container(
-                            color: context.palette.card,
-                            alignment: Alignment.center,
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Text(
-                              _hasStory ? 'Your story' : 'Create story',
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.labelMedium.copyWith(
-                                color: context.palette.text,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
                     // "+" affordance — when the viewer already has a story
                     // we show a small badge in the corner so they can add
                     // another. When they don't, the whole card acts as
@@ -284,6 +293,70 @@ class _YourStoryCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// The posted-story card: media edge to edge, a fade for legibility and
+  /// "Your story" in white — the same shape as [_FriendStoryCard].
+  List<Widget> _postedLayers(BuildContext context) {
+    final first = ownStories!.first;
+    return [
+      if (first.isText)
+        Container(
+          color: _storyBg(first.backgroundColor),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.all(8),
+          child: Text(
+            first.textContent ?? '',
+            textAlign: TextAlign.center,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        )
+      else
+        StoryMedia(
+          story: first,
+          fit: BoxFit.cover,
+          compact: true,
+          errorBuilder: (_) => _avatarBackground(),
+        ),
+      IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black.withValues(alpha: 0.20),
+                Colors.transparent,
+                Colors.black.withValues(alpha: 0.55),
+              ],
+              stops: const [0.0, 0.45, 1.0],
+            ),
+          ),
+        ),
+      ),
+      const Positioned(
+        left: 10,
+        right: 10,
+        bottom: 10,
+        child: Text(
+          'Your story',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppColors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
+          ),
+        ),
+      ),
+    ];
   }
 
   Widget _avatarBackground() {
@@ -391,8 +464,7 @@ class _FriendStoryCard extends StatelessWidget {
                           // Distance of this card from the rail's left edge,
                           // in card-pitches. Clamped so a card far off-screen
                           // doesn't slide its art out of its own frame.
-                          final delta =
-                              (index * _pitch) - scroll.offset;
+                          final delta = (index * _pitch) - scroll.offset;
                           shift = (delta * _depth).clamp(-18.0, 18.0);
                         }
                         return Transform.translate(

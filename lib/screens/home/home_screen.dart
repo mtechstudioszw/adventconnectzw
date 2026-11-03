@@ -626,10 +626,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() => _newPostCount = n);
   }
 
-  /// Tap on the pill: back to the top and load what's new.
+  /// Tap on the pill: load what's new and show THOSE posts at the top.
+  ///
+  /// The count comes from "posts newer than the newest one on screen", but
+  /// a plain refresh re-ranks the feed, so the new posts could land lower
+  /// down or past the first page — the pill said "3 new posts" and the
+  /// member saw none of them (3 Nov 2026). Now the same posts the pill
+  /// counted are fetched and pinned to the top, newest first.
   Future<void> _showNewPosts() async {
     HapticFeedback.selectionClick();
+    var newest = _posts.isEmpty ? null : _posts.first.createdAt;
+    for (final p in _posts) {
+      if (newest == null || p.createdAt.isAfter(newest)) newest = p.createdAt;
+    }
     setState(() => _newPostCount = 0);
+    final fresh = newest == null
+        ? const <Post>[]
+        : await FeedService.fetchNewerThan(newest);
     if (_scroll.hasClients) {
       await _scroll.animateTo(
         0,
@@ -638,6 +651,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       );
     }
     await _refresh();
+    if (!mounted || fresh.isEmpty) return;
+    final ids = {for (final p in fresh) p.id};
+    setState(() {
+      _posts = [...fresh, ..._posts.where((p) => !ids.contains(p.id))];
+    });
   }
 
   /// [f], or [fallback] if it fails — logged, never thrown. Home is many

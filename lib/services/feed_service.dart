@@ -175,6 +175,36 @@ class FeedService {
     }
   }
 
+  /// The posts [countNewerThan] counted — same filter, same cap, newest
+  /// first — so tapping "↑ 3 new posts" shows exactly those three. The
+  /// ranked feed alone could not promise that: new posts are scored like
+  /// any other and can land lower down or past the first page (3 Nov 2026
+  /// report: "you click it and you don't see the new posts").
+  static Future<List<Post>> fetchNewerThan(
+    DateTime after, {
+    int cap = 20,
+  }) async {
+    try {
+      final viewer = _viewerId;
+      final response = await _readPosts((cols) {
+        var query = _client
+            .from(_postsTable)
+            .select(cols)
+            .gt('created_at', after.toUtc().toIso8601String());
+        if (viewer != null) query = query.neq('author_id', viewer);
+        return query.order('created_at', ascending: false).limit(cap);
+      });
+      return (response as List)
+          .map((row) => Post.fromJson(
+                row as Map<String, dynamic>,
+                viewerId: viewer,
+              ))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   static const String _basePostCols =
       '*, '
       'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin, who_can_follow), '

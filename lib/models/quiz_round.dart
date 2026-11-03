@@ -20,6 +20,10 @@ enum QuizMode {
 
   /// Re-serves questions this player has previously gotten wrong.
   mistakes,
+
+  /// Three lives, no fixed end, and it gets harder as you go (3 Nov 2026 —
+  /// members said the quiz was too easy and ran out).
+  endless,
 }
 
 extension QuizModeInfo on QuizMode {
@@ -30,6 +34,7 @@ extension QuizModeInfo on QuizMode {
         QuizMode.survival => 'Survival',
         QuizMode.speed => 'Speed Round',
         QuizMode.mistakes => 'Fix Your Mistakes',
+        QuizMode.endless => 'Endless',
       };
 
   /// Seconds allowed per question before the speed bonus is gone.
@@ -45,6 +50,7 @@ extension QuizModeInfo on QuizMode {
         QuizMode.survival => 15,
         QuizMode.speed => 12,
         QuizMode.mistakes => 30,
+        QuizMode.endless => 20,
       };
 
   /// Whole-round clock in seconds, or null when the round is question-based.
@@ -52,6 +58,14 @@ extension QuizModeInfo on QuizMode {
 
   /// A wrong answer ends the round.
   bool get suddenDeath => this == QuizMode.survival;
+
+  /// Lives for a run: Survival 1, Endless 3, everything else unlimited (0).
+  /// A wrong answer or a timeout costs one; at zero the run ends.
+  int get lives => switch (this) {
+        QuizMode.survival => 1,
+        QuizMode.endless => 3,
+        _ => 0,
+      };
 
   /// Rounds that feed the "questions you got wrong" pool.
   bool get tracksMistakes => this != QuizMode.mistakes;
@@ -65,6 +79,8 @@ extension QuizModeInfo on QuizMode {
         QuizMode.survival => 60,
         QuizMode.speed => 40,
         QuizMode.mistakes => 10,
+        // Effectively endless for one sitting; ordered easy -> hard.
+        QuizMode.endless => 150,
       };
 
   /// Shown under the mode title in the lobby.
@@ -75,6 +91,7 @@ extension QuizModeInfo on QuizMode {
         QuizMode.survival => 'One wrong answer ends the run.',
         QuizMode.speed => 'Sixty seconds. Go as far as you can.',
         QuizMode.mistakes => 'The ones that caught you out before.',
+        QuizMode.endless => 'Three lives. It never ends — and gets harder.',
       };
 }
 

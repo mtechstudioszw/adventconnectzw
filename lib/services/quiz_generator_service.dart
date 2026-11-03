@@ -104,6 +104,11 @@ class QuizGenerator {
   static _Template _pickTemplate(Random rng, String? category) {
     // Verse templates carry the round; structural ones add variety.
     const weighted = <_Template>[
+      _Template.finishVerse,
+      _Template.finishVerse,
+      _Template.nextVerse,
+      _Template.whichChapter,
+      _Template.bookAfter,
       _Template.fillBlank,
       _Template.fillBlank,
       _Template.fillBlank,
@@ -118,6 +123,7 @@ class QuizGenerator {
     ];
     if (category == 'Bible Basics') {
       const structural = <_Template>[
+        _Template.bookAfter,
         _Template.comesFirst,
         _Template.chapterCount,
         _Template.notABook,
@@ -127,6 +133,9 @@ class QuizGenerator {
     }
     if (category == 'Scripture') {
       const verse = <_Template>[
+        _Template.finishVerse,
+        _Template.nextVerse,
+        _Template.whichChapter,
         _Template.fillBlank,
         _Template.fillBlank,
         _Template.whichBook,
@@ -139,6 +148,10 @@ class QuizGenerator {
 
   static QuizQuestion? _build(_Template t, _Index i, Random rng) =>
       switch (t) {
+        _Template.finishVerse => _buildFinishVerse(i, rng),
+        _Template.nextVerse => _buildNextVerse(i, rng),
+        _Template.whichChapter => _buildWhichChapter(i, rng),
+        _Template.bookAfter => _buildBookAfter(i, rng),
         _Template.fillBlank => _buildFillBlank(i, rng),
         _Template.whichBook => _buildWhichBook(i, rng),
         _Template.whereFound => _buildWhereFound(i, rng),
@@ -149,6 +162,154 @@ class QuizGenerator {
       };
 
   // ---- Templates ----------------------------------------------------------
+
+  /// Splits a verse at a natural pause (, ; :) near its middle into
+  /// (opening, ending), or null when there's no good split.
+  static (String, String)? _splitVerse(String text) {
+    final marks = RegExp(r'[,;:]\s');
+    (String, String)? best;
+    var bestScore = 1 << 30;
+    for (final m in marks.allMatches(text)) {
+      final head = text.substring(0, m.start).trim();
+      final tail = text.substring(m.end).trim();
+      final hw = head.split(' ').length, tw = tail.split(' ').length;
+      if (hw < 4 || tw < 3 || tw > 14) continue;
+      final score = (hw - tw).abs();
+      if (score < bestScore) {
+        bestScore = score;
+        best = (head, tail.replaceAll(RegExp(r'[.;:,]+$'), ''));
+      }
+    }
+    return best;
+  }
+
+  /// HARD. "Finish the verse: 'Be still, and know …'" — the three wrong
+  /// endings are real endings of other verses in the same chapter, so
+  /// grammar and tone can't give the answer away.
+  static QuizQuestion? _buildFinishVerse(_Index i, Random rng) {
+    if (i.bookCandidates.isEmpty) return null;
+    final code = i.bookCandidates[rng.nextInt(i.bookCandidates.length)];
+    final b = _bookOf(code), c = _chapterOf(code), v = _verseOf(code);
+    final book = i.books[b];
+    if (c >= book.chapters.length || v >= book.chapters[c].length) return null;
+    final split = _splitVerse(BibleService.cleanVerse(book.chapters[c][v]));
+    if (split == null) return null;
+    final (head, answer) = split;
+    final endings = <String>{answer};
+    final verses = book.chapters[c];
+    for (var tries = 0; tries < 40 && endings.length < 4; tries++) {
+      final o = rng.nextInt(verses.length);
+      if (o == v) continue;
+      final s = _splitVerse(BibleService.cleanVerse(verses[o]));
+      if (s == null || s.$2.toLowerCase() == answer.toLowerCase()) continue;
+      endings.add(s.$2);
+    }
+    if (endings.length < 4) return null;
+    final options = endings.toList()..shuffle(rng);
+    final ref = '${book.name} ${c + 1}:${v + 1}';
+    return QuizQuestion(
+      id: '$idPrefix:finish:$code',
+      question: 'Finish the verse:\n\n"$head, …"',
+      options: options,
+      correctIndex: options.indexOf(answer),
+      category: 'Scripture',
+      difficulty: 'hard',
+      explanation: '$ref — "$head, $answer."',
+      reference: ref,
+    );
+  }
+
+  /// HARD. "Which verse comes right after this one?"
+  static QuizQuestion? _buildNextVerse(_Index i, Random rng) {
+    if (i.bookCandidates.isEmpty) return null;
+    final code = i.bookCandidates[rng.nextInt(i.bookCandidates.length)];
+    final b = _bookOf(code), c = _chapterOf(code), v = _verseOf(code);
+    final verses = i.books[b].chapters[c];
+    if (v + 1 >= verses.length) return null;
+    String clip(String t) {
+      final clean = BibleService.cleanVerse(t);
+      return clean.length <= 110 ? clean : '${clean.substring(0, 107)}…';
+    }
+
+    final answer = clip(verses[v + 1]);
+    final opts = <String>{answer};
+    for (var tries = 0; tries < 40 && opts.length < 4; tries++) {
+      final o = rng.nextInt(verses.length);
+      if (o == v || o == v + 1) continue;
+      opts.add(clip(verses[o]));
+    }
+    if (opts.length < 4) return null;
+    final options = opts.toList()..shuffle(rng);
+    final book = i.books[b];
+    final ref = '${book.name} ${c + 1}:${v + 2}';
+    return QuizQuestion(
+      id: '$idPrefix:next:$code',
+      question:
+          'Which verse comes right after this one?\n\n"${clip(verses[v])}"',
+      options: options,
+      correctIndex: options.indexOf(answer),
+      category: 'Scripture',
+      difficulty: 'hard',
+      explanation: 'The next verse is $ref.',
+      reference: ref,
+    );
+  }
+
+  /// HARD. A famous verse — which CHAPTER of its book is it in? The wrong
+  /// options are neighbouring chapter numbers, so it rewards knowing.
+  static QuizQuestion? _buildWhichChapter(_Index i, Random rng) {
+    if (i.famous.isEmpty) return null;
+    final code = i.famous[rng.nextInt(i.famous.length)];
+    final b = _bookOf(code), c = _chapterOf(code), v = _verseOf(code);
+    final book = i.books[b];
+    if (book.chapters.length < 5 || v >= book.chapters[c].length) return null;
+    final nums = <int>{c + 1};
+    for (var tries = 0; tries < 30 && nums.length < 4; tries++) {
+      final d = c + 1 + rng.nextInt(9) - 4;
+      if (d >= 1 && d <= book.chapters.length) nums.add(d);
+    }
+    if (nums.length < 4) return null;
+    final options = [for (final n in nums) 'Chapter $n']..shuffle(rng);
+    final text = BibleService.cleanVerse(book.chapters[c][v]);
+    final ref = '${book.name} ${c + 1}:${v + 1}';
+    return QuizQuestion(
+      id: '$idPrefix:chapter:$code',
+      question: 'Which chapter of ${book.name} is this verse in?\n\n"$text"',
+      options: options,
+      correctIndex: options.indexOf('Chapter ${c + 1}'),
+      category: 'Scripture',
+      difficulty: 'hard',
+      explanation: 'It is $ref.',
+      reference: ref,
+    );
+  }
+
+  /// MEDIUM–HARD. "Which book comes right after Obadiah?"
+  static QuizQuestion? _buildBookAfter(_Index i, Random rng) {
+    final n = i.books.length;
+    if (n < 66) return null;
+    final b = rng.nextInt(n - 1);
+    final answer = i.books[b + 1].name;
+    final opts = <String>{answer};
+    for (var tries = 0; tries < 30 && opts.length < 4; tries++) {
+      final d = b + 1 + rng.nextInt(9) - 4;
+      if (d == b || d < 0 || d >= n) continue;
+      opts.add(i.books[d].name);
+    }
+    if (opts.length < 4) return null;
+    final options = opts.toList()..shuffle(rng);
+    final famousBook = b < 5 || (b >= 39 && b <= 43);
+    return QuizQuestion(
+      id: '$idPrefix:after:$b',
+      question: 'Which book comes right after ${i.books[b].name}?',
+      options: options,
+      correctIndex: options.indexOf(answer),
+      category: 'Bible Basics',
+      difficulty: famousBook ? 'medium' : 'hard',
+      explanation: '${i.books[b].name} is followed by $answer.',
+      reference: i.books[b + 1].name,
+    );
+  }
 
   /// "Blessed are the ______ in heart: for they shall see God."
   static QuizQuestion? _buildFillBlank(_Index i, Random rng) {
@@ -601,6 +762,11 @@ class QuizGenerator {
 }
 
 enum _Template {
+  // Hard templates (3 Nov 2026 — members said the quiz was too easy).
+  finishVerse,
+  nextVerse,
+  whichChapter,
+  bookAfter,
   fillBlank,
   whichBook,
   whereFound,

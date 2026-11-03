@@ -875,6 +875,15 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
           icon: Icons.shuffle_rounded,
           onTap: () => _play(QuizMode.practice),
         ),
+        // Endless (3 Nov 2026): first in the list — it's the mode that
+        // answers "the questions run out / are too easy".
+        _ModeRow(
+          label: QuizMode.endless.label,
+          blurb: QuizMode.endless.blurb,
+          icon: Icons.all_inclusive_rounded,
+          best: QuizProgressService.bestScore(QuizMode.endless),
+          onTap: () => _play(QuizMode.endless),
+        ),
         _ModeRow(
           label: QuizMode.survival.label,
           blurb: QuizMode.survival.blurb,

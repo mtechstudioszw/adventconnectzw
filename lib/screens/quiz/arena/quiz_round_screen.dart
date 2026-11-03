@@ -94,6 +94,18 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
   /// the leaderboard it feeds stops meaning anything.
   int _continuesUsed = 0;
 
+  /// Lives left this run (Survival 1, Endless 3; 0 = unlimited mode).
+  late int _livesLeft = _mode.lives;
+
+  /// Costs a life on a wrong answer or a timeout. True when the run is over.
+  bool _loseLife() {
+    if (_mode.lives == 0) return false;
+    if (_livesLeft > 0) setState(() => _livesLeft--);
+    return _livesLeft <= 0;
+  }
+
+  bool get _outOfLives => _mode.lives > 0 && _livesLeft <= 0;
+
   /// Mutable because Extra Time lengthens the current question's clock.
   late int _questionSeconds = _mode.secondsPerQuestion;
 
@@ -339,8 +351,9 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
 
     // Long enough to read the answer that was missed, short enough that
     // the round never feels stalled. Sudden death ends here instead.
+    final over = _loseLife();
     _advanceAfter(const Duration(milliseconds: 1400), () {
-      if (_mode.suddenDeath) {
+      if (over) {
         _endSuddenDeath();
       } else {
         _next();
@@ -412,7 +425,7 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     // open when a Second Chance was still available; that lifeline is
     // retired, so waiting would have left the run frozen on the question
     // it should have ended on.
-    if (!correct && _mode.suddenDeath) {
+    if (!correct && _loseLife()) {
       _advanceAfter(const Duration(milliseconds: 1200), _endSuddenDeath);
       return;
     }
@@ -432,7 +445,7 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
   /// — which is the whole difference between a continue and a lives gate,
   /// and why this one is fit for a church app.
   bool get _canOfferContinue =>
-      _mode.suddenDeath &&
+      _mode.lives > 0 &&
       _continuesUsed < QuizRewards.continuesPerRun &&
       // Pointless on the last question — there is nothing to continue into.
       _index < _questions.length - 1 &&
@@ -462,6 +475,8 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     _continuesUsed++;
     setState(() {
       _offeringContinue = false;
+      // A continue gives back one life.
+      _livesLeft = 1;
       // The continue rescues the RUN, not the streak. Buying back a combo
       // would let an ad purchase a multiplier, and the multiplier is what
       // the score is made of.
@@ -507,7 +522,7 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     final perfect = _answers.isNotEmpty &&
         _answers.every((a) => a.correct) &&
         _answers.length >= 5 &&
-        _mode != QuizMode.survival;
+        _mode.lives == 0;
     final bonus = perfect ? QuizScoring.perfectBonus : 0;
     final total = _points + bonus;
     // Must be computed from the TOTAL (bonus included) — the results screen
@@ -799,6 +814,10 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
                 const SizedBox(width: 6),
                 _buildCoinPill(),
                 const Spacer(),
+                if (_mode.lives > 1) ...[
+                  _Lives(left: _livesLeft, total: _mode.lives),
+                  const SizedBox(width: 8),
+                ],
                 ComboMeter(combo: _combo),
                 const SizedBox(width: 10),
                 TimerRing(
@@ -1153,7 +1172,7 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     final isLast = _index >= _questions.length - 1;
     // Timing out in sudden death ends the run, exactly as a wrong answer
     // does — _wasCorrect is false either way.
-    final ended = _mode.suddenDeath && !_wasCorrect;
+    final ended = _outOfLives && !_wasCorrect;
     return SafeArea(
       top: false,
       child: Padding(
@@ -1289,6 +1308,38 @@ class _LifelineChip extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Hearts for a lives-based run (Endless).
+class _Lives extends StatelessWidget {
+  const _Lives({required this.left, required this.total});
+
+  final int left;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$left of $total lives left',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < total; i++)
+            AnimatedScale(
+              scale: i < left ? 1 : 0.8,
+              duration: const Duration(milliseconds: 220),
+              child: Icon(
+                i < left ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                size: 18,
+                color: i < left
+                    ? const Color(0xFFD32F2F)
+                    : Colors.white.withValues(alpha: 0.35),
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -116,6 +116,7 @@ class QuizService {
 
     final count = mode.questionCount;
     if (mode == QuizMode.daily) return _dailyRound(count);
+    if (mode == QuizMode.endless) return _endlessRound(count);
 
     // Can the generator write questions for this topic? 'Scripture' is
     // generator-only (no curated rows), 'Bible Basics' exists in both — so
@@ -181,6 +182,35 @@ class QuizService {
   }
 
   /// Today's set — identical on every device, curated-first.
+  /// Endless (3 Nov 2026): fresh questions only (nothing seen in the last
+  /// three weeks while any remain), half curated and half generated, and
+  /// ordered roughly easy -> medium -> hard so it gets harder the longer
+  /// you last. "Roughly": a little jitter so the climb isn't mechanical.
+  static Future<List<QuizQuestion>> _endlessRound(int count) async {
+    final pool = await _curatedPool(null);
+    final curated = QuizProgressService.pickFresh(
+      pool,
+      count ~/ 2,
+      padWithStale: true,
+    );
+    final generated = await QuizGenerator.generate(
+      count: count - curated.length,
+      exclude: QuizProgressService.recentlySeenIds(),
+    );
+    final rng = Random();
+    double rank(QuizQuestion q) =>
+        switch (q.difficulty) {
+          'easy' => 0.0,
+          'hard' => 2.0,
+          _ => 1.0,
+        } +
+        rng.nextDouble() * 1.2;
+    final keyed = [
+      for (final q in [...curated, ...generated]) (rank(q), q),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+    return [for (final k in keyed) k.$2];
+  }
+
   static Future<List<QuizQuestion>> _dailyRound(int count) async {
     final now = DateTime.now();
     final seed = now.year * 10000 + now.month * 100 + now.day;

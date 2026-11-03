@@ -104,9 +104,9 @@ class _HymnalTabState extends State<HymnalTab>
     if (!mounted) return;
     setState(() => _all = HymnService.cached());
     if (changed) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Hymnal updated.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Hymnal updated.')));
     }
   }
 
@@ -139,8 +139,9 @@ class _HymnalTabState extends State<HymnalTab>
     }
 
     final visible = _visible;
-    final inCollection =
-        _all.where((h) => h.collection == _collection).toList();
+    final inCollection = _all
+        .where((h) => h.collection == _collection)
+        .toList();
     final categories = HymnService.categoriesIn(inCollection);
 
     return Column(
@@ -215,8 +216,9 @@ class _HymnalTabState extends State<HymnalTab>
                       boxShadow: _collection == c.key
                           ? [
                               BoxShadow(
-                                color: AppColors.primaryBlue
-                                    .withValues(alpha: 0.28),
+                                color: AppColors.primaryBlue.withValues(
+                                  alpha: 0.28,
+                                ),
                                 blurRadius: 10,
                                 offset: const Offset(0, 3),
                               ),
@@ -338,15 +340,19 @@ class _HymnalTabState extends State<HymnalTab>
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
-                leading: Icon(Icons.translate_rounded, color: palette.textMuted),
+                leading: Icon(
+                  Icons.translate_rounded,
+                  color: palette.textMuted,
+                ),
                 title: Text(
                   '${m.label} · ${m.subtitle}',
                   style: AppTextStyles.labelLarge.copyWith(color: palette.text),
                 ),
                 trailing: Text(
                   'Not yet',
-                  style:
-                      AppTextStyles.caption.copyWith(color: palette.textMuted),
+                  style: AppTextStyles.caption.copyWith(
+                    color: palette.textMuted,
+                  ),
                 ),
               ),
           ],
@@ -397,11 +403,7 @@ class _HymnalTabState extends State<HymnalTab>
 
   // ---- Tools --------------------------------------------------------------
 
-  Widget _toolRow(
-    BuildContext context,
-    int count,
-    List<String> categories,
-  ) {
+  Widget _toolRow(BuildContext context, int count, List<String> categories) {
     final palette = context.palette;
     return SizedBox(
       height: 44,
@@ -433,9 +435,8 @@ class _HymnalTabState extends State<HymnalTab>
                 context,
                 label: c,
                 selected: _category == c,
-                onTap: () => setState(
-                  () => _category = _category == c ? null : c,
-                ),
+                onTap: () =>
+                    setState(() => _category = _category == c ? null : c),
               ),
               const SizedBox(width: 8),
             ],
@@ -496,11 +497,11 @@ class _HymnalTabState extends State<HymnalTab>
     final message = _favOnly
         ? 'No favourites in this hymnal yet.\nTap the heart while reading a hymn.'
         : _query.trim().isNotEmpty
-            ? 'No hymn matches "$_query".'
-            : _category != null
-                ? 'No hymns in this category.'
-                : '${HymnCollection.fromKey(_collection).label} hymns will '
-                    'appear here once added.';
+        ? 'No hymn matches "$_query".'
+        : _category != null
+        ? 'No hymns in this category.'
+        : '${HymnCollection.fromKey(_collection).label} hymns will '
+              'appear here once added.';
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
@@ -615,8 +616,11 @@ class _HymnTile extends StatelessWidget {
                 if (fav)
                   const Padding(
                     padding: EdgeInsets.only(left: 6),
-                    child: Icon(Icons.favorite_rounded,
-                        color: AppColors.red, size: 17),
+                    child: Icon(
+                      Icons.favorite_rounded,
+                      color: AppColors.red,
+                      size: 17,
+                    ),
                   ),
               ],
             ),
@@ -633,11 +637,7 @@ class _HymnTile extends StatelessWidget {
 
 /// One block of a hymn: a numbered verse, or the chorus/refrain.
 class HymnStanza {
-  const HymnStanza({
-    required this.lines,
-    required this.isChorus,
-    this.number,
-  });
+  const HymnStanza({required this.lines, required this.isChorus, this.number});
 
   final List<String> lines;
   final bool isChorus;
@@ -678,8 +678,10 @@ List<HymnStanza> parseStanzas(String lyrics) {
       } else if (upper.startsWith('CHORUS') || upper.startsWith('REFRAIN')) {
         isChorus = true;
         // "CHORUS:" alone is a marker; "CHORUS: Sing on" keeps its text.
-        final rest = first.replaceFirst(RegExp(r'^(CHORUS|REFRAIN):?\s*',
-            caseSensitive: false), '');
+        final rest = first.replaceFirst(
+          RegExp(r'^(CHORUS|REFRAIN):?\s*', caseSensitive: false),
+          '',
+        );
         if (rest.isEmpty) {
           lines.removeAt(0);
         } else {
@@ -772,12 +774,10 @@ class _HymnReaderScreenState extends State<HymnReaderScreen> {
 
   /// Focus mode = warm paper background + no chrome, for singing from the
   /// phone in a dim church.
-  Color get _bg => _focusMode
-      ? const Color(0xFF14110C)
-      : context.palette.scaffoldBg;
+  Color get _bg =>
+      _focusMode ? const Color(0xFF14110C) : context.palette.scaffoldBg;
 
-  Color get _fg =>
-      _focusMode ? const Color(0xFFF2E7D0) : context.palette.text;
+  Color get _fg => _focusMode ? const Color(0xFFF2E7D0) : context.palette.text;
 
   @override
   Widget build(BuildContext context) {
@@ -795,9 +795,9 @@ class _HymnReaderScreenState extends State<HymnReaderScreen> {
         actions: [
           IconButton(
             tooltip: _focusMode ? 'Normal mode' : 'Focus mode',
-            icon: Icon(_focusMode
-                ? Icons.light_mode_outlined
-                : Icons.dark_mode_outlined),
+            icon: Icon(
+              _focusMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+            ),
             onPressed: () {
               setState(() => _focusMode = !_focusMode);
               HymnPrefs.setFocusMode(_focusMode);
@@ -810,9 +810,9 @@ class _HymnReaderScreenState extends State<HymnReaderScreen> {
           ),
           IconButton(
             tooltip: fav ? 'Remove favourite' : 'Add favourite',
-            icon: Icon(fav
-                ? Icons.favorite_rounded
-                : Icons.favorite_border_rounded),
+            icon: Icon(
+              fav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            ),
             color: fav ? AppColors.red : null,
             onPressed: () {
               HapticFeedback.lightImpact();
@@ -1027,8 +1027,9 @@ class _HymnReaderScreenState extends State<HymnReaderScreen> {
               children: [
                 Text(
                   'Text size',
-                  style: AppTextStyles.titleSmall
-                      .copyWith(fontWeight: FontWeight.w700),
+                  style: AppTextStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -1145,8 +1146,7 @@ class _AlsoIn extends StatelessWidget {
     return ValueListenableBuilder<Map<int, int>>(
       valueListenable: HymnLinkService.links,
       builder: (context, _, _) {
-        final others =
-            HymnLinkService.counterparts(hymn, HymnService.cached());
+        final others = HymnLinkService.counterparts(hymn, HymnService.cached());
         if (others.isEmpty) return const SizedBox.shrink();
         return Padding(
           padding: const EdgeInsets.only(top: 12),
@@ -1164,8 +1164,11 @@ class _AlsoIn extends StatelessWidget {
               ),
               for (final o in others)
                 ActionChip(
-                  avatar: Icon(Icons.swap_horiz_rounded,
-                      size: 16, color: palette.brandBlue),
+                  avatar: Icon(
+                    Icons.swap_horiz_rounded,
+                    size: 16,
+                    color: palette.brandBlue,
+                  ),
                   label: Text(
                     '${HymnCollection.fromKey(o.collection).subtitle} · '
                     '${o.reference}',

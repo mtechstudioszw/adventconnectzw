@@ -179,8 +179,11 @@ class _EqualizerBarsState extends State<EqualizerBars>
   Widget build(BuildContext context) {
     // Honour "remove animations": show a static glyph instead of a loop.
     if (!AppMotion.enabled(context)) {
-      return Icon(Icons.graphic_eq_rounded,
-          color: widget.color, size: widget.size);
+      return Icon(
+        Icons.graphic_eq_rounded,
+        color: widget.color,
+        size: widget.size,
+      );
     }
     final barWidth = widget.size / (widget.barCount * 2 - 1);
     return SizedBox(
@@ -193,8 +196,7 @@ class _EqualizerBarsState extends State<EqualizerBars>
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              for (var i = 0; i < widget.barCount; i++)
-                _bar(i, barWidth),
+              for (var i = 0; i < widget.barCount; i++) _bar(i, barWidth),
             ],
           );
         },

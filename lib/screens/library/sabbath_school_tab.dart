@@ -14,6 +14,7 @@ import '../../widgets/motion/branded_refresh_indicator.dart';
 import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import 'ss_lesson_screen.dart';
+import 'widgets/ss_download_all.dart';
 import 'widgets/ss_language_picker.dart';
 
 /// Library → Sabbath School tab.
@@ -185,10 +186,12 @@ class _SabbathSchoolTabState extends State<SabbathSchoolTab>
             slivers: [
               SliverToBoxAdapter(child: _languageBar(context)),
               SliverToBoxAdapter(child: _continueCard(context)),
-              SliverToBoxAdapter(child: _CurrentQuarterHero(
-                quarterly: current,
-                lang: _lang,
-              )),
+              SliverToBoxAdapter(
+                child: _CurrentQuarterHero(quarterly: current, lang: _lang),
+              ),
+              SliverToBoxAdapter(
+                child: SsDownloadAll(quarterly: current, lang: _lang),
+              ),
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 26, 16, 10),
@@ -236,13 +239,17 @@ class _SabbathSchoolTabState extends State<SabbathSchoolTab>
           ),
           child: Row(
             children: [
-              const Icon(Icons.translate_rounded,
-                  size: 19, color: AppColors.primaryBlue),
+              const Icon(
+                Icons.translate_rounded,
+                size: 19,
+                color: AppColors.primaryBlue,
+              ),
               const SizedBox(width: 10),
               Text(
                 'Language',
-                style: AppTextStyles.labelMedium
-                    .copyWith(color: palette.textMuted),
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: palette.textMuted,
+                ),
               ),
               const Spacer(),
               Text(
@@ -321,8 +328,11 @@ class _SabbathSchoolTabState extends State<SabbathSchoolTab>
           ),
           child: Row(
             children: [
-              const Icon(Icons.play_circle_fill_rounded,
-                  color: AppColors.white, size: 34),
+              const Icon(
+                Icons.play_circle_fill_rounded,
+                color: AppColors.white,
+                size: 34,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -350,8 +360,11 @@ class _SabbathSchoolTabState extends State<SabbathSchoolTab>
               ),
               IconButton(
                 tooltip: 'Dismiss',
-                icon: Icon(Icons.close_rounded,
-                    color: AppColors.white.withValues(alpha: 0.8), size: 18),
+                icon: Icon(
+                  Icons.close_rounded,
+                  color: AppColors.white.withValues(alpha: 0.8),
+                  size: 18,
+                ),
                 // Was `() => SabbathSchoolPrefs.clearLastRead()`, which is
                 // why this button did nothing you could see: the pref was
                 // genuinely cleared, but nothing told the tab to rebuild, so
@@ -396,16 +409,16 @@ class _SabbathSchoolTabState extends State<SabbathSchoolTab>
           child: Pressable(
             onTap: _refresh,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
               decoration: BoxDecoration(
                 gradient: AppColors.primaryGradient,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Text(
                 'Try again',
-                style: AppTextStyles.buttonText
-                    .copyWith(color: AppColors.white),
+                style: AppTextStyles.buttonText.copyWith(
+                  color: AppColors.white,
+                ),
               ),
             ),
           ),
@@ -467,8 +480,11 @@ class _CurrentQuarterHero extends StatelessWidget {
                             ? CachedImage(quarterly.cover!, fit: BoxFit.cover)
                             : ColoredBox(
                                 color: accent,
-                                child: const Icon(Icons.menu_book_rounded,
-                                    color: AppColors.white, size: 36),
+                                child: const Icon(
+                                  Icons.menu_book_rounded,
+                                  color: AppColors.white,
+                                  size: 36,
+                                ),
                               ),
                       ),
                     ),
@@ -480,10 +496,13 @@ class _CurrentQuarterHero extends StatelessWidget {
                           if (quarterly.isCurrent)
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
                               decoration: BoxDecoration(
-                                color: AppColors.successGreen
-                                    .withValues(alpha: 0.14),
+                                color: AppColors.successGreen.withValues(
+                                  alpha: 0.14,
+                                ),
                                 borderRadius: BorderRadius.circular(7),
                               ),
                               child: Text(
@@ -509,8 +528,9 @@ class _CurrentQuarterHero extends StatelessWidget {
                           const SizedBox(height: 5),
                           Text(
                             quarterly.humanDate,
-                            style: AppTextStyles.bodySmall
-                                .copyWith(color: palette.textMuted),
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: palette.textMuted,
+                            ),
                           ),
                         ],
                       ),
@@ -531,8 +551,9 @@ class _CurrentQuarterHero extends StatelessWidget {
                     ),
                     child: Text(
                       'Open lessons',
-                      style: AppTextStyles.buttonText
-                          .copyWith(color: AppColors.white),
+                      style: AppTextStyles.buttonText.copyWith(
+                        color: AppColors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -596,9 +617,13 @@ class _QuarterRow extends StatelessWidget {
                         ? CachedImage(quarterly.cover!, fit: BoxFit.cover)
                         : const DecoratedBox(
                             decoration: BoxDecoration(
-                                gradient: AppColors.primaryGradient),
-                            child: Icon(Icons.menu_book_rounded,
-                                color: AppColors.white, size: 20),
+                              gradient: AppColors.primaryGradient,
+                            ),
+                            child: Icon(
+                              Icons.menu_book_rounded,
+                              color: AppColors.white,
+                              size: 20,
+                            ),
                           ),
                   ),
                 ),
@@ -611,8 +636,9 @@ class _QuarterRow extends StatelessWidget {
                         quarterly.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.titleSmall
-                            .copyWith(fontWeight: FontWeight.w700),
+                        style: AppTextStyles.titleSmall.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       const SizedBox(height: 3),
                       // The edition, when it isn't the standard one. Two
@@ -634,8 +660,9 @@ class _QuarterRow extends StatelessWidget {
                         quarterly.humanDate,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: palette.textMuted),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: palette.textMuted,
+                        ),
                       ),
                     ],
                   ),

@@ -358,8 +358,7 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
       child: FutureBuilder<List<LibraryItem>>(
         future: _future,
         builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting &&
-              _all.isEmpty) {
+          if (snap.connectionState == ConnectionState.waiting && _all.isEmpty) {
             return const Center(child: BrandSpinner(size: 30));
           }
           if (_all.isEmpty) return _emptyShelf(context);
@@ -369,7 +368,8 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
           return CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              if (resume != null && _query.isEmpty &&
+              if (resume != null &&
+                  _query.isEmpty &&
                   _filter == _ShelfFilter.all)
                 SliverToBoxAdapter(
                   child: _ContinueReadingCard(
@@ -388,8 +388,7 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
                   sliver: SliverGrid.builder(
-                    gridDelegate:
-                        SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 3,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 16,
@@ -480,8 +479,9 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
 
   Widget _filterRow(BuildContext context) {
     final palette = context.palette;
-    final readingCount =
-        _all.where((i) => PdfProgress.hasStarted(i.fileUrl)).length;
+    final readingCount = _all
+        .where((i) => PdfProgress.hasStarted(i.fileUrl))
+        .length;
     final savedCount = EgwPrefs.saved().length;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 8, 6),
@@ -594,16 +594,18 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
                             item.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.titleSmall
-                                .copyWith(fontWeight: FontWeight.w700),
+                            style: AppTextStyles.titleSmall.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                           const SizedBox(height: 3),
                           Text(
                             item.author?.isNotEmpty ?? false
                                 ? item.author!
                                 : 'Ellen G. White',
-                            style: AppTextStyles.bodySmall
-                                .copyWith(color: palette.textMuted),
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: palette.textMuted,
+                            ),
                           ),
                           if (started) ...[
                             const SizedBox(height: 5),
@@ -624,11 +626,15 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
               Divider(color: palette.divider, height: 1),
               ListTile(
                 leading: Icon(
-                  isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                  isSaved
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_border_rounded,
                   color: isSaved ? AppColors.goldAccent : palette.textMuted,
                 ),
-                title: Text(isSaved ? 'Remove from saved' : 'Save to shelf',
-                    style: AppTextStyles.bodyMedium),
+                title: Text(
+                  isSaved ? 'Remove from saved' : 'Save to shelf',
+                  style: AppTextStyles.bodyMedium,
+                ),
                 onTap: () {
                   // Pop on the same frame. The sheet used to wait for the
                   // write to land before closing, which is what "save to
@@ -640,13 +646,18 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
               ),
               if (started)
                 ListTile(
-                  leading: Icon(Icons.restart_alt_rounded,
-                      color: palette.textMuted),
-                  title: Text('Start from the beginning',
-                      style: AppTextStyles.bodyMedium),
+                  leading: Icon(
+                    Icons.restart_alt_rounded,
+                    color: palette.textMuted,
+                  ),
+                  title: Text(
+                    'Start from the beginning',
+                    style: AppTextStyles.bodyMedium,
+                  ),
                   onTap: () async {
                     await CacheService.deletePref(
-                        PdfProgress.lastPageKey(item.fileUrl));
+                      PdfProgress.lastPageKey(item.fileUrl),
+                    );
                     EgwPrefs.revision.value++;
                     if (ctx.mounted) Navigator.of(ctx).pop();
                   },
@@ -679,12 +690,14 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
                   EgwDownloadService.isDownloaded(item.id)
                       ? 'Frees the space this book is using'
                       : 'Keeps this book on your phone, no data needed',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: palette.textMuted),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: palette.textMuted,
+                  ),
                 ),
                 onTap: () async {
-                  final wasDownloaded =
-                      EgwDownloadService.isDownloaded(item.id);
+                  final wasDownloaded = EgwDownloadService.isDownloaded(
+                    item.id,
+                  );
                   Navigator.of(ctx).pop();
                   final messenger = ScaffoldMessenger.of(context);
                   if (wasDownloaded) {
@@ -713,9 +726,11 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
                 },
               ),
               ListTile(
-                leading: Icon(Icons.download_outlined, color: palette.textMuted),
-                title:
-                    Text('Save a copy', style: AppTextStyles.bodyMedium),
+                leading: Icon(
+                  Icons.download_outlined,
+                  color: palette.textMuted,
+                ),
+                title: Text('Save a copy', style: AppTextStyles.bodyMedium),
                 onTap: () async {
                   Navigator.of(ctx).pop();
                   final ok = await DownloadService.downloadAndShare(
@@ -727,8 +742,10 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
                 },
               ),
               ListTile(
-                leading:
-                    Icon(Icons.ios_share_rounded, color: palette.textMuted),
+                leading: Icon(
+                  Icons.ios_share_rounded,
+                  color: palette.textMuted,
+                ),
                 title: Text('Share', style: AppTextStyles.bodyMedium),
                 onTap: () {
                   Navigator.of(ctx).pop();
@@ -774,17 +791,17 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
     final palette = context.palette;
     final (icon, text) = switch (_filter) {
       _ShelfFilter.reading => (
-          Icons.auto_stories_outlined,
-          'Books you open will appear here,\nready to resume where you stopped.',
-        ),
+        Icons.auto_stories_outlined,
+        'Books you open will appear here,\nready to resume where you stopped.',
+      ),
       _ShelfFilter.saved => (
-          Icons.bookmark_border_rounded,
-          'Save books to build your own shelf.\nHold any cover to save it.',
-        ),
+        Icons.bookmark_border_rounded,
+        'Save books to build your own shelf.\nHold any cover to save it.',
+      ),
       _ShelfFilter.all => (
-          Icons.search_off_rounded,
-          'No book matches "$_query".',
-        ),
+        Icons.search_off_rounded,
+        'No book matches "$_query".',
+      ),
     };
     return Padding(
       padding: const EdgeInsets.fromLTRB(40, 50, 40, 60),
@@ -796,8 +813,10 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
           Text(
             text,
             textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium
-                .copyWith(color: palette.textMuted, height: 1.55),
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: palette.textMuted,
+              height: 1.55,
+            ),
           ),
         ],
       ),
@@ -847,8 +866,8 @@ Widget _cover(
                   const lineHeight = 1.25;
                   final avail = c.maxHeight - pad * 2;
                   // Text scales with the system font; the box doesn't.
-                  final line = MediaQuery.textScalerOf(context)
-                          .scale(fontSize) *
+                  final line =
+                      MediaQuery.textScalerOf(context).scale(fontSize) *
                       lineHeight;
                   // Icon + its gap only earn their space if at least one
                   // line of title survives alongside them.
@@ -862,8 +881,11 @@ Widget _cover(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (showIcon) ...[
-                          const Icon(Icons.auto_stories_rounded,
-                              color: AppColors.goldAccent, size: 20),
+                          const Icon(
+                            Icons.auto_stories_rounded,
+                            color: AppColors.goldAccent,
+                            size: 20,
+                          ),
                           const SizedBox(height: 6),
                         ],
                         // Flexible so a mis-estimate clips instead of
@@ -961,10 +983,12 @@ class _ContinueReadingCard extends StatelessWidget {
                         builder: (context, v, _) => LinearProgressIndicator(
                           value: v,
                           minHeight: 4,
-                          backgroundColor:
-                              AppColors.white.withValues(alpha: 0.2),
+                          backgroundColor: AppColors.white.withValues(
+                            alpha: 0.2,
+                          ),
                           valueColor: const AlwaysStoppedAnimation<Color>(
-                              AppColors.goldAccent),
+                            AppColors.goldAccent,
+                          ),
                         ),
                       ),
                     ),
@@ -982,8 +1006,11 @@ class _ContinueReadingCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              const Icon(Icons.play_circle_fill_rounded,
-                  color: AppColors.white, size: 34),
+              const Icon(
+                Icons.play_circle_fill_rounded,
+                color: AppColors.white,
+                size: 34,
+              ),
             ],
           ),
         ),
@@ -1008,8 +1035,8 @@ double _gridAspectRatio(BuildContext context) {
   const horizontalPadding = 32.0; // SliverPadding, both sides
   const crossSpacing = 12.0 * (columns - 1);
   final width = MediaQuery.sizeOf(context).width;
-  final cellWidth =
-      ((width - horizontalPadding - crossSpacing) / columns).clamp(60.0, 260.0);
+  final cellWidth = ((width - horizontalPadding - crossSpacing) / columns)
+      .clamp(60.0, 260.0);
 
   // 6 gap + two title lines + 4 gap + 3 progress bar. Only the type
   // scales; the gaps and the bar don't.
@@ -1213,18 +1240,23 @@ class _BookCover extends StatelessWidget {
                   ),
                   child: AspectRatio(
                     aspectRatio: 2 / 3,
-                    child: _cover(item,
-                        width: double.infinity,
-                        height: double.infinity,
-                        radius: 11),
+                    child: _cover(
+                      item,
+                      width: double.infinity,
+                      height: double.infinity,
+                      radius: 11,
+                    ),
                   ),
                 ),
                 if (isSaved)
                   const Positioned(
                     top: 5,
                     right: 5,
-                    child: Icon(Icons.bookmark_rounded,
-                        color: AppColors.goldAccent, size: 17),
+                    child: Icon(
+                      Icons.bookmark_rounded,
+                      color: AppColors.goldAccent,
+                      size: 17,
+                    ),
                   ),
               ],
             ),
@@ -1249,7 +1281,8 @@ class _BookCover extends StatelessWidget {
                 minHeight: 3,
                 backgroundColor: palette.divider,
                 valueColor: const AlwaysStoppedAnimation<Color>(
-                    AppColors.primaryBlue),
+                  AppColors.primaryBlue,
+                ),
               ),
             ),
           ],
@@ -1305,8 +1338,9 @@ class _BookRow extends StatelessWidget {
                         item.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.titleSmall
-                            .copyWith(fontWeight: FontWeight.w700),
+                        style: AppTextStyles.titleSmall.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -1316,8 +1350,9 @@ class _BookRow extends StatelessWidget {
                         ].where((s) => s != null && s.isNotEmpty).join(' · '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: palette.textMuted),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: palette.textMuted,
+                        ),
                       ),
                       if (progress != null) ...[
                         const SizedBox(height: 7),
@@ -1328,7 +1363,8 @@ class _BookRow extends StatelessWidget {
                             minHeight: 3,
                             backgroundColor: palette.divider,
                             valueColor: const AlwaysStoppedAnimation<Color>(
-                                AppColors.primaryBlue),
+                              AppColors.primaryBlue,
+                            ),
                           ),
                         ),
                       ],
@@ -1338,14 +1374,20 @@ class _BookRow extends StatelessWidget {
                 if (isSaved)
                   const Padding(
                     padding: EdgeInsets.only(left: 6),
-                    child: Icon(Icons.bookmark_rounded,
-                        color: AppColors.goldAccent, size: 16),
+                    child: Icon(
+                      Icons.bookmark_rounded,
+                      color: AppColors.goldAccent,
+                      size: 16,
+                    ),
                   ),
                 IconButton(
                   tooltip: 'More',
                   visualDensity: VisualDensity.compact,
-                  icon: Icon(Icons.more_vert_rounded,
-                      color: palette.textMuted, size: 20),
+                  icon: Icon(
+                    Icons.more_vert_rounded,
+                    color: palette.textMuted,
+                    size: 20,
+                  ),
                   onPressed: onMore,
                 ),
               ],
@@ -1419,8 +1461,9 @@ class EgwPrefs {
     final raw = CacheService.readPref(_kOpened);
     if (raw == null) return <String, int>{};
     try {
-      return (jsonDecode(raw) as Map)
-          .map((k, v) => MapEntry(k.toString(), (v as num).toInt()));
+      return (jsonDecode(raw) as Map).map(
+        (k, v) => MapEntry(k.toString(), (v as num).toInt()),
+      );
     } catch (_) {
       return <String, int>{};
     }

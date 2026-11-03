@@ -126,8 +126,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
         children: [
           IconButton(
             tooltip: 'Close',
-            icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                color: AppColors.white, size: 30),
+            icon: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: AppColors.white,
+              size: 30,
+            ),
             onPressed: () => Navigator.of(context).maybePop(),
           ),
           Expanded(
@@ -257,7 +260,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
                 tooltip: liked ? 'Remove from liked' : 'Add to liked',
                 iconSize: 28,
                 icon: Icon(
-                  liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  liked
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
                   color: liked ? AppColors.red : AppColors.white,
                 ),
                 onPressed: () => MusicPrefsService.toggleLike(item.id),
@@ -301,8 +306,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
                     ? null
                     : (v) => setState(() => _scrubValue = v),
                 onChangeEnd: (v) async {
-                  await _service.player
-                      .seek(Duration(milliseconds: v.round()));
+                  await _service.player.seek(Duration(milliseconds: v.round()));
                   if (mounted) setState(() => _scrubValue = null);
                 },
               ),
@@ -327,9 +331,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
   }
 
   TextStyle get _timeStyle => AppTextStyles.labelSmall.copyWith(
-        color: AppColors.white.withValues(alpha: 0.7),
-        fontSize: 11.5,
-      );
+    color: AppColors.white.withValues(alpha: 0.7),
+    fontSize: 11.5,
+  );
 
   // ---- Transport ----------------------------------------------------------
 
@@ -345,10 +349,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
               final on = s.data ?? false;
               return IconButton(
                 tooltip: 'Shuffle',
-                icon: Icon(Icons.shuffle_rounded,
-                    color: on
-                        ? AppColors.goldAccent
-                        : AppColors.white.withValues(alpha: 0.75)),
+                icon: Icon(
+                  Icons.shuffle_rounded,
+                  color: on
+                      ? AppColors.goldAccent
+                      : AppColors.white.withValues(alpha: 0.75),
+                ),
                 onPressed: _service.toggleShuffle,
               );
             },
@@ -395,7 +401,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
       builder: (context, snap) {
         final state = snap.data;
         final playing = state?.playing ?? false;
-        final loading = state?.processingState == ProcessingState.loading ||
+        final loading =
+            state?.processingState == ProcessingState.loading ||
             state?.processingState == ProcessingState.buffering;
         return Row(
           mainAxisSize: MainAxisSize.min,
@@ -403,8 +410,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
             IconButton(
               tooltip: 'Previous',
               iconSize: 34,
-              icon: const Icon(Icons.skip_previous_rounded,
-                  color: AppColors.white),
+              icon: const Icon(
+                Icons.skip_previous_rounded,
+                color: AppColors.white,
+              ),
               onPressed: _service.previous,
             ),
             Container(
@@ -473,7 +482,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
         children: [
           _pill(
             icon: Icons.speed_rounded,
-            label: '${_service.speed.toStringAsFixed(_service.speed == _service.speed.roundToDouble() ? 0 : 2)}×',
+            label:
+                '${_service.speed.toStringAsFixed(_service.speed == _service.speed.roundToDouble() ? 0 : 2)}×',
             active: _service.speed != 1.0,
             onTap: () => _openSpeedSheet(context),
           ),
@@ -572,9 +582,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
     final ok = await MusicDownloadService.download(item);
     messenger.showSnackBar(
       SnackBar(
-        content: Text(ok
-            ? 'Saved for offline listening.'
-            : 'Download failed. Check your connection.'),
+        content: Text(
+          ok
+              ? 'Saved for offline listening.'
+              : 'Download failed. Check your connection.',
+        ),
       ),
     );
   }
@@ -598,12 +610,15 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
               ListTile(
                 title: Text(
                   s == 1.0 ? 'Normal' : '$s×',
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: AppColors.white),
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.white,
+                  ),
                 ),
                 trailing: (_service.speed - s).abs() < 0.01
-                    ? const Icon(Icons.check_rounded,
-                        color: AppColors.goldAccent)
+                    ? const Icon(
+                        Icons.check_rounded,
+                        color: AppColors.goldAccent,
+                      )
                     : null,
                 onTap: () async {
                   await _service.setSpeed(s);
@@ -647,8 +662,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
                 ),
                 title: Text(
                   label,
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: AppColors.white),
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.white,
+                  ),
                 ),
                 onTap: () {
                   _service.setSleepTimer(duration);
@@ -701,8 +717,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
                               color: isCurrent
                                   ? AppColors.goldAccent
                                   : AppColors.white,
-                              fontWeight:
-                                  isCurrent ? FontWeight.w700 : FontWeight.w500,
+                              fontWeight: isCurrent
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
                             ),
                           ),
                           subtitle: Text(
@@ -740,17 +757,17 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
   }
 
   Widget _sheetTitle(String text) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
-        child: Row(
-          children: [
-            Text(
-              text,
-              style: AppTextStyles.titleSmall.copyWith(
-                color: AppColors.white,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
+    padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
+    child: Row(
+      children: [
+        Text(
+          text,
+          style: AppTextStyles.titleSmall.copyWith(
+            color: AppColors.white,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }

@@ -50,8 +50,7 @@ class SabbathSchoolService {
 
   // ---- Language -----------------------------------------------------------
 
-  static String language() =>
-      CacheService.readPref(_kLang) ?? defaultLanguage;
+  static String language() => CacheService.readPref(_kLang) ?? defaultLanguage;
 
   static Future<void> setLanguage(String code) =>
       CacheService.writePref(_kLang, code);
@@ -80,10 +79,12 @@ class SabbathSchoolService {
           .map((e) => SsLanguage.fromJson(e as Map<String, dynamic>))
           .toList();
       if (list.isNotEmpty) {
-        unawaited(CacheService.writeString(
-          _kLangList,
-          jsonEncode([for (final l in list) l.toJson()]),
-        ));
+        unawaited(
+          CacheService.writeString(
+            _kLangList,
+            jsonEncode([for (final l in list) l.toJson()]),
+          ),
+        );
         return order(list);
       }
     } catch (e) {
@@ -92,9 +93,11 @@ class SabbathSchoolService {
 
     final cached = _readCache(_kLangList);
     if (cached is List && cached.isNotEmpty) {
-      return order(cached
-          .map((e) => SsLanguage.fromJson(e as Map<String, dynamic>))
-          .toList());
+      return order(
+        cached
+            .map((e) => SsLanguage.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
     }
     // Cold first run with no connection. Covers every priority language
     // rather than just Shona + English: the picker collapsing to two entries
@@ -155,16 +158,20 @@ class SabbathSchoolService {
       final list = (data as List)
           .map((e) => Quarterly.fromJson(e as Map<String, dynamic>))
           .toList();
-      unawaited(CacheService.writeString(
-        key,
-        jsonEncode([for (final q in list) q.toJson()]),
-      ));
+      unawaited(
+        CacheService.writeString(
+          key,
+          jsonEncode([for (final q in list) q.toJson()]),
+        ),
+      );
       // Warm the covers into the image cache alongside the JSON, so a quarter
       // that has been seen once still shows its artwork offline instead of a
       // grid of retry tiles.
-      unawaited(precacheImageUrls([
-        for (final q in list) ...[q.cover, q.splash],
-      ]));
+      unawaited(
+        precacheImageUrls([
+          for (final q in list) ...[q.cover, q.splash],
+        ]),
+      );
       return list;
     } catch (e) {
       debugPrint('SS quarterlies falling back to cache: $e');
@@ -194,14 +201,17 @@ class SabbathSchoolService {
     final key = 'ss:lessons:$code:$quarterlyId';
     try {
       final data = await _get('$code/quarterlies/$quarterlyId/index.json');
-      final raw = (data as Map<String, dynamic>)['lessons'] as List? ?? const [];
+      final raw =
+          (data as Map<String, dynamic>)['lessons'] as List? ?? const [];
       final list = raw
           .map((e) => SsLesson.fromJson(e as Map<String, dynamic>))
           .toList();
-      unawaited(CacheService.writeString(
-        key,
-        jsonEncode([for (final l in list) l.toJson()]),
-      ));
+      unawaited(
+        CacheService.writeString(
+          key,
+          jsonEncode([for (final l in list) l.toJson()]),
+        ),
+      );
       unawaited(precacheImageUrls([for (final l in list) l.cover]));
       return list;
     } catch (e) {
@@ -231,12 +241,15 @@ class SabbathSchoolService {
         '$code/quarterlies/$quarterlyId/lessons/$lessonId/index.json',
       );
       final raw = (data as Map<String, dynamic>)['days'] as List? ?? const [];
-      final list =
-          raw.map((e) => SsDay.fromJson(e as Map<String, dynamic>)).toList();
-      unawaited(CacheService.writeString(
-        key,
-        jsonEncode([for (final d in list) d.toJson()]),
-      ));
+      final list = raw
+          .map((e) => SsDay.fromJson(e as Map<String, dynamic>))
+          .toList();
+      unawaited(
+        CacheService.writeString(
+          key,
+          jsonEncode([for (final d in list) d.toJson()]),
+        ),
+      );
       return list;
     } catch (e) {
       debugPrint('SS days falling back to cache: $e');
@@ -288,7 +301,9 @@ class SabbathSchoolService {
       final data = await _get('$readPath/index.json');
       await CacheService.writeString(
         _contentKey(readPath),
-        jsonEncode(SsDayContent.fromJson(data as Map<String, dynamic>).toJson()),
+        jsonEncode(
+          SsDayContent.fromJson(data as Map<String, dynamic>).toJson(),
+        ),
       );
     } catch (_) {
       // Silent — we already served the cached copy.
@@ -336,5 +351,76 @@ class SabbathSchoolService {
       if (!isDayCached(day.readPath)) return false;
     }
     return true;
+  }
+
+  // ---- Whole-quarter download (3 Nov 2026) --------------------------------
+
+  /// A whole-quarter download in progress: quarterly id → weeks done/total.
+  /// Global, so leaving the screen doesn't stop it and coming back shows it.
+  static final ValueNotifier<Map<String, ({int done, int total})>>
+  quarterProgress = ValueNotifier(const {});
+
+  static final Set<String> _cancelQuarters = {};
+
+  /// Saves every week of [quarterlyId] (all days of all 13 lessons) for
+  /// offline reading, one week at a time so a slow connection isn't
+  /// swamped. Weeks already saved are skipped. Returns how many weeks
+  /// failed (0 = the whole quarter is on the phone), or -1 if the lesson
+  /// list itself couldn't be loaded.
+  static Future<int> downloadQuarterly(
+    String quarterlyId, {
+    String? lang,
+  }) async {
+    if (quarterProgress.value.containsKey(quarterlyId)) return 0;
+    _cancelQuarters.remove(quarterlyId);
+    final weeks = await lessons(quarterlyId, lang: lang);
+    if (weeks.isEmpty) return -1;
+    var failed = 0;
+    _setQuarter(quarterlyId, 0, weeks.length);
+    try {
+      for (var i = 0; i < weeks.length; i++) {
+        if (_cancelQuarters.contains(quarterlyId)) break;
+        final id = weeks[i].id;
+        final have = await isLessonDownloaded(quarterlyId, id, lang: lang);
+        if (!have) {
+          final ok = await downloadLesson(quarterlyId, id, lang: lang);
+          if (!ok) failed++;
+        }
+        _setQuarter(quarterlyId, i + 1, weeks.length);
+      }
+    } finally {
+      quarterProgress.value = {...quarterProgress.value}..remove(quarterlyId);
+    }
+    return failed;
+  }
+
+  static void cancelQuarterly(String quarterlyId) =>
+      _cancelQuarters.add(quarterlyId);
+
+  /// How many of the quarter's weeks are fully saved (cache only, no
+  /// network unless the lesson list was never fetched).
+  static Future<({int saved, int total})> quarterlySaved(
+    String quarterlyId, {
+    String? lang,
+  }) async {
+    final code = lang ?? language();
+    final cached = _readCache('ss:lessons:$code:$quarterlyId');
+    final weeks = cached is List
+        ? cached
+              .map((e) => SsLesson.fromJson(e as Map<String, dynamic>))
+              .toList()
+        : await lessons(quarterlyId, lang: code);
+    var saved = 0;
+    for (final w in weeks) {
+      if (await isLessonDownloaded(quarterlyId, w.id, lang: code)) saved++;
+    }
+    return (saved: saved, total: weeks.length);
+  }
+
+  static void _setQuarter(String id, int done, int total) {
+    quarterProgress.value = {
+      ...quarterProgress.value,
+      id: (done: done, total: total),
+    };
   }
 }

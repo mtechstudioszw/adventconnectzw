@@ -31,10 +31,7 @@ class SsLanguagePicker extends StatefulWidget {
 
   /// Pushes the picker. Resolves to the chosen language code, or null on
   /// dismiss.
-  static Future<String?> show(
-    BuildContext context, {
-    required String current,
-  }) {
+  static Future<String?> show(BuildContext context, {required String current}) {
     return Navigator.of(context).push<String>(
       PageRouteBuilder<String>(
         opaque: false,
@@ -96,9 +93,11 @@ class _SsLanguagePickerState extends State<SsLanguagePicker>
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return all;
     return all
-        .where((l) =>
-            l.name.toLowerCase().contains(q) ||
-            l.code.toLowerCase().contains(q))
+        .where(
+          (l) =>
+              l.name.toLowerCase().contains(q) ||
+              l.code.toLowerCase().contains(q),
+        )
         .toList();
   }
 
@@ -302,8 +301,7 @@ class _SsLanguagePickerState extends State<SsLanguagePicker>
                   boxShadow: isChosen
                       ? [
                           BoxShadow(
-                            color:
-                                AppColors.goldAccent.withValues(alpha: 0.45),
+                            color: AppColors.goldAccent.withValues(alpha: 0.45),
                             blurRadius: 22,
                           ),
                         ]
@@ -350,8 +348,9 @@ class _SsLanguagePickerState extends State<SsLanguagePicker>
                               child: Text(
                                 'Default',
                                 style: AppTextStyles.labelSmall.copyWith(
-                                  color: AppColors.white
-                                      .withValues(alpha: 0.55),
+                                  color: AppColors.white.withValues(
+                                    alpha: 0.55,
+                                  ),
                                 ),
                               ),
                             ),

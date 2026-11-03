@@ -134,8 +134,9 @@ class _SsHtmlTextState extends State<SsHtmlText> {
             border: const Border(
               left: BorderSide(color: AppColors.goldAccent, width: 3),
             ),
-            borderRadius:
-                const BorderRadius.horizontal(right: Radius.circular(12)),
+            borderRadius: const BorderRadius.horizontal(
+              right: Radius.circular(12),
+            ),
           ),
           child: _tappable(
             block.inlines,
@@ -201,10 +202,10 @@ class _SsHtmlTextState extends State<SsHtmlText> {
   }
 
   TextStyle _bodyStyle(Color color) => AppTextStyles.bodyLarge.copyWith(
-        color: color,
-        fontSize: 16 * fontScale,
-        height: 1.78,
-      );
+    color: color,
+    fontSize: 16 * fontScale,
+    height: 1.78,
+  );
 
   TextSpan _spanFor(
     BuildContext context,
@@ -239,27 +240,33 @@ class _SsHtmlTextState extends State<SsHtmlText> {
           orElse: () => (start: -1, end: -1),
         );
         if (hit.start < 0) {
-          out.add(TextSpan(
-            text: text.substring(at - start),
-            style: style,
-            recognizer: recognizer,
-          ));
+          out.add(
+            TextSpan(
+              text: text.substring(at - start),
+              style: style,
+              recognizer: recognizer,
+            ),
+          );
           return;
         }
         if (hit.start > at) {
-          out.add(TextSpan(
-            text: text.substring(at - start, hit.start - start),
-            style: style,
-            recognizer: recognizer,
-          ));
+          out.add(
+            TextSpan(
+              text: text.substring(at - start, hit.start - start),
+              style: style,
+              recognizer: recognizer,
+            ),
+          );
           at = hit.start;
         }
         final stop = hit.end < end ? hit.end : end;
-        out.add(TextSpan(
-          text: text.substring(at - start, stop - start),
-          style: style.copyWith(backgroundColor: wash),
-          recognizer: recognizer,
-        ));
+        out.add(
+          TextSpan(
+            text: text.substring(at - start, stop - start),
+            style: style.copyWith(backgroundColor: wash),
+            recognizer: recognizer,
+          ),
+        );
         at = stop;
       }
     }
@@ -281,8 +288,7 @@ class _SsHtmlTextState extends State<SsHtmlText> {
         base.copyWith(
           fontWeight: inline.bold ? FontWeight.w700 : base.fontWeight,
           fontStyle: inline.italic ? FontStyle.italic : base.fontStyle,
-          fontSize:
-              inline.small ? (base.fontSize ?? 16) * 0.82 : base.fontSize,
+          fontSize: inline.small ? (base.fontSize ?? 16) * 0.82 : base.fontSize,
           // <sup> can't shift the baseline in a plain TextSpan, so verse
           // numbers are rendered small + bold + blue instead — it reads as a
           // verse marker without layout gymnastics.
@@ -407,11 +413,13 @@ List<_Block> _parseBlocks(String html) {
     if (tag == 'hr') {
       blocks.add(_Block(_BlockKind.rule, const []));
     } else if (tag.startsWith('h')) {
-      blocks.add(_Block(
-        _BlockKind.heading,
-        _parseInlines(inner),
-        level: int.tryParse(tag.substring(1)) ?? 3,
-      ));
+      blocks.add(
+        _Block(
+          _BlockKind.heading,
+          _parseInlines(inner),
+          level: int.tryParse(tag.substring(1)) ?? 3,
+        ),
+      );
     } else if (tag == 'blockquote') {
       // A blockquote usually wraps its own <p>s — flatten them so the quote
       // renders as one styled body instead of nesting boxes.
@@ -425,7 +433,9 @@ List<_Block> _parseBlocks(String html) {
 
   final tail = _stripTags(doc.substring(lastEnd)).trim();
   if (tail.isNotEmpty) {
-    blocks.add(_Block(_BlockKind.paragraph, _parseInlines(doc.substring(lastEnd))));
+    blocks.add(
+      _Block(_BlockKind.paragraph, _parseInlines(doc.substring(lastEnd))),
+    );
   }
 
   if (blocks.isEmpty) {
@@ -455,14 +465,16 @@ List<_Inline> _parseInlines(String html) {
   void emit(String raw) {
     final text = _decodeEntities(raw);
     if (text.isEmpty) return;
-    out.add(_Inline(
-      text,
-      bold: bold > 0,
-      italic: italic > 0,
-      small: small > 0,
-      superscript: sup > 0,
-      verseRef: verseRef,
-    ));
+    out.add(
+      _Inline(
+        text,
+        bold: bold > 0,
+        italic: italic > 0,
+        small: small > 0,
+        superscript: sup > 0,
+        verseRef: verseRef,
+      ),
+    );
   }
 
   var cursor = 0;
@@ -493,9 +505,10 @@ List<_Inline> _parseInlines(String html) {
         } else {
           // Only `class="verse"` anchors are made tappable; the API also
           // emits plain links we render as ordinary text.
-          final verse = RegExp('verse="([^"]*)"', caseSensitive: false)
-              .firstMatch(attrs)
-              ?.group(1);
+          final verse = RegExp(
+            'verse="([^"]*)"',
+            caseSensitive: false,
+          ).firstMatch(attrs)?.group(1);
           verseRef = (verse != null && verse.isNotEmpty) ? verse : null;
         }
     }
@@ -510,8 +523,7 @@ List<_Inline> _parseInlines(String html) {
   return out.isEmpty ? [_Inline(_decodeEntities(_stripTags(html)))] : out;
 }
 
-String _stripTags(String html) =>
-    html.replaceAll(RegExp(r'<[^>]*>'), '');
+String _stripTags(String html) => html.replaceAll(RegExp(r'<[^>]*>'), '');
 
 /// Lesson HTML as plain readable text.
 ///

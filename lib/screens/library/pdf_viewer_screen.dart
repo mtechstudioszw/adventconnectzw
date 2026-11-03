@@ -93,6 +93,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   int _pages = 0;
   int _current = 0;
   late final int _resumePage;
+
   /// Night mode OVERRIDE. Null means "follow the app theme".
   ///
   /// This was a plain `bool _night = false`, so the reader opened on a
@@ -118,8 +119,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   @override
   void initState() {
     super.initState();
-    _resumePage =
-        int.tryParse(CacheService.readPref(_pageKey) ?? '') ?? 0;
+    _resumePage = int.tryParse(CacheService.readPref(_pageKey) ?? '') ?? 0;
     _prepare();
   }
 
@@ -167,8 +167,10 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       setState(() => _localPath = file.path);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _error =
-          'Could not open this file. Check your connection and try again.');
+      setState(
+        () => _error =
+            'Could not open this file. Check your connection and try again.',
+      );
     }
   }
 
@@ -181,9 +183,12 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: palette.card,
-        title: Text('Go to page',
-            style: AppTextStyles.titleMedium
-                .copyWith(fontWeight: FontWeight.w700)),
+        title: Text(
+          'Go to page',
+          style: AppTextStyles.titleMedium.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -194,8 +199,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             filled: true,
             fillColor: palette.inputFill,
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: palette.divider)),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: palette.divider),
+            ),
           ),
         ),
         actions: [
@@ -204,8 +210,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             child: Text('Cancel', style: TextStyle(color: palette.textMuted)),
           ),
           FilledButton(
-            style:
-                FilledButton.styleFrom(backgroundColor: AppColors.primaryBlue),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+            ),
             onPressed: () =>
                 Navigator.pop(ctx, int.tryParse(controller.text.trim())),
             child: const Text('Go'),
@@ -234,9 +241,9 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
         actions: [
           IconButton(
             tooltip: _night ? 'Day mode' : 'Night mode',
-            icon: Icon(_night
-                ? Icons.light_mode_outlined
-                : Icons.dark_mode_outlined),
+            icon: Icon(
+              _night ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+            ),
             // Records an explicit choice, which then outranks the theme.
             onPressed: () => setState(() => _nightOverride = !_night),
           ),
@@ -274,12 +281,15 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                         Text(
                           'Page ${_current + 1} of $_pages',
                           style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.white.withValues(alpha: 0.85)),
+                            color: AppColors.white.withValues(alpha: 0.85),
+                          ),
                         ),
                         const SizedBox(width: 4),
-                        Icon(Icons.unfold_more,
-                            size: 13,
-                            color: AppColors.white.withValues(alpha: 0.7)),
+                        Icon(
+                          Icons.unfold_more,
+                          size: 13,
+                          color: AppColors.white.withValues(alpha: 0.7),
+                        ),
                       ],
                     ),
                   ),
@@ -288,74 +298,80 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             : null,
       ),
       body: _error != null
-          ? _ErrorView(message: _error!, onRetry: () {
-              setState(() => _error = null);
-              _prepare();
-            })
+          ? _ErrorView(
+              message: _error!,
+              onRetry: () {
+                setState(() => _error = null);
+                _prepare();
+              },
+            )
           : _localPath == null
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(
-                          value: _progress, color: AppColors.primaryBlue),
-                      const SizedBox(height: 14),
-                      Text(
-                        _progress == null
-                            ? 'Opening…'
-                            : 'Downloading ${(_progress! * 100).round()}%',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: palette.textMuted),
-                      ),
-                    ],
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    value: _progress,
+                    color: AppColors.primaryBlue,
                   ),
-                )
-              : PDFView(
-                  filePath: _localPath,
-                  swipeHorizontal: false,
-                  autoSpacing: true,
-                  pageFling: true,
-                  nightMode: _night,
-                  // Resume where the reader left off last time.
-                  defaultPage: _resumePage,
-                  onViewCreated: (c) => _ctrl = c,
-                  onRender: (pages) {
-                    setState(() => _pages = pages ?? 0);
-                    // Persist the length too, so the Library bookshelf can
-                    // show "page 42 of 380" progress without opening the file.
-                    if (pages != null && pages > 0) {
-                      CacheService.writePref(
-                        PdfProgress.pageCountKey(widget.url),
-                        pages.toString(),
-                      );
-                    }
-                    // Mark the book STARTED on render, not on the first page
-                    // turn.
-                    //
-                    // The page was only ever written by onPageChanged, so a
-                    // book you opened and read without swiping was invisible
-                    // to `PdfProgress.hasStarted` — and the EGW shelf's
-                    // "Continue reading" hero filters on exactly that. Open
-                    // Steps to Christ and turn a page, then open Great
-                    // Controversy and read page one, and the hero still
-                    // offered Steps to Christ (founder, 17 Aug).
-                    //
-                    // Only writes when absent, so it can never clobber a real
-                    // resume position with the default page.
-                    if (!PdfProgress.hasStarted(widget.url)) {
-                      CacheService.writePref(_pageKey, _resumePage.toString());
-                    }
-                  },
-                  onPageChanged: (page, _) {
-                    setState(() => _current = page ?? 0);
-                    // Remember the page so the next open resumes here.
-                    if (page != null) {
-                      CacheService.writePref(_pageKey, page.toString());
-                    }
-                  },
-                  onError: (_) => setState(() =>
-                      _error = 'This PDF could not be displayed.'),
-                ),
+                  const SizedBox(height: 14),
+                  Text(
+                    _progress == null
+                        ? 'Opening…'
+                        : 'Downloading ${(_progress! * 100).round()}%',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: palette.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : PDFView(
+              filePath: _localPath,
+              swipeHorizontal: false,
+              autoSpacing: true,
+              pageFling: true,
+              nightMode: _night,
+              // Resume where the reader left off last time.
+              defaultPage: _resumePage,
+              onViewCreated: (c) => _ctrl = c,
+              onRender: (pages) {
+                setState(() => _pages = pages ?? 0);
+                // Persist the length too, so the Library bookshelf can
+                // show "page 42 of 380" progress without opening the file.
+                if (pages != null && pages > 0) {
+                  CacheService.writePref(
+                    PdfProgress.pageCountKey(widget.url),
+                    pages.toString(),
+                  );
+                }
+                // Mark the book STARTED on render, not on the first page
+                // turn.
+                //
+                // The page was only ever written by onPageChanged, so a
+                // book you opened and read without swiping was invisible
+                // to `PdfProgress.hasStarted` — and the EGW shelf's
+                // "Continue reading" hero filters on exactly that. Open
+                // Steps to Christ and turn a page, then open Great
+                // Controversy and read page one, and the hero still
+                // offered Steps to Christ (founder, 17 Aug).
+                //
+                // Only writes when absent, so it can never clobber a real
+                // resume position with the default page.
+                if (!PdfProgress.hasStarted(widget.url)) {
+                  CacheService.writePref(_pageKey, _resumePage.toString());
+                }
+              },
+              onPageChanged: (page, _) {
+                setState(() => _current = page ?? 0);
+                // Remember the page so the next open resumes here.
+                if (page != null) {
+                  CacheService.writePref(_pageKey, page.toString());
+                }
+              },
+              onError: (_) =>
+                  setState(() => _error = 'This PDF could not be displayed.'),
+            ),
     );
   }
 }
@@ -374,18 +390,25 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.picture_as_pdf_outlined,
-                size: 56, color: palette.textMuted),
+            Icon(
+              Icons.picture_as_pdf_outlined,
+              size: 56,
+              color: palette.textMuted,
+            ),
             const SizedBox(height: 14),
-            Text(message,
-                textAlign: TextAlign.center,
-                style:
-                    AppTextStyles.bodyMedium.copyWith(color: palette.textMuted)),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: palette.textMuted,
+              ),
+            ),
             const SizedBox(height: 18),
             FilledButton(
               onPressed: onRetry,
               style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue),
+                backgroundColor: AppColors.primaryBlue,
+              ),
               child: const Text('Try again'),
             ),
           ],

@@ -29,8 +29,10 @@ class AudioBibleScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text('Audio Bible',
-            style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 18)),
+        title: Text(
+          'Audio Bible',
+          style: AppTextStyles.appBarTitleFlat.copyWith(fontSize: 18),
+        ),
       ),
       body: SafeArea(
         top: false,
@@ -330,7 +332,12 @@ class _MusicTabState extends State<MusicTab>
           const SizedBox(width: 8),
           _chip(context, 'Liked', _MusicFilter.liked, likedCount),
           const SizedBox(width: 8),
-          _chip(context, 'Downloaded', _MusicFilter.downloaded, downloadedCount),
+          _chip(
+            context,
+            'Downloaded',
+            _MusicFilter.downloaded,
+            downloadedCount,
+          ),
         ],
       ),
     );
@@ -459,8 +466,10 @@ class _MusicTabState extends State<MusicTab>
             Pressable(
               onTap: _shuffleAll,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 9,
+                ),
                 decoration: BoxDecoration(
                   gradient: AppColors.primaryGradient,
                   borderRadius: BorderRadius.circular(14),
@@ -475,8 +484,11 @@ class _MusicTabState extends State<MusicTab>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.shuffle_rounded,
-                        color: AppColors.white, size: 17),
+                    const Icon(
+                      Icons.shuffle_rounded,
+                      color: AppColors.white,
+                      size: 17,
+                    ),
                     const SizedBox(width: 7),
                     Text(
                       'Shuffle',
@@ -515,8 +527,7 @@ class _MusicTabState extends State<MusicTab>
                 padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
                 child: Row(
                   children: [
-                    TrackArtwork(
-                        coverUrl: item.coverUrl, size: 52, radius: 10),
+                    TrackArtwork(coverUrl: item.coverUrl, size: 52, radius: 10),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
@@ -526,8 +537,9 @@ class _MusicTabState extends State<MusicTab>
                             item.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.titleSmall
-                                .copyWith(fontWeight: FontWeight.w700),
+                            style: AppTextStyles.titleSmall.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                           Text(
                             (item.author?.isNotEmpty ?? false)
@@ -535,8 +547,9 @@ class _MusicTabState extends State<MusicTab>
                                 : 'Adventist Super App',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.bodySmall
-                                .copyWith(color: palette.textMuted),
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: palette.textMuted,
+                            ),
                           ),
                         ],
                       ),
@@ -552,8 +565,10 @@ class _MusicTabState extends State<MusicTab>
                       : Icons.favorite_border_rounded,
                   color: liked ? AppColors.red : palette.textMuted,
                 ),
-                title: Text(liked ? 'Remove from liked' : 'Add to liked',
-                    style: AppTextStyles.bodyMedium),
+                title: Text(
+                  liked ? 'Remove from liked' : 'Add to liked',
+                  style: AppTextStyles.bodyMedium,
+                ),
                 onTap: () async {
                   await MusicPrefsService.toggleLike(item.id);
                   if (ctx.mounted) Navigator.of(ctx).pop();
@@ -561,9 +576,7 @@ class _MusicTabState extends State<MusicTab>
               ),
               ListTile(
                 leading: Icon(
-                  saved
-                      ? Icons.download_done_rounded
-                      : Icons.download_outlined,
+                  saved ? Icons.download_done_rounded : Icons.download_outlined,
                   color: saved ? AppColors.successGreen : palette.textMuted,
                 ),
                 title: Text(
@@ -576,8 +589,10 @@ class _MusicTabState extends State<MusicTab>
                 },
               ),
               ListTile(
-                leading:
-                    Icon(Icons.ios_share_rounded, color: palette.textMuted),
+                leading: Icon(
+                  Icons.ios_share_rounded,
+                  color: palette.textMuted,
+                ),
                 title: Text('Share', style: AppTextStyles.bodyMedium),
                 onTap: () {
                   Navigator.of(ctx).pop();
@@ -608,9 +623,11 @@ class _MusicTabState extends State<MusicTab>
     final ok = await MusicDownloadService.download(item);
     messenger.showSnackBar(
       SnackBar(
-        content: Text(ok
-            ? 'Saved for offline listening.'
-            : 'Download failed. Check your connection.'),
+        content: Text(
+          ok
+              ? 'Saved for offline listening.'
+              : 'Download failed. Check your connection.',
+        ),
       ),
     );
   }
@@ -641,17 +658,17 @@ class _MusicTabState extends State<MusicTab>
     final palette = context.palette;
     final (icon, text) = switch (_filter) {
       _MusicFilter.liked => (
-          Icons.favorite_border_rounded,
-          'Songs you like will collect here.\nTap the heart on any track.',
-        ),
+        Icons.favorite_border_rounded,
+        'Songs you like will collect here.\nTap the heart on any track.',
+      ),
       _MusicFilter.downloaded => (
-          Icons.download_outlined,
-          'Download tracks to listen with no data.\nThey play even in airplane mode.',
-        ),
+        Icons.download_outlined,
+        'Download tracks to listen with no data.\nThey play even in airplane mode.',
+      ),
       _MusicFilter.all => (
-          Icons.search_off_rounded,
-          'Nothing matches "$_query".',
-        ),
+        Icons.search_off_rounded,
+        'Nothing matches "$_query".',
+      ),
     };
     return Padding(
       padding: const EdgeInsets.fromLTRB(40, 40, 40, 60),
@@ -787,30 +804,42 @@ class _TrackRow extends StatelessWidget {
                                   : 'Adventist Super App',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.bodySmall
-                                  .copyWith(color: palette.textMuted),
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: palette.textMuted,
+                              ),
                             ),
                           ),
                           if (item.durationSeconds != null) ...[
-                            Text(' · ',
-                                style: AppTextStyles.bodySmall
-                                    .copyWith(color: palette.textMuted)),
+                            Text(
+                              ' · ',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: palette.textMuted,
+                              ),
+                            ),
                             Text(
                               formatDuration(
-                                  Duration(seconds: item.durationSeconds!)),
-                              style: AppTextStyles.bodySmall
-                                  .copyWith(color: palette.textMuted),
+                                Duration(seconds: item.durationSeconds!),
+                              ),
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: palette.textMuted,
+                              ),
                             ),
                           ],
                           if (saved) ...[
                             const SizedBox(width: 6),
-                            const Icon(Icons.download_done_rounded,
-                                size: 14, color: AppColors.successGreen),
+                            const Icon(
+                              Icons.download_done_rounded,
+                              size: 14,
+                              color: AppColors.successGreen,
+                            ),
                           ],
                           if (liked) ...[
                             const SizedBox(width: 6),
-                            const Icon(Icons.favorite_rounded,
-                                size: 13, color: AppColors.red),
+                            const Icon(
+                              Icons.favorite_rounded,
+                              size: 13,
+                              color: AppColors.red,
+                            ),
                           ],
                         ],
                       ),
@@ -829,13 +858,19 @@ class _TrackRow extends StatelessWidget {
                     ),
                   )
                 else
-                  Icon(Icons.play_arrow_rounded,
-                      color: palette.textMuted, size: 24),
+                  Icon(
+                    Icons.play_arrow_rounded,
+                    color: palette.textMuted,
+                    size: 24,
+                  ),
                 IconButton(
                   tooltip: 'More',
                   visualDensity: VisualDensity.compact,
-                  icon: Icon(Icons.more_vert_rounded,
-                      color: palette.textMuted, size: 20),
+                  icon: Icon(
+                    Icons.more_vert_rounded,
+                    color: palette.textMuted,
+                    size: 20,
+                  ),
                   onPressed: onMore,
                 ),
               ],

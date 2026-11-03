@@ -97,10 +97,7 @@ class _TranslationPickerState extends State<TranslationPicker>
                 builder: (context, _) {
                   final t = animate ? _c.value : 1.0;
                   return BackdropFilter(
-                    filter: ui.ImageFilter.blur(
-                      sigmaX: 18 * t,
-                      sigmaY: 18 * t,
-                    ),
+                    filter: ui.ImageFilter.blur(sigmaX: 18 * t, sigmaY: 18 * t),
                     child: ColoredBox(
                       color: AppColors.darkNavy.withValues(alpha: 0.82 * t),
                       child: const SizedBox.expand(),
@@ -179,8 +176,11 @@ class _TranslationPickerState extends State<TranslationPicker>
     final start = (index * 0.07).clamp(0.0, 0.6);
     final anim = CurvedAnimation(
       parent: _c,
-      curve: Interval(start, (start + 0.5).clamp(0.0, 1.0),
-          curve: AppMotion.easeOut),
+      curve: Interval(
+        start,
+        (start + 0.5).clamp(0.0, 1.0),
+        curve: AppMotion.easeOut,
+      ),
     );
 
     return AnimatedBuilder(
@@ -282,15 +282,19 @@ class _TranslationPickerState extends State<TranslationPicker>
                             Row(
                               children: [
                                 if (t.hasAudio) ...[
-                                  const Icon(Icons.headphones_rounded,
-                                      size: 12,
-                                      color: AppColors.goldAccent),
+                                  const Icon(
+                                    Icons.headphones_rounded,
+                                    size: 12,
+                                    color: AppColors.goldAccent,
+                                  ),
                                   const SizedBox(width: 4),
                                 ],
                                 if (t.isOffline) ...[
-                                  const Icon(Icons.offline_pin_rounded,
-                                      size: 12,
-                                      color: AppColors.successGreen),
+                                  const Icon(
+                                    Icons.offline_pin_rounded,
+                                    size: 12,
+                                    color: AppColors.successGreen,
+                                  ),
                                   const SizedBox(width: 4),
                                 ],
                                 Flexible(
@@ -299,8 +303,9 @@ class _TranslationPickerState extends State<TranslationPicker>
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: AppTextStyles.labelSmall.copyWith(
-                                      color: AppColors.white
-                                          .withValues(alpha: 0.5),
+                                      color: AppColors.white.withValues(
+                                        alpha: 0.5,
+                                      ),
                                       fontSize: 10.5,
                                     ),
                                   ),
@@ -314,8 +319,10 @@ class _TranslationPickerState extends State<TranslationPicker>
                     if (isCurrent && !isChosen)
                       Icon(Icons.check_circle_rounded, color: t.accent),
                     if (isChosen)
-                      const Icon(Icons.auto_awesome_rounded,
-                          color: AppColors.goldAccent),
+                      const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: AppColors.goldAccent,
+                      ),
                   ],
                 ),
               ),

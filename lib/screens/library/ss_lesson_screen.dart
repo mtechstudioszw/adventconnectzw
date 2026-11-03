@@ -19,6 +19,7 @@ import '../../widgets/motion/pressable.dart';
 import '../../widgets/motion/staggered_reveal.dart';
 import '../../widgets/verse_share_card.dart';
 import 'widgets/ss_html_text.dart';
+import 'widgets/ss_download_all.dart';
 
 // ---------------------------------------------------------------------------
 //  Lesson list — the 13 weeks of a quarter
@@ -91,6 +92,13 @@ class _SsLessonListScreenState extends State<SsLessonListScreen> {
               else ...[
                 if ((widget.quarterly.description).isNotEmpty)
                   SliverToBoxAdapter(child: _description(context)),
+                SliverToBoxAdapter(
+                  child: SsDownloadAll(
+                    quarterly: widget.quarterly,
+                    lang: widget.lang,
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                  ),
+                ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
                   sliver: SliverList.separated(
@@ -199,8 +207,10 @@ class _SsLessonListScreenState extends State<SsLessonListScreen> {
           Text(
             'Could not load these lessons.\nConnect once and they stay offline.',
             textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium
-                .copyWith(color: palette.textMuted, height: 1.6),
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: palette.textMuted,
+              height: 1.6,
+            ),
           ),
         ],
       ),
@@ -286,6 +296,18 @@ class _LessonCardState extends State<_LessonCard> {
   void initState() {
     super.initState();
     _loadDays();
+    // "Download all" saves this week too: repaint the tick as it lands.
+    SabbathSchoolService.quarterProgress.addListener(_onQuarterProgress);
+  }
+
+  @override
+  void dispose() {
+    SabbathSchoolService.quarterProgress.removeListener(_onQuarterProgress);
+    super.dispose();
+  }
+
+  void _onQuarterProgress() {
+    if (mounted) setState(() {});
   }
 
   /// Days are needed for the progress ring, so read them from cache without
@@ -316,9 +338,11 @@ class _LessonCardState extends State<_LessonCard> {
     setState(() => _downloading = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(ok
-            ? 'Week ${widget.lesson.weekNumber} saved for offline.'
-            : 'Could not save the whole week. Try again on a better signal.'),
+        content: Text(
+          ok
+              ? 'Week ${widget.lesson.weekNumber} saved for offline.'
+              : 'Could not save the whole week. Try again on a better signal.',
+        ),
       ),
     );
   }
@@ -406,8 +430,9 @@ class _LessonCardState extends State<_LessonCard> {
                       const SizedBox(height: 3),
                       Text(
                         _dateRange(),
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: palette.textMuted),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: palette.textMuted,
+                        ),
                       ),
                     ],
                   ),
@@ -449,8 +474,11 @@ class _LessonCardState extends State<_LessonCard> {
             ),
           ),
           if (complete)
-            const Icon(Icons.check_rounded,
-                color: AppColors.successGreen, size: 22)
+            const Icon(
+              Icons.check_rounded,
+              color: AppColors.successGreen,
+              size: 22,
+            )
           else
             Text(
               '${widget.lesson.weekNumber}',
@@ -482,16 +510,15 @@ class _LessonCardState extends State<_LessonCard> {
         ),
       );
     }
-    final cached = _days.isNotEmpty &&
+    final cached =
+        _days.isNotEmpty &&
         _days.every((d) => SabbathSchoolService.isDayCached(d.readPath));
     return IconButton(
       tooltip: cached ? 'Available offline' : 'Save for offline',
       icon: Icon(
         cached ? Icons.download_done_rounded : Icons.download_outlined,
         size: 20,
-        color: cached
-            ? AppColors.successGreen
-            : context.palette.textMuted,
+        color: cached ? AppColors.successGreen : context.palette.textMuted,
       ),
       onPressed: cached ? null : _download,
     );
@@ -502,8 +529,18 @@ class _LessonCardState extends State<_LessonCard> {
     final e = widget.lesson.endDate;
     if (s == null || e == null) return 'Week ${widget.lesson.weekNumber}';
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final sm = months[s.month - 1];
     final em = months[e.month - 1];
@@ -598,9 +635,8 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
     });
   }
 
-  SsDay? get _day => (_index >= 0 && _index < _days.length)
-      ? _days[_index]
-      : null;
+  SsDay? get _day =>
+      (_index >= 0 && _index < _days.length) ? _days[_index] : null;
 
   void _setScale(double v) {
     final clamped = v.clamp(0.8, 2.0);
@@ -721,8 +757,8 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
                   color: day.isToday && !selected
                       ? AppColors.goldAccent
                       : selected
-                          ? AppColors.primaryBlue
-                          : palette.divider,
+                      ? AppColors.primaryBlue
+                      : palette.divider,
                   width: day.isToday && !selected ? 1.5 : 1,
                 ),
               ),
@@ -840,9 +876,12 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Text size',
-                    style: AppTextStyles.titleSmall
-                        .copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  'Text size',
+                  style: AppTextStyles.titleSmall.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 Row(
                   children: [
                     const Text('A', style: TextStyle(fontSize: 13)),
@@ -1069,11 +1108,14 @@ class _DayNoteSheetState extends State<_DayNoteSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Your note — ${widget.day.title}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.titleSmall
-                  .copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            'Your note — ${widget.day.title}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.titleSmall.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 12),
           TextField(
             controller: _controller,
@@ -1125,8 +1167,7 @@ class _DayPage extends StatefulWidget {
   State<_DayPage> createState() => _DayPageState();
 }
 
-class _DayPageState extends State<_DayPage>
-    with AutomaticKeepAliveClientMixin {
+class _DayPageState extends State<_DayPage> with AutomaticKeepAliveClientMixin {
   SsDayContent? _content;
   bool _loading = true;
 
@@ -1173,8 +1214,10 @@ class _DayPageState extends State<_DayPage>
             Text(
               'This day is not downloaded yet.\nConnect once to read it.',
               textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium
-                  .copyWith(color: palette.textMuted, height: 1.6),
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: palette.textMuted,
+                height: 1.6,
+              ),
             ),
           ],
         ),
@@ -1251,14 +1294,18 @@ class _DayPageState extends State<_DayPage>
           children: [
             Row(
               children: [
-                const Icon(Icons.menu_book_rounded,
-                    color: AppColors.primaryBlue, size: 19),
+                const Icon(
+                  Icons.menu_book_rounded,
+                  color: AppColors.primaryBlue,
+                  size: 19,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     label,
-                    style: AppTextStyles.titleSmall
-                        .copyWith(fontWeight: FontWeight.w700),
+                    style: AppTextStyles.titleSmall.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -1268,8 +1315,10 @@ class _DayPageState extends State<_DayPage>
               Text(
                 'This passage was not included with the lesson. '
                 'Open it in the Bible tab.',
-                style: AppTextStyles.bodyMedium
-                    .copyWith(color: context.palette.textMuted, height: 1.6),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: context.palette.textMuted,
+                  height: 1.6,
+                ),
               )
             else
               SsHtmlText(html: html, fontScale: widget.fontScale),
@@ -1281,12 +1330,27 @@ class _DayPageState extends State<_DayPage>
 
   static String _formatDate(DateTime d) {
     const days = [
-      'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY',
-      'FRIDAY', 'SATURDAY', 'SUNDAY',
+      'MONDAY',
+      'TUESDAY',
+      'WEDNESDAY',
+      'THURSDAY',
+      'FRIDAY',
+      'SATURDAY',
+      'SUNDAY',
     ];
     const months = [
-      'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
-      'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
+      'JANUARY',
+      'FEBRUARY',
+      'MARCH',
+      'APRIL',
+      'MAY',
+      'JUNE',
+      'JULY',
+      'AUGUST',
+      'SEPTEMBER',
+      'OCTOBER',
+      'NOVEMBER',
+      'DECEMBER',
     ];
     return '${days[d.weekday - 1]} · ${months[d.month - 1]} ${d.day}';
   }

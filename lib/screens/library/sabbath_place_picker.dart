@@ -15,21 +15,25 @@ import '../../widgets/screen_shell.dart';
 Future<bool> pickSabbathPlace(BuildContext context) async {
   final pick = await Navigator.of(context, rootNavigator: true)
       .push<SabbathPlacePick>(
-    MaterialPageRoute<SabbathPlacePick>(
-      builder: (_) => SabbathPlacePicker(
-        homeCountry: SabbathService.profileCountryCode(),
-      ),
-    ),
-  );
+        MaterialPageRoute<SabbathPlacePick>(
+          builder: (_) => SabbathPlacePicker(
+            homeCountry: SabbathService.profileCountryCode(),
+          ),
+        ),
+      );
   if (pick == null) return false;
   if (pick.useGps) {
     final pos = await LocationService.getCurrentPosition();
     if (pos == null) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Couldn't get your location. Check that location is "
-              'on and allowed for the app.'),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Couldn't get your location. Check that location is "
+              'on and allowed for the app.',
+            ),
+          ),
+        );
       }
       return false;
     }

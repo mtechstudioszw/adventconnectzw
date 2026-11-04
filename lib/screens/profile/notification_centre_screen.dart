@@ -147,6 +147,7 @@ class _NotificationCentreScreenState extends State<NotificationCentreScreen> {
 
   void _openReader(AppNotification n) {
     showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.card,
       isScrollControlled: true,

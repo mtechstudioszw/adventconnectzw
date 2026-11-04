@@ -844,6 +844,7 @@ class _AudioRouteButton extends StatelessWidget {
     AudioRoute current,
   ) async {
     final chosen = await showModalBottomSheet<AudioRoute>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(

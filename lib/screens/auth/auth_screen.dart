@@ -273,6 +273,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   /// user (optionally) attach a password for next time.
   Future<void> _showLinkOptionsSheet(String email) {
     return showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -308,6 +309,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     }
     HapticFeedback.mediumImpact();
     final verified = await showModalBottomSheet<bool>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

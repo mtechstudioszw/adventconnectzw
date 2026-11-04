@@ -331,6 +331,7 @@ class _ChurchesScreenState extends State<ChurchesScreen> {
         if (c.city.trim().isNotEmpty) c.city.trim(),
     }.toList()..sort();
     final picked = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,

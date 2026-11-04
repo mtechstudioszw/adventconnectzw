@@ -552,6 +552,7 @@ class _CallRow extends StatelessWidget {
 
   Future<void> _showRowActions(BuildContext context) {
     return showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(

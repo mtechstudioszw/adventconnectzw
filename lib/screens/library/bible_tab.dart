@@ -108,6 +108,7 @@ class _BibleTabState extends State<BibleTab>
     HapticFeedback.selectionClick();
     final palette = context.palette;
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: palette.sheet,
       isScrollControlled: true,
@@ -1471,6 +1472,7 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
       text: BiblePrefsService.note(key) ?? '',
     );
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,
@@ -1530,6 +1532,7 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
 
   Future<void> _openChapterPicker(BibleBook book) async {
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       isScrollControlled: true,
@@ -1551,6 +1554,7 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
 
   Future<void> _openReadingSheet() async {
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(
@@ -1993,6 +1997,7 @@ class _ChapterPageState extends State<_ChapterPage> {
 
   Future<void> _openListenSheet() async {
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       isScrollControlled: true,

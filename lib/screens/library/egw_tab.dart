@@ -567,6 +567,7 @@ class _EgwTabState extends State<EgwTab> with AutomaticKeepAliveClientMixin {
   Future<void> _openBookSheet(LibraryItem item) async {
     final palette = context.palette;
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: palette.sheet,
       shape: const RoundedRectangleBorder(

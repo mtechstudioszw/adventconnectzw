@@ -172,6 +172,7 @@ class _PageDetailsScreenState extends State<PageDetailsScreen> {
     final page = _page!;
     final palette = context.palette;
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: palette.sheet,
       shape: const RoundedRectangleBorder(
@@ -245,6 +246,7 @@ class _PageDetailsScreenState extends State<PageDetailsScreen> {
     final page = _page!;
     final palette = context.palette;
     final choice = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: palette.sheet,
       shape: const RoundedRectangleBorder(

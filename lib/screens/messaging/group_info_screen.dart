@@ -201,6 +201,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           'join.html?g=$token';
       if (!mounted) return;
       await showModalBottomSheet<void>(
+      useRootNavigator: true,
         context: context,
         backgroundColor: context.palette.sheet,
         shape: const RoundedRectangleBorder(
@@ -302,6 +303,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   Future<void> _addMembers() async {
     final existing = _members.map((m) => m.userId).toSet();
     final picked = await showModalBottomSheet<List<String>>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,
@@ -326,6 +328,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     if (m.userId == _myId) return;
     final firstName = m.fullName.split(' ').first;
     final action = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(

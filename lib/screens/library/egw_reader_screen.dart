@@ -1366,6 +1366,7 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
   void _openContents() {
     final palette = EgwReadingPalette.of(EgwReaderPrefs.resolve(context));
     showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: palette.page,
       isScrollControlled: true,
@@ -1406,6 +1407,7 @@ class _EgwReaderScreenState extends State<EgwReaderScreen> {
 
   void _openSettings() {
     showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       // Transparent, because the sheet paints its OWN ground from the
       // current setting. A colour passed here is evaluated once, when the

@@ -22,6 +22,7 @@ class QuizProfileSheet extends StatefulWidget {
   /// Returns true when a profile now exists.
   static Future<bool?> show(BuildContext context, {String? initialName}) {
     return showModalBottomSheet<bool>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

@@ -596,6 +596,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
   Future<void> _openSpeedSheet(BuildContext context) async {
     const speeds = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: AppColors.darkNavy,
       shape: const RoundedRectangleBorder(
@@ -642,6 +643,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
       ('Off', null),
     ];
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: AppColors.darkNavy,
       shape: const RoundedRectangleBorder(
@@ -680,6 +682,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
 
   Future<void> _openQueue(BuildContext context) async {
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: AppColors.darkNavy,
       isScrollControlled: true,

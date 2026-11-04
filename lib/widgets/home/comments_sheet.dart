@@ -28,6 +28,7 @@ Future<void> showCommentsSheet(
   String? postAuthorId,
 }) {
   return showModalBottomSheet<void>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

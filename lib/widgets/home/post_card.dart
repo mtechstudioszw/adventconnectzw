@@ -1006,6 +1006,7 @@ Future<PostReaction?> showReactionTray(
   PostReaction? current,
 }) {
   return showModalBottomSheet<PostReaction>(
+      useRootNavigator: true,
     context: context,
     backgroundColor: Colors.transparent,
     builder: (ctx) => _ReactionTray(current: current),

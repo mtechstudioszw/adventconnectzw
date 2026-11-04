@@ -20,6 +20,7 @@ Future<bool?> showReportSheet(
 }) async {
   final messenger = ScaffoldMessenger.of(context);
   final sent = await showModalBottomSheet<bool>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

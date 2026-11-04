@@ -25,6 +25,7 @@ class AudioBibleBooksScreen extends StatefulWidget {
 class _AudioBibleBooksScreenState extends State<AudioBibleBooksScreen> {
   Future<void> _openBook(BibleBook book) async {
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       isScrollControlled: true,
@@ -216,6 +217,7 @@ class _ChapterPicker extends StatelessWidget {
     void openSheet() {
       Navigator.of(context).pop();
       showModalBottomSheet<void>(
+      useRootNavigator: true,
         context: context,
         backgroundColor: palette.sheet,
         isScrollControlled: true,

@@ -74,6 +74,7 @@ class CaptchaService {
     final nav = navigatorKey?.currentState;
     if (key == null || nav == null || !nav.mounted) return null;
     return showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: nav.context,
       isDismissible: true,
       backgroundColor: Colors.transparent,

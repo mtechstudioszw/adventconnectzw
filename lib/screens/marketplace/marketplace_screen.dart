@@ -910,6 +910,7 @@ Future<void> _onBecomeSellerTapped(BuildContext context) async {
 /// a store or want to set up a fresh one.
 Future<void> _showSellerChooser(BuildContext context) {
   return showModalBottomSheet<void>(
+      useRootNavigator: true,
     context: context,
     backgroundColor: Colors.transparent,
     builder: (sheetContext) => SafeArea(

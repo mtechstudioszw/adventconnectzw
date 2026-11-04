@@ -24,6 +24,7 @@ bool hasAiConsent() => CacheService.readStringStale(_kConsentKey) == 'yes';
 Future<bool> ensureAiConsent(BuildContext context) async {
   if (hasAiConsent()) return true;
   final agreed = await showModalBottomSheet<bool>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: context.palette.sheet,

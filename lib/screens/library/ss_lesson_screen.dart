@@ -863,6 +863,7 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
 
   Future<void> _openTextSheet() async {
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(
@@ -926,6 +927,7 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
     final palette = context.palette;
 
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: palette.sheet,
       isScrollControlled: true,
@@ -1029,6 +1031,7 @@ class _SsDayReaderScreenState extends State<SsDayReaderScreen> {
 
   void _openNote(SsDay day) {
     showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,
@@ -1277,6 +1280,7 @@ class _DayPageState extends State<_DayPage> with AutomaticKeepAliveClientMixin {
   ) {
     final html = content.bible[ref];
     showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       isScrollControlled: true,

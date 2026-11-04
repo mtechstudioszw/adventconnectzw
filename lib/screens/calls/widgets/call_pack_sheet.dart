@@ -19,6 +19,7 @@ class CallPackSheet extends StatefulWidget {
   static Future<void> show(BuildContext context) async {
     if (kHidePayments) return;
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       isScrollControlled: true,

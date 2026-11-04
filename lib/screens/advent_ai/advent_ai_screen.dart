@@ -300,6 +300,7 @@ class _AdventAiScreenState extends State<AdventAiScreen> {
 
   Future<void> _openHistory() async {
     final chosen = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,

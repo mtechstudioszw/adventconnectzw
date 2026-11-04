@@ -35,6 +35,7 @@ Future<String?> showChatContactSheet(
   String? conversationId,
 }) {
   return showModalBottomSheet<String>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

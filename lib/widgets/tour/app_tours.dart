@@ -143,6 +143,7 @@ class AppTours {
 
   static Future<void> _showWhatsNew(BuildContext context) {
     return showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       isScrollControlled: true,

@@ -206,6 +206,7 @@ class _AdventNewsDetailsScreenState extends State<AdventNewsDetailsScreen> {
 
   void _showOwnerMenu() {
     showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(

@@ -860,6 +860,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   /// group" are indistinguishable to somebody who hasn't used the app before.
   Future<void> _openNewChatSheet() async {
     final choice = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _ComposeSheet(),
@@ -1349,6 +1350,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   /// through a small "Archived" row that opens them in a sheet.
   void _openArchivedSheet() {
     showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.scaffoldBg,
@@ -1902,6 +1904,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
   Future<void> _openConversationActions(Conversation c) async {
     final action = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(

@@ -16,6 +16,7 @@ Future<MarketFilters?> showMarketFilterSheet(
   required List<Seller> shops,
 }) {
   return showModalBottomSheet<MarketFilters>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: context.palette.sheet,

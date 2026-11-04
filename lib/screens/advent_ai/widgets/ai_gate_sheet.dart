@@ -32,6 +32,7 @@ Future<void> showAiGateSheet(
   bool offerPack = false,
 }) {
   return showModalBottomSheet<void>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: context.palette.sheet,

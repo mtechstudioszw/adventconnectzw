@@ -16,6 +16,7 @@ Future<Country?> showCountryPicker(
   String? selectedCode,
 }) {
   return showModalBottomSheet<Country>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

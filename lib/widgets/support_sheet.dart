@@ -14,6 +14,7 @@ const String kSupportEmail = 'adventconnectzw@gmail.com';
 /// (e.g. 'Sign-in problem', 'Password reset').
 Future<void> showSupportSheet(BuildContext context, {String topic = ''}) {
   return showModalBottomSheet<void>(
+      useRootNavigator: true,
     context: context,
     backgroundColor: Colors.transparent,
     builder: (_) => _SupportSheet(topic: topic),

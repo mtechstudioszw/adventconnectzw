@@ -1166,6 +1166,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     final lines = await VerseRefService.passage(ref);
     if (!mounted) return;
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,
@@ -1263,6 +1264,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     } catch (_) {}
     if (!mounted) return;
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,

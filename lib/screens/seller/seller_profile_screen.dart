@@ -227,6 +227,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     final seller = _seller;
     if (seller == null) return;
     final result = await showModalBottomSheet<SellerRating?>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,
@@ -469,6 +470,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
     if (seller == null) return;
     final palette = context.palette;
     final choice = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: palette.sheet,
       shape: const RoundedRectangleBorder(
@@ -1079,6 +1081,7 @@ class _SellerProfileScreenState extends State<SellerProfileScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => showModalBottomSheet<void>(
+      useRootNavigator: true,
           context: context,
           backgroundColor: palette.sheet,
           shape: const RoundedRectangleBorder(

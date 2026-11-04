@@ -216,6 +216,7 @@ class _CartScreenState extends State<CartScreen> {
       return;
     }
     final details = await showModalBottomSheet<_CheckoutDetails>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,

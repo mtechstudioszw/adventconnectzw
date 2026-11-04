@@ -20,6 +20,7 @@ import '../theme/app_text_styles.dart';
 /// Returns true if anything changed, so the caller can reload.
 Future<bool?> showPrayerCirclesSheet(BuildContext context) {
   return showModalBottomSheet<bool>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
@@ -141,6 +142,7 @@ class _CirclesSheetState extends State<_CirclesSheet> {
 
   Future<void> _manageMembers(PrayerCircle circle) async {
     final changed = await showModalBottomSheet<bool>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

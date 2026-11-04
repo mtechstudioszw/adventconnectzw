@@ -69,6 +69,7 @@ Future<void> showModerationAppealSheet(
   String? reason,
 }) {
   return showModalBottomSheet<void>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

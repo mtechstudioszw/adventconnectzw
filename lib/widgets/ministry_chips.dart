@@ -198,6 +198,7 @@ Future<Set<int>?> showMinistryPicker(
   required Set<int> selected,
 }) {
   return showModalBottomSheet<Set<int>>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

@@ -127,6 +127,7 @@ class _IphoneFundraiserScreenState extends State<IphoneFundraiserScreen> {
             '${campaign.formatCents(amount)}, but I do not have EcoCash. '
             'What is the best way to send it?';
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => _ArrangeSheet(message: intro),

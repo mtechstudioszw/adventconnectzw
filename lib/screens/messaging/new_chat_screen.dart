@@ -267,6 +267,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
         : m.fullName!.trim();
     final bond = _bonds[m.userId] ?? _Bond.none;
     final choice = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(

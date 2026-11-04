@@ -228,6 +228,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
     final picked = await showModalBottomSheet<ChurchAdminRole>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(
@@ -802,6 +803,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _openMoreMenu() async {
     final result = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: Colors.transparent,
       // Scroll-controlled and scrollable: the menu has outgrown a short

@@ -89,6 +89,7 @@ class InviteFriendsCard extends StatelessWidget {
 
   Future<void> _openShareSheet(BuildContext context) {
     return showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _ShareSheet(message: _inviteMessage),

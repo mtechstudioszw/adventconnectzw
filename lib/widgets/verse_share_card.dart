@@ -45,6 +45,7 @@ class VerseShareSheet extends StatefulWidget {
     String attribution = 'KJV',
   }) {
     return showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

@@ -70,6 +70,7 @@ Future<bool> showEntityPreview(
   List<PreviewNote> notes = const [],
 }) async {
   final result = await showModalBottomSheet<bool>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

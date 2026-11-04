@@ -425,6 +425,7 @@ class _DirectoryRow extends StatelessWidget {
         ? entry.fullName!.trim()
         : 'Member';
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

@@ -29,6 +29,7 @@ Future<String?> showQuickApplySheet(
   required List<ApplyRoute> routes,
 }) {
   return showModalBottomSheet<String>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: context.palette.sheet,

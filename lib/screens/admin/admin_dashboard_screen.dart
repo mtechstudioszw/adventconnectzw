@@ -128,6 +128,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   /// admins only — the RPC enforces it too, this just hides the door.
   Future<void> _openAdminsSheet() async {
     final changed = await showModalBottomSheet<bool>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,
@@ -194,6 +195,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Future<void> _openComposer() async {
     final result = await showModalBottomSheet<bool>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surface,
@@ -1291,6 +1293,7 @@ class _AdminsSheetState extends State<_AdminsSheet> {
 
   Future<void> _nominate() async {
     final picked = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,

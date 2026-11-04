@@ -15,6 +15,7 @@ Future<JobFilters?> showJobFilterSheet(
   bool hire = false,
 }) {
   return showModalBottomSheet<JobFilters>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: context.palette.sheet,

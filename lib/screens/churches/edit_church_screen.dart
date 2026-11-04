@@ -240,6 +240,7 @@ class _EditChurchScreenState extends State<EditChurchScreen> {
 
   Future<void> _addServiceTime() async {
     final added = await showModalBottomSheet<ServiceTime>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,

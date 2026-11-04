@@ -640,15 +640,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   /// The guided tour (3 Nov 2026): once Home has painted its feed and is
   /// the screen in front, spotlight the main features — once per phone.
+  ///
+  /// Keeps trying while something else is in front. A brand-new member
+  /// lands on Home with the "Welcome to the family" survey on top, and the
+  /// tour used to give up on its one attempt and only appear after the
+  /// app was restarted (owner, 4 Nov 2026). It now waits — every 2s for
+  /// up to 2 minutes — until Home is the screen in front, then runs.
+  bool _tourScheduled = false;
+
   void _scheduleTour() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future<void>.delayed(const Duration(milliseconds: 900), () {
-        if (!mounted) return;
-        final route = ModalRoute.of(context);
-        if (route != null && !route.isCurrent) return;
-        if (TabShell.activeIndex.value != TabShell.homeIndex) return;
-        unawaited(AppTours.maybeRun(context));
-      });
+    if (_tourScheduled) return;
+    _tourScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await Future<void>.delayed(const Duration(milliseconds: 900));
+        for (var attempt = 0; attempt < 60; attempt++) {
+          if (!mounted) return;
+          final route = ModalRoute.of(context);
+          final inFront = route == null || route.isCurrent;
+          if (inFront && TabShell.activeIndex.value == TabShell.homeIndex) {
+            // Let a sheet that has just closed finish sliding away.
+            await Future<void>.delayed(const Duration(milliseconds: 600));
+            if (!mounted) return;
+            await AppTours.maybeRun(context);
+            return;
+          }
+          await Future<void>.delayed(const Duration(seconds: 2));
+        }
+      } finally {
+        // A later feed load may try again (e.g. the anchors were not on
+        // screen yet); AppTours itself never shows a finished tour twice.
+        _tourScheduled = false;
+      }
     });
   }
 
@@ -1396,6 +1419,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       return;
     }
     final choice = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(

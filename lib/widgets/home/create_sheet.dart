@@ -309,6 +309,7 @@ class _CreateScreenState extends State<_CreateScreen>
     if (_pages.isEmpty) return;
     final self = _who();
     final picked = await showModalBottomSheet<_Identity>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(

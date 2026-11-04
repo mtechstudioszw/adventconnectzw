@@ -392,6 +392,7 @@ class _PostPrayerScreenState extends State<PostPrayerScreen>
 
   Future<void> _pickCircle() async {
     final picked = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => SafeArea(

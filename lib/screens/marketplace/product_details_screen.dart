@@ -1460,6 +1460,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
               onTap: () => showModalBottomSheet<void>(
+      useRootNavigator: true,
                 context: context,
                 backgroundColor: palette.sheet,
                 shape: const RoundedRectangleBorder(
@@ -1557,6 +1558,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final palette = context.palette;
     final hasPhone = (product.sellerPhone ?? '').trim().isNotEmpty;
     final choice = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: palette.sheet,
       shape: const RoundedRectangleBorder(

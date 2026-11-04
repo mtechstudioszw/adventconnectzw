@@ -511,6 +511,7 @@ class _MusicTabState extends State<MusicTab>
   Future<void> _openTrackSheet(BuildContext context, LibraryItem item) async {
     final palette = context.palette;
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: palette.sheet,
       shape: const RoundedRectangleBorder(

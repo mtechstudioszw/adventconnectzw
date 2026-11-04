@@ -274,6 +274,7 @@ class _SettingsButton extends StatelessWidget {
 /// sound effects.
 Future<void> showQuizSettings(BuildContext context) {
   return showModalBottomSheet<void>(
+      useRootNavigator: true,
     context: context,
     backgroundColor: Colors.transparent,
     // The sheet now carries five controls rather than three. Without this

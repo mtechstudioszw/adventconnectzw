@@ -311,6 +311,7 @@ class _HymnalTabState extends State<HymnalTab>
         if (!_available.contains(c)) c,
     ];
     showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: palette.sheet,
       showDragHandle: true,
@@ -1012,6 +1013,7 @@ class _HymnReaderScreenState extends State<HymnReaderScreen> {
 
   Future<void> _openTextSheet() async {
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(

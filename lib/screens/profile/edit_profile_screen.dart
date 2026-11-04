@@ -1083,6 +1083,7 @@ class _ChurchDropdown extends StatelessWidget {
       child: InkWell(
         onTap: () async {
           final picked = await showModalBottomSheet<String?>(
+      useRootNavigator: true,
             context: context,
             isScrollControlled: true,
             backgroundColor: Colors.transparent,

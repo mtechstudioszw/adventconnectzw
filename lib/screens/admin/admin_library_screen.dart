@@ -481,6 +481,7 @@ class _UploadAdminTabState extends State<_UploadAdminTab> {
   /// FAB tap → choose single (titled) upload or bulk (many files at once).
   Future<void> _showAddMenu() async {
     final choice = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(
@@ -523,6 +524,7 @@ class _UploadAdminTabState extends State<_UploadAdminTab> {
 
   Future<void> _add() async {
     final added = await showModalBottomSheet<bool>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

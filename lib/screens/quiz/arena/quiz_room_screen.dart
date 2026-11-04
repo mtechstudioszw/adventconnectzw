@@ -746,6 +746,7 @@ class _InviteSheet extends StatefulWidget {
 
   static Future<void> show(BuildContext context, QuizRoom room) =>
       showModalBottomSheet<void>(
+      useRootNavigator: true,
         context: context,
         isScrollControlled: true,
         backgroundColor: ArenaTheme.canvasLift,

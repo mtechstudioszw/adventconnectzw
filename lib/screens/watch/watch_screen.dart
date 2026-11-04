@@ -901,6 +901,7 @@ class _WatchScreenState extends State<WatchScreen> {
   // --------------------------- Submit channel -------------------------
   Future<void> _openSubmitSheet() async {
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,

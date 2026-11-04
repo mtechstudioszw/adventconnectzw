@@ -439,6 +439,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (m.isDeleted) {
       if (!isMine) return;
       final remove = await showModalBottomSheet<bool>(
+      useRootNavigator: true,
         context: context,
         backgroundColor: context.palette.sheet,
         shape: const RoundedRectangleBorder(
@@ -478,6 +479,7 @@ class _ChatScreenState extends State<ChatScreen>
     final hasText =
         m.content.trim().isNotEmpty && m.messageType != 'voice' && !isImage;
     final action = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       // Scrollable so the full action list (incl. Delete for everyone)
@@ -1175,6 +1177,7 @@ class _ChatScreenState extends State<ChatScreen>
     final convos = await MessagingService.fetchConversations();
     if (!mounted) return null;
     return showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       isScrollControlled: true,
@@ -2772,6 +2775,7 @@ class _ChatScreenState extends State<ChatScreen>
         selected.isNotEmpty && selected.every((m) => m.senderId == me);
     final count = _selectedMsgIds.length;
     final choice = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(
@@ -3092,6 +3096,7 @@ class _ChatScreenState extends State<ChatScreen>
   ) async {
     final name = _conversation?.otherUserName ?? 'this chat';
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       isScrollControlled: true,
@@ -3902,6 +3907,7 @@ class _ChatScreenState extends State<ChatScreen>
   /// reuses the hold-to-record voice flow.
   Future<void> _openAttachmentSheet() async {
     final choice = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(

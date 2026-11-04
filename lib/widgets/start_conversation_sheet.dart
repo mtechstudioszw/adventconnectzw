@@ -23,6 +23,7 @@ Future<void> showStartConversationSheet(
   String? openerOverride,
 }) {
   return showModalBottomSheet<void>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

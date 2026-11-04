@@ -49,6 +49,7 @@ class PremiumPromoSheet extends StatelessWidget {
     if (!context.mounted) return false;
 
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

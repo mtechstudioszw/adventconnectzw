@@ -26,6 +26,7 @@ class SignupSurveySheet extends StatefulWidget {
     // kill the app mid-question, which is the right trade.
     if (!context.mounted) return;
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

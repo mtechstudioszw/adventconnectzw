@@ -96,6 +96,7 @@ Future<Story?> showStoryComposer(
   bool pickPhoto = false,
 }) {
   return showModalBottomSheet<Story>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

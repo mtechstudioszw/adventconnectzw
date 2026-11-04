@@ -249,6 +249,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   Future<void> _openSupportSheet() async {
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: context.palette.sheet,
       shape: const RoundedRectangleBorder(
@@ -353,6 +354,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   // ignore: unused_element
   Future<void> _pickTheme() async {
     final picked = await showModalBottomSheet<ThemeMode>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _ThemeSheet(selected: _themeMode),
@@ -1141,6 +1143,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// The ten notification switches, on one sheet (settings audit).
   Future<void> _openNotificationSheet() async {
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: context.palette.sheet,

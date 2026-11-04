@@ -25,6 +25,7 @@ Future<bool> showBoostSheet(
 }) async {
   if (kHidePayments) return false;
   final landed = await showModalBottomSheet<bool>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: context.palette.scaffoldBg,

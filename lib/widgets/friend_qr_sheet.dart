@@ -160,6 +160,7 @@ Future<void> showFriendQrSheet(
   String? name,
 }) {
   return showModalBottomSheet<void>(
+      useRootNavigator: true,
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,

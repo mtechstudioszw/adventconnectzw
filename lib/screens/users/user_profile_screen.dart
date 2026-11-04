@@ -404,6 +404,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         ? alertsMuted('user', widget.userId)
         : null;
     final choice = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       backgroundColor: palette.sheet,
       shape: const RoundedRectangleBorder(

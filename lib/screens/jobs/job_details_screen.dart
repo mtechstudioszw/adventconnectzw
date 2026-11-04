@@ -719,6 +719,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen>
     final hasEmail = (job.contactEmail ?? '').trim().isNotEmpty;
     final hasUrl = (job.applyUrl ?? '').trim().isNotEmpty;
     final choice = await showModalBottomSheet<String>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: palette.sheet,

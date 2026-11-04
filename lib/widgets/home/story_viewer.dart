@@ -212,6 +212,7 @@ class _StoryViewerState extends State<StoryViewer>
   Future<void> _openLikersSheet(Story story) async {
     _onHoldStart();
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -336,6 +337,7 @@ class _StoryViewerState extends State<StoryViewer>
   Future<void> _openViewersSheet(Story story) async {
     _onHoldStart();
     await showModalBottomSheet<void>(
+      useRootNavigator: true,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

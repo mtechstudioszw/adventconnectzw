@@ -111,6 +111,7 @@ class _GetVerifiedScreenState extends State<GetVerifiedScreen> {
   }
 
   Future<ImageSource?> _askSource() => showModalBottomSheet<ImageSource>(
+      useRootNavigator: true,
     context: context,
     backgroundColor: context.palette.scaffoldBg,
     builder: (context) => SafeArea(

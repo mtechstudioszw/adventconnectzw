@@ -1,3 +1,5 @@
+import '../utils/premium_flag.dart';
+
 /// A community post from the home feed. Permanent unless the author
 /// deletes it. Mirrors public.posts (patch_011 + patch_012 visibility).
 enum PostVisibility { public, friendsOnly }
@@ -42,6 +44,7 @@ class Post {
     required this.createdAt,
     this.authorPhotoUrl,
     this.authorIsVerified = false,
+    this.authorPremiumUntil,
     this.authorAllowsFollowers = false,
     this.churchId,
     this.country,
@@ -70,6 +73,10 @@ class Post {
 
   /// Cosmetic gold tick (super admin / approved church admin, patch_134).
   final bool authorIsVerified;
+
+  /// Author's profiles.premium_until — drives the Premium star others see.
+  final String? authorPremiumUntil;
+  bool get authorIsPremium => premiumActive(authorPremiumUntil);
 
   /// The author turned followers on (patch_287) — so the post menu may
   /// offer "Follow". Off by default, like the account itself.
@@ -150,6 +157,7 @@ class Post {
       authorName: authorName,
       authorPhotoUrl: authorPhotoUrl,
       authorIsVerified: authorIsVerified,
+      authorPremiumUntil: authorPremiumUntil,
       authorAllowsFollowers: authorAllowsFollowers,
       churchId: churchId,
       // Was missing: a liked or commented post lost its country, which the
@@ -261,6 +269,7 @@ class Post {
       authorName: (authorMap?['full_name'] as String?) ?? 'Member',
       authorPhotoUrl: authorMap?['profile_photo_url'] as String?,
       authorIsVerified: authorMap?['is_verified'] == true,
+      authorPremiumUntil: authorMap?['premium_until']?.toString(),
       authorAllowsFollowers: const {'everyone', 'friends'}
           .contains(authorMap?['who_can_follow']),
       churchId: json['church_id']?.toString(),
@@ -305,7 +314,9 @@ class Post {
         'profiles': {
           'full_name': authorName,
           'profile_photo_url': authorPhotoUrl,
+          'is_verified': authorIsVerified,
           'is_verified_admin': authorIsVerified,
+          'premium_until': authorPremiumUntil,
           'who_can_follow': authorAllowsFollowers ? 'everyone' : 'nobody',
         },
         'church_id': churchId,

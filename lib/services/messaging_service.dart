@@ -424,8 +424,8 @@ class MessagingService {
   /// empty embedded objects, leaving the chat header on initials only.
   static const _conversationSelect =
       '*, '
-      'participant_a:profiles!conversations_participant_a_id_fkey(profile_photo_url, is_verified, is_verified_admin), '
-      'participant_b:profiles!conversations_participant_b_id_fkey(profile_photo_url, is_verified, is_verified_admin)';
+      'participant_a:profiles!conversations_participant_a_id_fkey(profile_photo_url, is_verified, is_verified_admin, premium_until), '
+      'participant_b:profiles!conversations_participant_b_id_fkey(profile_photo_url, is_verified, is_verified_admin, premium_until)';
 
   /// Fetches a single conversation by id, joining both participants'
   /// profile photos. Used when the chat screen is entered from a deep

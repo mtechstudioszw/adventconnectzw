@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'follow_service.dart' show WhoCanFollow, WhoCanFollowX;
 
+import '../utils/premium_flag.dart';
 import '../utils/require_changed.dart';
 
 /// Snapshot of another user's public profile fields. Mirrors what the
@@ -14,6 +15,7 @@ class PublicUserProfile {
     required this.isDiscoverable,
     required this.isVerified,
     this.isVerifiedAdmin = false,
+    this.premiumUntil,
     required this.isBusiness,
     this.profilePhotoUrl,
     this.coverPhotoUrl,
@@ -47,6 +49,10 @@ class PublicUserProfile {
   final String? churchName;
   final bool isDiscoverable;
   final bool isVerified;
+
+  /// profiles.premium_until — the Premium star on their profile.
+  final String? premiumUntil;
+  bool get isPremium => premiumActive(premiumUntil);
 
   /// Cosmetic gold tick: TRUE for the super admin and approved church admins
   /// (patch_134). Grants no powers — display only.
@@ -111,6 +117,7 @@ class PublicUserProfile {
       isDiscoverable: json['is_discoverable'] != false,
       isVerified: json['is_verified'] == true,
       isVerifiedAdmin: json['is_verified_admin'] == true,
+      premiumUntil: json['premium_until']?.toString(),
       isBusiness: json['is_business'] == true,
       showAge: json['show_age'] != false,
       username: (json['username'] as String?)?.trim().isNotEmpty == true
@@ -135,7 +142,7 @@ class UserProfileService {
   static const _baseColumns =
       'id, full_name, username, profile_photo_url, cover_photo_url, bio, '
       'country, province, city, date_of_birth, created_at, '
-      'is_discoverable, is_verified, is_verified_admin, is_business, show_age, '
+      'is_discoverable, is_verified, is_verified_admin, premium_until, is_business, show_age, '
       'churches(name)';
 
   /// Flips false the first time patch_274's columns are missing, so later

@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import '../premium/premium_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
@@ -293,6 +294,14 @@ class _PostCardState extends State<PostCard>
                           size: 14,
                           color: AppColors.goldAccent,
                         ),
+                      ],
+                      // Premium star — the member's, never lent to a Page
+                      // or church post they wrote on behalf of.
+                      if (!post.isPagePost &&
+                          !post.isChurchPost &&
+                          post.authorIsPremium) ...[
+                        const SizedBox(width: 3),
+                        const PremiumBadge(size: 14),
                       ],
                     ],
                   ),

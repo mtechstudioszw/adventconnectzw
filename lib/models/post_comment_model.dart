@@ -1,3 +1,5 @@
+import '../utils/premium_flag.dart';
+
 /// A comment on a feed post. Mirrors public.post_comments (patch_011),
 /// extended with threading + like/dislike in patch_017:
 ///   - parent_comment_id  → top-level vs reply
@@ -13,6 +15,7 @@ class PostComment {
     required this.createdAt,
     this.authorPhotoUrl,
     this.authorIsVerified = false,
+    this.authorPremiumUntil,
     this.parentCommentId,
     this.likeCount = 0,
     this.dislikeCount = 0,
@@ -26,6 +29,8 @@ class PostComment {
   final String authorName;
   final String? authorPhotoUrl;
   final bool authorIsVerified;
+  final String? authorPremiumUntil;
+  bool get authorIsPremium => premiumActive(authorPremiumUntil);
   final String body;
   final DateTime createdAt;
   final String? parentCommentId;
@@ -54,6 +59,7 @@ class PostComment {
       authorName: authorName,
       authorPhotoUrl: authorPhotoUrl,
       authorIsVerified: authorIsVerified,
+      authorPremiumUntil: authorPremiumUntil,
       body: body,
       createdAt: createdAt,
       parentCommentId: parentCommentId,
@@ -97,6 +103,7 @@ class PostComment {
       authorName: (authorMap?['full_name'] as String?) ?? 'Member',
       authorPhotoUrl: authorMap?['profile_photo_url'] as String?,
       authorIsVerified: authorMap?['is_verified'] == true,
+      authorPremiumUntil: authorMap?['premium_until']?.toString(),
       body: (json['body'] ?? '') as String,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.now(),

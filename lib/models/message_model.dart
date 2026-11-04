@@ -1,3 +1,5 @@
+import '../utils/premium_flag.dart';
+
 /// Per-user pin/mute/archive flags for a conversation (patch_058).
 class ConversationState {
   const ConversationState({
@@ -48,6 +50,7 @@ class Conversation {
     this.lastDelivered = false,
     this.lastRead = false,
     this.otherUserIsVerified = false,
+    this.otherUserPremiumUntil,
     this.adminsOnlySend = false,
   });
 
@@ -88,6 +91,11 @@ class Conversation {
   /// is_verified_admin) — drives the gold tick on the inbox tile + chat
   /// header. Always false for groups.
   final bool otherUserIsVerified;
+
+  /// The other participant's profiles.premium_until (DMs only).
+  final String? otherUserPremiumUntil;
+  bool get otherUserIsPremium =>
+      !isGroup && premiumActive(otherUserPremiumUntil);
 
   /// Announcement mode (patch_296): only group admins can send.
   final bool adminsOnlySend;
@@ -159,6 +167,9 @@ class Conversation {
     final pb = json['participant_b'];
     bool verifiedOf(dynamic p) => p is Map && (p['is_verified'] == true);
     bool otherVerified;
+    String? premiumOf(dynamic p) =>
+        p is Map ? p['premium_until']?.toString() : null;
+    final otherPremium = premiumOf(selfChat || !isCurrentA ? pa : pb);
     if (selfChat) {
       otherPhoto = (pa is Map ? pa['profile_photo_url'] : null) as String?;
       otherVerified = verifiedOf(pa);
@@ -191,6 +202,7 @@ class Conversation {
       lastDelivered: json['last_delivered'] == true,
       lastRead: json['last_read'] == true,
       otherUserIsVerified: otherVerified,
+      otherUserPremiumUntil: otherPremium,
     );
   }
 
@@ -232,6 +244,7 @@ class Conversation {
       lastDelivered: lastDelivered ?? this.lastDelivered,
       lastRead: lastRead ?? this.lastRead,
       otherUserIsVerified: otherUserIsVerified,
+      otherUserPremiumUntil: otherUserPremiumUntil,
       adminsOnlySend: adminsOnlySend ?? this.adminsOnlySend,
     );
   }

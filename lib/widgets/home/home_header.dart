@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show FloatingHeaderSnapConfiguration;
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 
+import '../../services/premium_service.dart';
 import '../../services/sabbath_service.dart';
+import '../premium/premium_badge.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -527,18 +529,37 @@ class _TitleBlock extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            firstName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.headlineMedium.copyWith(
-              color: onHeader,
-              fontWeight: FontWeight.w700,
-              height: 1.1,
-              // 20pt expanded → 17pt pinned. Tracks the finger like the rest
-              // of the header instead of snapping at a threshold.
-              fontSize: lerpDouble(20, 17, t),
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  firstName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.headlineMedium.copyWith(
+                    color: onHeader,
+                    fontWeight: FontWeight.w700,
+                    height: 1.1,
+                    // 20pt expanded → 17pt pinned. Tracks the finger like
+                    // the rest of the header instead of snapping at a
+                    // threshold.
+                    fontSize: lerpDouble(20, 17, t),
+                  ),
+                ),
+              ),
+              // A quiet Premium mark beside the name (owner, 4 Nov 2026) —
+              // the same star others see on your posts. No banner.
+              ValueListenableBuilder<bool>(
+                valueListenable: PremiumService.isPremium,
+                builder: (context, premium, _) => premium
+                    ? Padding(
+                        padding: const EdgeInsets.only(left: 5),
+                        child: PremiumBadge(size: lerpDouble(17, 15, t)!),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
           ),
         ],
       ),

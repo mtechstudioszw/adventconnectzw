@@ -676,6 +676,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         coverUrl: _coverPhotoUrl(),
         bio: bio,
         verified: _isVerified,
+        premiumRing: isPremium,
         // Premium sits AFTER the verified tick: verification says who you
         // are, premium says you support the app — paid is not verified.
         badges: [

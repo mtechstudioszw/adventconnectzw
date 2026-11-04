@@ -1,4 +1,5 @@
 import '../../config/platform_flags.dart';
+import '../../widgets/premium/premium_badge.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
@@ -2955,6 +2956,10 @@ class _ChatScreenState extends State<ChatScreen>
                                     if (!isGroup &&
                                         (convo?.otherUserIsVerified ?? false))
                                       const VerifiedTick(size: 16),
+                                    if (convo?.otherUserIsPremium ?? false) ...[
+                                      const SizedBox(width: 3),
+                                      const PremiumBadge(size: 15),
+                                    ],
                                   ],
                                 ),
                                 const SizedBox(height: 2),

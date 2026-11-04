@@ -1,4 +1,5 @@
 import '../../config/platform_flags.dart';
+import '../../widgets/premium/premium_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/countries.dart';
@@ -776,8 +777,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       coverUrl: open ? cover : null,
       bio: open ? p.bio : null,
       verified: p.showsVerifiedTick,
+      premiumRing: p.isPremium,
       relationNote: note,
       badges: [
+        // Premium sits after the verified tick, as on your own profile.
+        if (p.isPremium) const PremiumBadge(size: 20),
         if (p.isBusiness)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

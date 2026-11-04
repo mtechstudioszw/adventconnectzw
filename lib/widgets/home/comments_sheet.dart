@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../premium/premium_badge.dart';
 import '../motion/brand_spinner.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/post_comment_model.dart';
@@ -665,6 +666,10 @@ class _CommentRow extends StatelessWidget {
                         ),
                         if (comment.authorIsVerified)
                           const VerifiedTick(size: 13),
+                        if (comment.authorIsPremium) ...[
+                          const SizedBox(width: 3),
+                          const PremiumBadge(size: 13),
+                        ],
                         // Comments carried no time at all, so a thread read
                         // as though it had all happened at once — you could
                         // not tell a reply from this morning from one left

@@ -207,7 +207,7 @@ class FeedService {
 
   static const String _basePostCols =
       '*, '
-      'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin, who_can_follow), '
+      'profiles!posts_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin, premium_until, who_can_follow), '
       'churches(name, profile_photo_url), '
       'post_likes(user_id, reaction), '
       'post_comments(id)';
@@ -813,7 +813,7 @@ class FeedService {
         .from(_commentsTable)
         .select(
           '*, '
-          'profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
+          'profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin, premium_until), '
           'post_comment_reactions(user_id, value)',
         )
         .eq('post_id', postId)
@@ -849,7 +849,7 @@ class FeedService {
         })
         .select(
           '*, '
-          'profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin), '
+          'profiles!post_comments_author_id_fkey(id, full_name, profile_photo_url, is_verified, is_verified_admin, premium_until), '
           'post_comment_reactions(user_id, value)',
         )
         .single();

@@ -1,4 +1,5 @@
 import '../../services/e2ee/chat_backup_service.dart';
+import '../../widgets/premium/premium_badge.dart';
 import '../../config/platform_flags.dart';
 import 'dart:async';
 
@@ -3014,6 +3015,10 @@ class _ConversationTile extends StatelessWidget {
                                 if (conversation.otherUserIsVerified ||
                                     conversation.isChurchGroup)
                                   const VerifiedTick(size: 15),
+                                if (conversation.otherUserIsPremium) ...[
+                                  const SizedBox(width: 3),
+                                  const PremiumBadge(size: 14),
+                                ],
                                 // Group size, in the name row where it reads as
                                 // part of the identity rather than as metadata.
                                 if (memberCount != null &&

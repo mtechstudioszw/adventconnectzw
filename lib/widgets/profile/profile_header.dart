@@ -49,6 +49,7 @@ class ProfileHeader extends StatelessWidget {
     this.onCoverTap,
     this.relationNote,
     this.squareAvatar = false,
+    this.premiumRing = false,
   });
 
   final String name;
@@ -82,6 +83,10 @@ class ProfileHeader extends StatelessWidget {
   /// logo never reads as a person (and logos are square uploads).
   final bool squareAvatar;
 
+  /// Thin gold ring round the photo for a Premium member (owner, 4 Nov
+  /// 2026). The completion ring wins while the profile is unfinished.
+  final bool premiumRing;
+
   static const double _avatar = 88;
 
   @override
@@ -109,6 +114,17 @@ class ProfileHeader extends StatelessWidget {
                 borderRadius: squareAvatar ? BorderRadius.circular(26) : null,
               ),
             ),
+            if (premiumRing &&
+                !squareAvatar &&
+                !(completion != null && completion! < 1))
+              Container(
+                width: _avatar + 6,
+                height: _avatar + 6,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.goldAccent, width: 2.5),
+                ),
+              ),
             if (completion != null && completion! < 1)
               SizedBox(
                 width: _avatar + 6,

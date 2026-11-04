@@ -395,14 +395,29 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
               _reveal(2, _buildDailyHero()),
               const SizedBox(height: 14),
               _reveal(3, _buildLiveStrip()),
-              const SizedBox(height: 20),
-              _reveal(4, _buildSectionLabel('MORE WAYS TO PLAY')),
+              // Redesign (owner, 4 Nov 2026): the ten identical rows read
+              // as one long menu, Leaderboard sat there twice (header +
+              // row) and "Fix your mistakes" showed even with nothing to
+              // fix. Now grouped by WHO you play with — people first,
+              // because a quiz is more fun with someone — then solo modes
+              // as a compact 2×2 grid, each with its best score. The
+              // hierarchy from 17 Aug stands: hero > live strip > these.
+              const SizedBox(height: 22),
+              _reveal(4, _buildSectionLabel('PLAY WITH PEOPLE')),
               const SizedBox(height: 10),
-              _reveal(5, _buildModeList(mistakes)),
-              const SizedBox(height: 20),
-              _reveal(6, _buildSectionLabel('TOPICS')),
+              _reveal(5, _buildPeople()),
+              const SizedBox(height: 22),
+              _reveal(6, _buildSectionLabel('ON YOUR OWN')),
               const SizedBox(height: 10),
-              _reveal(7, _buildTopics()),
+              _reveal(7, _buildSoloGrid()),
+              if (mistakes > 0) ...[
+                const SizedBox(height: 10),
+                _reveal(8, _buildMistakes(mistakes)),
+              ],
+              const SizedBox(height: 22),
+              _reveal(9, _buildSectionLabel('TOPICS')),
+              const SizedBox(height: 10),
+              _reveal(10, _buildTopics()),
             ],
           ),
           if (_busy)
@@ -856,101 +871,109 @@ class _QuizLobbyScreenState extends State<QuizLobbyScreen>
     );
   }
 
-  /// The quiet list. Everything that is NOT today's challenge or a live
-  /// opponent, at a deliberately lower weight.
-  ///
-  /// A list, not a grid: rows give each mode its blurb back (the grid had
-  /// to drop them for space), read top-to-bottom in one pass, and — the
-  /// point of the change — visibly rank below the hero instead of
-  /// competing with it. The async challenge stays here rather than beside
-  /// live match: they are different games, one played whenever you like.
-  Widget _buildModeList(int mistakes) {
+  /// Friends: a live room (up to 5) and an async challenge side by side,
+  /// with "Join a room" as a plain link under them — it is the same game
+  /// as "Play with friends", just entered from the other end.
+  Widget _buildPeople() {
+    final yourTurn = _incomingChallenges;
     return Column(
       children: [
-        _ModeRow(
-          label: QuizMode.practice.label,
-          blurb: QuizMode.practice.blurb,
-          icon: Icons.shuffle_rounded,
-          onTap: () => _play(QuizMode.practice),
-        ),
-        // Endless (3 Nov 2026): first in the list — it's the mode that
-        // answers "the questions run out / are too easy".
-        _ModeRow(
-          label: QuizMode.endless.label,
-          blurb: QuizMode.endless.blurb,
-          icon: Icons.all_inclusive_rounded,
-          best: QuizProgressService.bestScore(QuizMode.endless),
-          onTap: () => _play(QuizMode.endless),
-        ),
-        _ModeRow(
-          label: QuizMode.survival.label,
-          blurb: QuizMode.survival.blurb,
-          icon: Icons.favorite_rounded,
-          best: QuizProgressService.bestScore(QuizMode.survival),
-          onTap: () => _play(QuizMode.survival),
-        ),
-        _ModeRow(
-          label: QuizMode.speed.label,
-          blurb: QuizMode.speed.blurb,
-          icon: Icons.bolt_rounded,
-          best: QuizProgressService.bestScore(QuizMode.speed),
-          onTap: () => _play(QuizMode.speed),
-        ),
-        _ModeRow(
-          label: QuizMode.mistakes.label,
-          // Say why it is unavailable rather than just dimming it. A
-          // disabled row with no explanation reads as broken.
-          blurb: mistakes > 0
-              ? QuizMode.mistakes.blurb
-              : 'Nothing to fix yet — play a round first.',
-          icon: Icons.auto_fix_high_rounded,
-          badge: mistakes > 0 ? '$mistakes' : null,
-          enabled: mistakes > 0,
-          onTap: () => _play(QuizMode.mistakes),
-        ),
-        _ModeRow(
-          label: 'Challenge a friend',
-          blurb: _incomingChallenges > 0
-              ? 'Your turn in $_incomingChallenges'
-              : 'Send five questions. They play when they can.',
-          icon: Icons.sports_kabaddi_rounded,
-          badge: _incomingChallenges > 0 ? '$_incomingChallenges' : null,
-          highlight: _incomingChallenges > 0,
-          onTap: _incomingChallenges > 0 ? _openChallenges : _startChallenge,
-        ),
-        // Live rooms for 2–5 players (3 Nov 2026).
-        _ModeRow(
-          label: 'Play with friends',
-          blurb: 'Live room for up to 5. Share a code, play together.',
-          icon: Icons.groups_rounded,
-          onTap: () {
-            QuizSfx.tap();
-            QuizRoomScreen.host(context);
-          },
-        ),
-        _ModeRow(
-          label: 'Join a room',
-          blurb: 'Got a 6-letter code? Enter it here.',
-          icon: Icons.login_rounded,
-          onTap: () {
-            QuizSfx.tap();
-            QuizRoomScreen.askCode(context);
-          },
-        ),
-        _ModeRow(
-          label: 'Leaderboard',
-          blurb: 'Where you stand this week.',
-          icon: Icons.leaderboard_rounded,
-          onTap: () {
-            QuizSfx.tap();
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const QuizLeaderboardScreen(),
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _PeopleCard(
+                  icon: Icons.groups_rounded,
+                  title: 'Play with friends',
+                  blurb: 'A live room for up to 5. Share the code.',
+                  onTap: () {
+                    QuizSfx.tap();
+                    QuizRoomScreen.host(context);
+                  },
+                ),
               ),
-            );
-          },
+              const SizedBox(width: 10),
+              Expanded(
+                child: _PeopleCard(
+                  icon: Icons.sports_kabaddi_rounded,
+                  title: 'Challenge a friend',
+                  blurb: yourTurn > 0
+                      ? 'Your turn in $yourTurn'
+                      : 'Five questions. They play when they can.',
+                  badge: yourTurn > 0 ? '$yourTurn' : null,
+                  onTap: () {
+                    QuizSfx.tap();
+                    yourTurn > 0 ? _openChallenges() : _startChallenge();
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () {
+              QuizSfx.tap();
+              QuizRoomScreen.askCode(context);
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: ArenaTheme.gold,
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+            ),
+            icon: const Icon(Icons.login_rounded, size: 18),
+            label: const Text('Have a room code? Join a room'),
+          ),
         ),
       ],
+    );
+  }
+
+  /// The four solo modes as a 2×2 grid, each showing your best.
+  Widget _buildSoloGrid() {
+    final modes = <(QuizMode, IconData)>[
+      (QuizMode.practice, Icons.shuffle_rounded),
+      (QuizMode.endless, Icons.all_inclusive_rounded),
+      (QuizMode.survival, Icons.favorite_rounded),
+      (QuizMode.speed, Icons.bolt_rounded),
+    ];
+    Widget tile((QuizMode, IconData) m) => _SoloTile(
+      icon: m.$2,
+      title: m.$1.label,
+      blurb: m.$1.blurb,
+      best: m.$1 == QuizMode.practice ? 0 : QuizProgressService.bestScore(m.$1),
+      onTap: () => _play(m.$1),
+    );
+    return Column(
+      children: [
+        for (var r = 0; r < 2; r++) ...[
+          if (r > 0) const SizedBox(height: 10),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: tile(modes[r * 2])),
+                const SizedBox(width: 10),
+                Expanded(child: tile(modes[r * 2 + 1])),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Only when there is something to fix — a dimmed "nothing yet" row was
+  /// a whole row spent on telling you a feature doesn't apply.
+  Widget _buildMistakes(int mistakes) {
+    return _ModeRow(
+      label: QuizMode.mistakes.label,
+      blurb: QuizMode.mistakes.blurb,
+      icon: Icons.auto_fix_high_rounded,
+      badge: '$mistakes',
+      onTap: () => _play(QuizMode.mistakes),
     );
   }
 
@@ -1069,104 +1092,170 @@ class _ModeRow extends StatelessWidget {
     required this.blurb,
     required this.icon,
     required this.onTap,
-    this.best = 0,
     this.badge,
-    this.enabled = true,
-    this.highlight = false,
   });
 
   final String label;
   final String blurb;
   final IconData icon;
   final VoidCallback onTap;
-  final int best;
   final String? badge;
-  final bool enabled;
-
-  /// Draws the row in the "something is waiting for you" state — used when
-  /// a challenge is your turn. Deliberately the same green the live strip
-  /// uses, so "someone is waiting" reads identically wherever it appears.
-  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
-    final accent = highlight ? ArenaTheme.correctOnNavy : ArenaTheme.gold;
+    const accent = ArenaTheme.gold;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Opacity(
-        opacity: enabled ? 1 : 0.55,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: ArenaTheme.tileRadius,
-            onTap: enabled
-                ? () {
-                    QuizSfx.tap();
-                    onTap();
-                  }
-                : null,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-              decoration: BoxDecoration(
-                color: highlight
-                    ? ArenaTheme.correctOnNavy.withValues(alpha: 0.12)
-                    : ArenaTheme.glass,
-                borderRadius: ArenaTheme.tileRadius,
-                border: Border.all(
-                  color: highlight
-                      ? ArenaTheme.correctOnNavy.withValues(alpha: 0.5)
-                      : ArenaTheme.glassBorder,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: ArenaTheme.tileRadius,
+          onTap: () {
+            QuizSfx.tap();
+            onTap();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            decoration: BoxDecoration(
+              color: ArenaTheme.glass,
+              borderRadius: ArenaTheme.tileRadius,
+              border: Border.all(color: ArenaTheme.glassBorder),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.16),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 19, color: accent),
                 ),
-              ),
-              child: Row(
+                const SizedBox(width: 13),
+                // Expanded, not bare: these labels and blurbs scale with
+                // the system font, and an unflexed Text in a Row THROWS
+                // rather than clipping. This project has shipped that bug
+                // before.
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleSmall.copyWith(
+                          color: ArenaTheme.textOnNavy,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        blurb,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: ArenaTheme.textFaintOnNavy,
+                          fontSize: 11.5,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                if (badge != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(
+                        ArenaTheme.radiusPill,
+                      ),
+                    ),
+                    child: Text(
+                      badge!,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: ArenaTheme.canvasTop,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 10.5,
+                      ),
+                    ),
+                  )
+                else
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: ArenaTheme.textFaintOnNavy,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A "play with someone" card — taller than a solo tile, gold-ringed icon.
+class _PeopleCard extends StatelessWidget {
+  const _PeopleCard({
+    required this.icon,
+    required this.title,
+    required this.blurb,
+    required this.onTap,
+    this.badge,
+  });
+
+  final IconData icon;
+  final String title;
+  final String blurb;
+  final VoidCallback onTap;
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final waiting = badge != null;
+    final accent = waiting ? ArenaTheme.correctOnNavy : ArenaTheme.gold;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: ArenaTheme.tileRadius,
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [accent.withValues(alpha: 0.16), ArenaTheme.glass],
+            ),
+            borderRadius: ArenaTheme.tileRadius,
+            border: Border.all(color: accent.withValues(alpha: 0.45)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
                   Container(
-                    width: 38,
-                    height: 38,
+                    width: 40,
+                    height: 40,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.16),
+                      color: accent.withValues(alpha: 0.18),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(icon, size: 19, color: accent),
+                    child: Icon(icon, size: 21, color: accent),
                   ),
-                  const SizedBox(width: 13),
-                  // Expanded, not bare: these labels and blurbs scale with
-                  // the system font, and an unflexed Text in a Row THROWS
-                  // rather than clipping. This project has shipped that bug
-                  // before.
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.titleSmall.copyWith(
-                            color: ArenaTheme.textOnNavy,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          blurb,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: highlight
-                                ? ArenaTheme.correctOnNavy
-                                : ArenaTheme.textFaintOnNavy,
-                            fontSize: 11.5,
-                            height: 1.3,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  if (badge != null)
+                  const Spacer(),
+                  if (waiting)
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -1186,25 +1275,114 @@ class _ModeRow extends StatelessWidget {
                           fontSize: 10.5,
                         ),
                       ),
-                    )
-                  else if (best > 0)
-                    Text(
-                      'Best $best',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: ArenaTheme.textFaintOnNavy,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    )
-                  else
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 20,
-                      color: ArenaTheme.textFaintOnNavy,
                     ),
                 ],
               ),
-            ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.titleSmall.copyWith(
+                  color: ArenaTheme.textOnNavy,
+                  fontWeight: FontWeight.w800,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                blurb,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: waiting
+                      ? ArenaTheme.correctOnNavy
+                      : ArenaTheme.textMutedOnNavy,
+                  fontSize: 11.5,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A solo mode in the 2×2 grid: icon, name, one line, your best.
+class _SoloTile extends StatelessWidget {
+  const _SoloTile({
+    required this.icon,
+    required this.title,
+    required this.blurb,
+    required this.best,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String blurb;
+  final int best;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: ArenaTheme.tileRadius,
+        onTap: () {
+          QuizSfx.tap();
+          onTap();
+        },
+        child: Ink(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: ArenaTheme.glass,
+            borderRadius: ArenaTheme.tileRadius,
+            border: Border.all(color: ArenaTheme.glassBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 20, color: ArenaTheme.gold),
+                  const Spacer(),
+                  if (best > 0)
+                    Text(
+                      'Best $best',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: ArenaTheme.gold,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.titleSmall.copyWith(
+                  color: ArenaTheme.textOnNavy,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                blurb,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: ArenaTheme.textFaintOnNavy,
+                  fontSize: 11,
+                  height: 1.3,
+                ),
+              ),
+            ],
           ),
         ),
       ),

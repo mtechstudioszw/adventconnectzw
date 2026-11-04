@@ -837,34 +837,57 @@ class _QuizRoundScreenState extends State<QuizRoundScreen>
     );
   }
 
+  /// Question at the top, answers anchored to the BOTTOM (redesign, owner
+  /// 4 Nov 2026). The four tiles used to sit right under the question
+  /// with half the screen empty beneath them — on a tall phone the thumb
+  /// had to stretch to the middle of the screen for every answer. Now
+  /// they live where the thumb rests, the question gets the room above,
+  /// and "Good to know" appears between the two once you answer.
+  ///
+  /// SliverFillRemaining(hasScrollBody: false) rather than a Column in an
+  /// Expanded: a long question with long options on a small phone must
+  /// still scroll, never overflow.
   Widget _buildBody() {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-      children: [
-        _buildQuestionCard(),
-        const SizedBox(height: 12),
-        _buildLifelines(),
-        const SizedBox(height: 14),
-        for (var i = 0; i < _question.options.length; i++)
-          AnswerTile(
-            // Keyed per question so tiles rebuild fresh each time rather
-            // than animating the previous question's state.
-            key: ValueKey('${_question.id}-$i'),
-            label: _question.options[i],
-            letter: String.fromCharCode(65 + i),
-            hidden: _hidden.contains(i),
-            entrance: CurvedAnimation(
-              parent: _entrance,
-              curve: Interval(
-                (0.25 + i * 0.11).clamp(0.0, 0.9),
-                1.0,
-                curve: AppMotion.easeOut,
-              ),
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+          sliver: SliverFillRemaining(
+            hasScrollBody: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildQuestionCard(),
+                if (_answered) _buildExplanation(),
+                const Spacer(),
+                const SizedBox(height: 16),
+                if (!_answered) ...[
+                  _buildLifelines(),
+                  const SizedBox(height: 14),
+                ],
+                for (var i = 0; i < _question.options.length; i++)
+                  AnswerTile(
+                    // Keyed per question so tiles rebuild fresh each time
+                    // rather than animating the previous question's state.
+                    key: ValueKey('${_question.id}-$i'),
+                    label: _question.options[i],
+                    letter: String.fromCharCode(65 + i),
+                    hidden: _hidden.contains(i),
+                    entrance: CurvedAnimation(
+                      parent: _entrance,
+                      curve: Interval(
+                        (0.25 + i * 0.11).clamp(0.0, 0.9),
+                        1.0,
+                        curve: AppMotion.easeOut,
+                      ),
+                    ),
+                    state: _stateFor(i),
+                    onTap: (tileCentre) => _answer(i, tileCentre),
+                  ),
+              ],
             ),
-            state: _stateFor(i),
-            onTap: (tileCentre) => _answer(i, tileCentre),
           ),
-        if (_answered) _buildExplanation(),
+        ),
       ],
     );
   }

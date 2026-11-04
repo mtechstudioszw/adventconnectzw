@@ -438,7 +438,10 @@ class _OtpField extends StatelessWidget {
         controller: controller,
         keyboardType: TextInputType.number,
         textInputAction: TextInputAction.done,
-        autofocus: true,
+        // No autofocus (owner, 4 Nov 2026: "after sign up the keyboard
+        // still shows"). The member has to leave for their email app to
+        // GET the code first; a keyboard sprung over the screen hid the
+        // instructions telling them so. It opens when they tap the box.
         // Lets the OS offer the code as a one-tap suggestion above the
         // keyboard (iOS surfaces one-time codes; Android offers clipboard).
         autofillHints: const [AutofillHints.oneTimeCode],

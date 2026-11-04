@@ -316,8 +316,27 @@ String? _shareLinkRedirect(GoRouterState state) {
   }
 }
 
+/// Closes the keyboard whenever a screen changes, so it never rides along
+/// from one screen onto the next (owner, 4 Nov 2026: "after sign up the
+/// keyboard still shows"). A screen that WANTS the keyboard (autofocus)
+/// still gets it, because its field asks after this runs.
+class KeyboardDismissObserver extends NavigatorObserver {
+  void _dismiss() => FocusManager.instance.primaryFocus?.unfocus();
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) => _dismiss();
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) =>
+      _dismiss();
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) => _dismiss();
+}
+
 final GoRouter appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
+  observers: [KeyboardDismissObserver()],
   initialLocation: '/splash',
   debugLogDiagnostics: false,
   // Re-run the guards the moment the phone requirement flips, so an open

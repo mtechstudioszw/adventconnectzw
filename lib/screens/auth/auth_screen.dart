@@ -90,9 +90,9 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
     ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOutCubic));
     _birthDate = widget.birthDate;
     _loadStoredBirthDate();
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _emailFocus.requestFocus(),
-    );
+    // No autofocus on the email field (owner, 4 Nov 2026): the keyboard
+    // jumping up over the screen before the member has even read it felt
+    // pushy. The field lights up when they tap it.
   }
 
   Future<void> _loadStoredBirthDate() async {

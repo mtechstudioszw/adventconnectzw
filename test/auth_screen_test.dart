@@ -39,6 +39,21 @@ void main() {
       expect(find.text('Continue'), findsOneWidget);
     });
 
+    testWidgets('email field is NOT focused until tapped (owner, 4 Nov)',
+        (tester) async {
+      await tester.pumpWidget(_wrap(const AuthScreen()));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      final field = find.byType(TextField).first;
+      final editable = tester.widget<EditableText>(
+        find.descendant(of: field, matching: find.byType(EditableText)),
+      );
+      expect(editable.focusNode.hasFocus, isFalse);
+      await tester.tap(field);
+      await tester.pump();
+      expect(editable.focusNode.hasFocus, isTrue);
+    });
+
     testWidgets('legal line is shown', (tester) async {
       await tester.pumpWidget(_wrap(const AuthScreen()));
       await tester.pump();

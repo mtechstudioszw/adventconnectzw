@@ -59,7 +59,13 @@ export const NAV: NavItem[] = [
   { href: "/church-admins", label: "Church admins", icon: IconShield, group: "People", min: "moderator" },
   { href: "/users", label: "Members", icon: IconUsers, group: "People", min: "moderator" },
   { href: "/watch", label: "Watch channels", icon: IconPlay, group: "People", min: "moderator" },
-  { href: "/hymns", label: "Hymn matching", icon: IconInbox, group: "People", min: "viewer" },
+  { href: "/church-members", label: "Church members", icon: IconChurch, group: "People", min: "owner" },
+
+  { href: "/quiz-questions", label: "Quiz questions", icon: IconCompass, group: "Content", min: "viewer" },
+  { href: "/library", label: "Library", icon: IconNews, group: "Content", min: "viewer" },
+  { href: "/hymns", label: "Hymn matching", icon: IconInbox, group: "Content", min: "viewer" },
+  { href: "/fundraiser", label: "Fundraiser", icon: IconStore, group: "Content", min: "owner" },
+  { href: "/calls", label: "Calls", icon: IconChat, group: "Content", min: "owner" },
 
   { href: "/analytics", label: "Analytics", icon: IconChart, group: "Insight", min: "viewer" },
   { href: "/insights", label: "Why they join & leave", icon: IconCompass, group: "Insight", min: "manager" },
@@ -71,7 +77,7 @@ export const NAV: NavItem[] = [
   { href: "/audit", label: "Audit log", icon: IconHistory, group: "Controls", min: "manager" },
 ];
 
-export const NAV_GROUPS = ["Today", "Queues", "People", "Insight", "Controls"] as const;
+export const NAV_GROUPS = ["Today", "Queues", "People", "Content", "Insight", "Controls"] as const;
 
 /** Page title/subtitle for the top bar, keyed by route. */
 export const PAGE_META: Record<string, { title: string; sub?: string }> = {
@@ -94,6 +100,11 @@ export const PAGE_META: Record<string, { title: string; sub?: string }> = {
   "/quiz-reports": { title: "Quiz reports", sub: "Questions members flagged as wrong or unclear." },
   "/hymns": { title: "Hymn matching", sub: "Link Kristu MuNzwiyo hymns to the SDA Hymnal." },
   "/settings": { title: "App settings", sub: "App versions, security switches and features." },
+  "/quiz-questions": { title: "Quiz questions", sub: "The question bank behind every quiz mode." },
+  "/library": { title: "Library", sub: "Hymns, Ellen G. White books and music." },
+  "/fundraiser": { title: "Fundraiser", sub: "Campaigns and pledges to confirm." },
+  "/calls": { title: "Calls", sub: "How voice calling is doing." },
+  "/church-members": { title: "Church members", sub: "Who belongs to which church." },
   "/staff": { title: "Staff & roles", sub: "Who can work in this console, and how much they can do." },
   "/audit": { title: "Audit log", sub: "Every action taken from this console." },
 };

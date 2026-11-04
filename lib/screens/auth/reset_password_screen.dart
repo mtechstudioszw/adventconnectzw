@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../services/password_breach_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -130,6 +131,14 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
         return;
       }
       // Legacy session mode (recovery deep-link already signed us in).
+      if (await PasswordBreachService.isBreached(_passwordController.text)) {
+        if (!mounted) return;
+        setState(() {
+          _saving = false;
+          _error = PasswordBreachService.message;
+        });
+        return;
+      }
       await Supabase.instance.client.auth.updateUser(
         UserAttributes(password: _passwordController.text),
       );

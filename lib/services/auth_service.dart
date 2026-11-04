@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'password_breach_service.dart';
 import 'captcha_service.dart';
 import 'phone_verification_service.dart';
 import 'dart:convert';
@@ -117,6 +118,9 @@ class AuthService {
     required String fullName,
     required DateTime birthDate,
   }) async {
+    if (await PasswordBreachService.isBreached(password)) {
+      return AuthResult.failure(PasswordBreachService.message);
+    }
     try {
       if (!ConnectivityService.isOnline) {
         return AuthResult.failure(
@@ -434,6 +438,9 @@ class AuthService {
         'Choose a stronger password — at least 8 characters.',
       );
     }
+    if (await PasswordBreachService.isBreached(password)) {
+      return AuthResult.failure(PasswordBreachService.message);
+    }
     try {
       await _client.auth.updateUser(UserAttributes(password: password));
       return AuthResult.success(currentUser);
@@ -694,6 +701,9 @@ class AuthService {
       if (newPassword.length < 8) {
         return AuthResult.failure('Password must be at least 8 characters.');
       }
+      if (await PasswordBreachService.isBreached(newPassword)) {
+        return AuthResult.failure(PasswordBreachService.message);
+      }
       final response = await _client.auth.updateUser(
         UserAttributes(password: newPassword),
       );
@@ -772,6 +782,9 @@ class AuthService {
     final code = token.trim();
     if (code.length < 6) {
       return AuthResult.failure('Enter the 6-digit code from your email.');
+    }
+    if (await PasswordBreachService.isBreached(newPassword)) {
+      return AuthResult.failure(PasswordBreachService.message);
     }
     try {
       await _client.auth.verifyOTP(

@@ -111,6 +111,32 @@ export default function UsersPage() {
                 Notify
               </BusyButton>
 
+              {/* Support reset for a member who lost the phone with their
+                  authenticator app (patch_314: super admin only, audited). */}
+              {canBan ? (
+                <BusyButton
+                  className="btn ghost sm"
+                  onClick={async () => {
+                    const ok = await ask({
+                      title: `Reset two-step login for ${u.full_name}?`,
+                      sub:
+                        "Only after you have confirmed it is really them (e.g. they emailed from their " +
+                        "account address). Anyone with their password can then sign in until they turn " +
+                        "two-step on again.",
+                      confirmLabel: "Reset",
+                      tone: "red",
+                    });
+                    if (ok === null) return;
+                    await act(async () => {
+                      const n = await rpc<number>("admin_reset_two_step", { p_user: u.id });
+                      if (!n) throw new Error(`${u.full_name} did not have two-step login on.`);
+                    }, `Two-step reset — ${u.full_name} can sign in with their password.`);
+                  }}
+                >
+                  Reset 2-step
+                </BusyButton>
+              ) : null}
+
               {/* A super admin cannot be banned from here. Locking the only
                   person who can undo it out of their own app is not an action
                   worth offering. */}

@@ -1,6 +1,9 @@
 import 'package:advent_connect_zw/screens/onboarding/onboarding_screen.dart';
 import 'package:advent_connect_zw/screens/onboarding/widgets/film_scenes.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 /// Owner, 4 Nov 2026: the intro took too long (46s, no Skip).
 void main() {
@@ -11,9 +14,9 @@ void main() {
     // Marketplace, Watch (s4, s5) between chat and Library.
     expect(OnboardingScreen.jumpTargetFor(FilmTimeline.s5.$1),
         FilmTimeline.s6.$1);
-    // Feed, quiz, Advent AI before the finale.
-    expect(OnboardingScreen.jumpTargetFor(FilmTimeline.s8.$1),
-        FilmTimeline.s10.$1);
+    // Nothing after the Library: the film ends there and sign-in opens.
+    expect(OnboardingScreen.filmEnd, FilmTimeline.s6.$2);
+    expect(OnboardingScreen.keptScenes.contains(FilmTimeline.s10), isFalse);
   });
 
   test('kept scenes play through', () {
@@ -22,7 +25,7 @@ void main() {
     }
   });
 
-  test('the whole film now lasts under 20 seconds', () {
+  test('the whole film now lasts under 16 seconds', () {
     // Played fraction of the master timeline x the controller's 35s.
     var played = 0.0;
     var cursor = 0.0;
@@ -31,6 +34,32 @@ void main() {
       played += w.$2 - start;
       cursor = w.$2;
     }
-    expect(played * 35, lessThan(20));
+    expect(played * 35, lessThan(16));
+  });
+
+  testWidgets('when the film ends, sign-in opens by itself', (tester) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+      (_) async => null,
+    );
+    final router = GoRouter(
+      initialLocation: '/onboarding',
+      routes: [
+        GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingScreen()),
+        GoRoute(
+          path: '/login',
+          name: 'login',
+          builder: (_, _) => const Scaffold(body: Text('LOGIN')),
+        ),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    expect(find.text('Skip'), findsOneWidget);
+    for (var i = 0; i < 40; i++) {
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('LOGIN'), findsOneWidget);
   });
 }

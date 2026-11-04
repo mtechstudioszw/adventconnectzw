@@ -5,17 +5,15 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/secure_storage_service.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
-import '../../widgets/motion/pressable.dart';
 import 'widgets/film_scenes.dart';
 import 'widgets/film_scenes_library.dart';
 
 /// First-run intro — a continuous, auto-playing motion piece, not
-/// slides. (Since 4 Nov 2026 only five of these scenes play, ~19s, with a
-/// Skip button — see [keptScenes].) One master
+/// slides. (Since 4 Nov 2026 only four of these scenes play, ~15s, with a
+/// Skip button, then sign-in opens by itself — see [keptScenes].) One master
 /// timeline drives ELEVEN overlapping scenes (brand →
 /// churches → prayer → chat + calls → marketplace/jobs → watch → offline
 /// Library → feed → quiz → Advent AI → sabbath finale); elements
@@ -63,8 +61,13 @@ class OnboardingScreen extends StatefulWidget {
     FilmTimeline.s1, // churches
     FilmTimeline.s3, // chat + calls
     FilmTimeline.s6, // offline Bible library
-    FilmTimeline.s10, // Sabbath finale + CTA
+    // No Sabbath finale (owner, 4 Nov 2026: "is that slide necessary …
+    // after the slides just go straight to the login screen"). When the
+    // last kept scene ends, the film hands over to sign-in by itself.
   ];
+
+  /// The moment the film is over and sign-in opens.
+  static double get filmEnd => keptScenes.last.$2;
 
   /// Where to jump to when [t] has run off the end of a kept scene into
   /// dropped ones, or null to keep playing.
@@ -111,7 +114,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     // Owner, 4 Nov 2026: "the onboarding slides before sign in … taking
     // long". 46 seconds with no way out is too long for anyone, and
     // unbearable for someone reinstalling. The film now plays only the
-    // scenes in [keptScenes] (five, ~16s) at 1.3x the old pace, and a Skip
+    // scenes in [keptScenes] (four, ~15s) at 1.3x the old pace, and a Skip
     // button sits in the corner from the first frame.
     _film = AnimationController(
       vsync: this,
@@ -144,7 +147,16 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     super.dispose();
   }
 
+  bool _handedOver = false;
+
   void _onFilmTick() {
+    if (!_handedOver && _film.value >= OnboardingScreen.filmEnd) {
+      _handedOver = true;
+      _film.stop();
+      // After this frame — the tick can arrive mid-build.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _finish());
+      return;
+    }
     final jump = OnboardingScreen.jumpTargetFor(_film.value);
     if (jump != null) {
       _film.value = jump;
@@ -167,7 +179,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     // Next kept scene's START (a tap skips the rest of this one).
     final next = OnboardingScreen.keptScenes
         .map((w) => w.$1)
-        .firstWhere((b) => b > _film.value + 0.005, orElse: () => 1.0);
+        .firstWhere(
+          (b) => b > _film.value + 0.005,
+          orElse: () => OnboardingScreen.filmEnd,
+        );
     _film
         .animateTo(
           next,
@@ -271,9 +286,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     // unlabelled tap-to-advance helped nobody who didn't
                     // know it was there, and someone reinstalling the
                     // app should never have to sit through the pitch.
-                    _buildCta(t),
-                    if (t < FilmTimeline.s10.$1)
-                      Positioned(
+                    Positioned(
                         top: 4,
                         right: 8,
                         child: TextButton(
@@ -316,101 +329,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           if (live(FilmTimeline.s1)) SceneChurch(t: t),
           if (live(FilmTimeline.s3)) SceneChatMarket(t: t),
           if (live(FilmTimeline.s6)) SceneLibrary(t: t),
-          if (t > FilmTimeline.s10.$1 - 0.01) SceneSabbathFinale(t: t),
         ],
-      ),
-    );
-  }
-
-  /// The landing: real buttons that rise as the film settles. The gold
-  /// ring's handoff (Scene 4) sinks into this button's glow.
-  Widget _buildCta(double t) {
-    final ctaIn = seg(t, 0.885, 0.965, Curves.easeOutCubic);
-    final glow = seg(t, 0.930, 0.985, Curves.easeOutCubic);
-    if (ctaIn <= 0) return const SizedBox.shrink();
-    return Positioned(
-      left: 24,
-      right: 24,
-      bottom: 24,
-      child: IgnorePointer(
-        ignoring: ctaIn < 0.6,
-        child: Opacity(
-          opacity: ctaIn,
-          child: Transform.translate(
-            offset: Offset(0, 34 * (1 - ctaIn)),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                PressEffect(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      borderRadius: BorderRadius.circular(22),
-                      boxShadow: [
-                        // Blue lift + the gold bloom the ring dissolves into.
-                        BoxShadow(
-                          color: AppColors.primaryBlue.withValues(alpha: 0.32),
-                          blurRadius: 22,
-                          offset: const Offset(0, 12),
-                        ),
-                        BoxShadow(
-                          color: AppColors.goldAccent.withValues(
-                            alpha: 0.35 * glow,
-                          ),
-                          blurRadius: 34,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: _finish,
-                        borderRadius: BorderRadius.circular(22),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 18),
-                          alignment: Alignment.center,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                'Get started',
-                                style: AppTextStyles.buttonText.copyWith(
-                                  color: AppColors.white,
-                                  fontSize: 15.5,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.4,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              const Icon(
-                                Icons.arrow_forward_rounded,
-                                color: AppColors.white,
-                                size: 18,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextButton(
-                  onPressed: _finish,
-                  child: Text(
-                    'I already have an account',
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: context.palette.textMuted,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

@@ -791,59 +791,71 @@ class _AdventConnectAppState extends State<AdventConnectApp>
           // each screen carrying its own copy. It also paints the opaque
           // ground that Scaffolds no longer paint for themselves — see the
           // widget's doc comment before making any Scaffold opaque again.
-          builder: (context, child) => AmbientBackground(
-            child: Stack(
-              children: [
-                OfflineBanner(child: child ?? const SizedBox.shrink()),
-                // The bars below sit ABOVE the router's Navigator, so they
-                // inherit no Overlay. Anything that resolves an Overlay lazily
-                // — Tooltip, Slider's value indicator, popup menus — throws
-                // "No Overlay widget found" there, and the ErrorWidget that
-                // replaces the failed subtree expands to its biggest
-                // constraints, which is where the giant bottom overflow came
-                // from. Give the layer its own Overlay instead of banning
-                // those widgets from it one at a time.
-                Positioned.fill(
-                  child: Overlay(
-                    initialEntries: [
-                      OverlayEntry(
-                        builder: (_) => const Stack(
-                          children: [
-                            // Global voice-note bar — shows at the top whenever
-                            // a note plays outside its own chat (WhatsApp).
-                            Align(
-                              alignment: Alignment.topCenter,
-                              child: VoiceMiniBar(),
-                            ),
-                            // "Tap to return to call" while a call is live
-                            // and its screen is not on top.
-                            Align(
-                              alignment: Alignment.topCenter,
-                              child: OngoingCallBar(),
-                            ),
-                            // Docked video + music windows — whatever is still
-                            // playing stays reachable from anywhere.
-                            //
-                            // Positioned.fill, NOT an Align: both windows are
-                            // draggable now and position themselves anywhere in
-                            // this rect. Bottom clearance for the navigation
-                            // island is applied per-window inside
-                            // GlobalMediaBars, because the Watch player and the
-                            // music card park independently.
-                            Positioned.fill(child: GlobalMediaBars()),
-                            // No Advent AI layer here (founder, 27 Oct 2026).
-                            // Its only entry point is the stationary button
-                            // on the Chat tab's inbox (conversations_screen).
-                            // An app-wide bubble decided where to hide from
-                            // the router's URL, which `push` never updates —
-                            // so it floated over chats opened from a profile.
-                          ],
+          // Tap anywhere that isn't a button or a field to close the
+          // keyboard (owner, 4 Nov 2026: on iPhone "they have to remove the
+          // keyboard like on Android"). iOS has no back button, and its
+          // email and number keyboards have no close key, so without this
+          // a member is stuck with the keyboard covering the screen. Buttons
+          // and fields still win their own taps — this one only receives a
+          // tap nothing else claimed, because the gesture arena hands a tap
+          // to the deepest recognizer first.
+          builder: (context, child) => GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            child: AmbientBackground(
+              child: Stack(
+                children: [
+                  OfflineBanner(child: child ?? const SizedBox.shrink()),
+                  // The bars below sit ABOVE the router's Navigator, so they
+                  // inherit no Overlay. Anything that resolves an Overlay lazily
+                  // — Tooltip, Slider's value indicator, popup menus — throws
+                  // "No Overlay widget found" there, and the ErrorWidget that
+                  // replaces the failed subtree expands to its biggest
+                  // constraints, which is where the giant bottom overflow came
+                  // from. Give the layer its own Overlay instead of banning
+                  // those widgets from it one at a time.
+                  Positioned.fill(
+                    child: Overlay(
+                      initialEntries: [
+                        OverlayEntry(
+                          builder: (_) => const Stack(
+                            children: [
+                              // Global voice-note bar — shows at the top whenever
+                              // a note plays outside its own chat (WhatsApp).
+                              Align(
+                                alignment: Alignment.topCenter,
+                                child: VoiceMiniBar(),
+                              ),
+                              // "Tap to return to call" while a call is live
+                              // and its screen is not on top.
+                              Align(
+                                alignment: Alignment.topCenter,
+                                child: OngoingCallBar(),
+                              ),
+                              // Docked video + music windows — whatever is still
+                              // playing stays reachable from anywhere.
+                              //
+                              // Positioned.fill, NOT an Align: both windows are
+                              // draggable now and position themselves anywhere in
+                              // this rect. Bottom clearance for the navigation
+                              // island is applied per-window inside
+                              // GlobalMediaBars, because the Watch player and the
+                              // music card park independently.
+                              Positioned.fill(child: GlobalMediaBars()),
+                              // No Advent AI layer here (founder, 27 Oct 2026).
+                              // Its only entry point is the stationary button
+                              // on the Chat tab's inbox (conversations_screen).
+                              // An app-wide bubble decided where to hide from
+                              // the router's URL, which `push` never updates —
+                              // so it floated over chats opened from a profile.
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

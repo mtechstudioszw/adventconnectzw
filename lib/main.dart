@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'services/captcha_service.dart';
 import 'services/phone_verification_service.dart';
 import 'dart:ui' show PlatformDispatcher;
 
@@ -48,6 +49,9 @@ import 'widgets/voice_mini_bar.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // The CAPTCHA sheet appears over whatever screen is up (AuthService,
+  // which asks for the token, has no BuildContext of its own).
+  CaptchaService.navigatorKey = rootNavigatorKey;
 
   // Firebase ready + the FCM background handler registered — BEFORE
   // runApp(), unconditionally. This must not wait on Supabase, network,

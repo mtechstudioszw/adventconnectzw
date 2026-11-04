@@ -81,6 +81,37 @@ What happens when you switch it on:
 
 **Gentler option, if you change your mind:** exempt older accounts by setting `phone_verification_cutoff` to a date, e.g. `'2026-11-10T00:00:00Z'`. Then only accounts created after that date must verify.
 
+## CAPTCHA (bot check) — Cloudflare Turnstile, free
+
+The app is ready for it, but it stays off until you do these steps.
+- When it's on, most people just see "Quick security check" for a second. Suspicious traffic gets a checkbox.
+
+**Do these in this order:**
+
+1. **Cloudflare → Turnstile → Add widget:**
+   - Name: Adventist Super App.
+   - Hostname: `adventconnectzw.com`.
+   - Mode: **Managed**.
+   - Copy the **Site key** and the **Secret key**.
+2. **Wait until the new app version is live** (the one with this feature).
+3. **Supabase → SQL Editor:**
+   ```sql
+   insert into app_config(key, value, updated_at)
+   values ('captcha_site_key', '<SITE KEY>', now())
+   on conflict (key) do update set value = excluded.value, updated_at = now();
+   ```
+   - The app now runs the check before sign-up, sign-in, Google/Apple sign-in, password reset and code re-send.
+   - Nothing breaks yet: Supabase ignores the token until step 5.
+4. **Test on your own phone.** Sign out, sign in, and check that "Quick security check" finishes by itself.
+5. **Raise the minimum build** (`min_build_android` / `min_build_ios`) to this version.
+6. **Supabase → Authentication → Bot and Abuse Protection** (some dashboards call it "Attack Protection") **→ Enable CAPTCHA protection:**
+   - Provider: Turnstile.
+   - Paste the **Secret key**, then save.
+
+**Do not do step 6 early.** From that moment, Supabase rejects every sign-in that has no token. Anyone on an older app version can't sign in or sign up until they update.
+
+**To turn it off:** switch the CAPTCHA off in Supabase first, then set `captcha_site_key` to `''`.
+
 ## Support: a member lost their authenticator phone
 
 1. Confirm it's really them (ask them to email from their account address, or video-call).
@@ -88,6 +119,7 @@ What happens when you switch it on:
    ```sql
    delete from auth.mfa_factors where user_id = '<their user id>';
    ```
+   **Easier (after patch 311):** open their profile in the app (as super admin) → ⋯ → **Reset two-step login**.
 
 ## Still on your list from before
 

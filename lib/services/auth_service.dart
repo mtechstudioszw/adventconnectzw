@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'captcha_service.dart';
 import 'phone_verification_service.dart';
 import 'dart:convert';
 import 'dart:math';
@@ -93,6 +94,7 @@ class AuthService {
       final response = await _client.auth.signUp(
         email: email,
         password: password,
+        captchaToken: await CaptchaService.token(),
         data: {
           'full_name': fullName,
           'birth_date': birthDate.toIso8601String(),
@@ -310,7 +312,11 @@ class AuthService {
       );
     }
     try {
-      await _client.auth.signInWithOtp(email: trimmed, shouldCreateUser: false);
+      await _client.auth.signInWithOtp(
+        email: trimmed,
+        shouldCreateUser: false,
+        captchaToken: await CaptchaService.token(),
+      );
       return AuthResult.success(null);
     } on AuthException catch (e) {
       final lower = e.message.toLowerCase();
@@ -393,6 +399,7 @@ class AuthService {
       final response = await _client.auth.signInWithPassword(
         email: email,
         password: password,
+        captchaToken: await CaptchaService.token(),
       );
 
       if (response.user == null) {
@@ -478,6 +485,7 @@ class AuthService {
         provider: OAuthProvider.google,
         idToken: idToken,
         accessToken: accessToken,
+        captchaToken: await CaptchaService.token(),
       );
       if (response.user == null) {
         return AuthResult.failure('Could not sign in with Google.');
@@ -569,6 +577,7 @@ class AuthService {
         provider: OAuthProvider.apple,
         idToken: idToken,
         nonce: rawNonce,
+        captchaToken: await CaptchaService.token(),
       );
       if (response.user == null) {
         return AuthResult.failure('Could not sign in with Apple.');
@@ -611,6 +620,7 @@ class AuthService {
       final response = await _client.auth.signInWithPassword(
         email: email,
         password: password,
+        captchaToken: await CaptchaService.token(),
       );
       if (response.user == null) {
         return AuthResult.failure('Current password is incorrect.');
@@ -683,7 +693,10 @@ class AuthService {
       // No redirectTo — the recovery email is a 6-digit CODE (same as signup
       // verification, which is known to deliver), verified in-app via
       // [resetPasswordWithOtp]. A link/deep-link was unreliable on mobile.
-      await _client.auth.resetPasswordForEmail(normalised);
+      await _client.auth.resetPasswordForEmail(
+        normalised,
+        captchaToken: await CaptchaService.token(),
+      );
       await _recordResetAttempt(normalised);
       return AuthResult.success(null);
     } on AuthException catch (e) {

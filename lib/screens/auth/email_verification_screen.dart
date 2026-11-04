@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../services/captcha_service.dart';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
@@ -217,6 +218,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
       await Supabase.instance.client.auth.resend(
         type: OtpType.signup,
         email: widget.email,
+        captchaToken: await CaptchaService.token(),
       );
       if (!mounted) return;
       // Backoff: 60s the first time, then double each subsequent

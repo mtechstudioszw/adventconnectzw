@@ -1,4 +1,5 @@
 import '../../config/platform_flags.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../widgets/premium/premium_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -452,6 +453,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               ),
               onTap: () => Navigator.pop(ctx, 'block'),
             ),
+            // Support only: a member who lost the phone with their
+            // authenticator app is locked out until this is done.
+            if (_isSuperAdmin)
+              ListTile(
+                leading: const Icon(Icons.phonelink_erase_rounded),
+                title: const Text('Reset two-step login'),
+                subtitle: const Text(
+                  'For a member who lost their authenticator phone.',
+                ),
+                onTap: () => Navigator.pop(ctx, 'reset_2fa'),
+              ),
             const SizedBox(height: 8),
           ],
         ),
@@ -472,6 +484,58 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         await _reportUser();
       case 'block':
         await _toggleBlock();
+      case 'reset_2fa':
+        await _resetTwoStep();
+    }
+  }
+
+  /// Super admin: remove this member's authenticator so they can sign in
+  /// with their password alone, then set two-step up again on a new phone.
+  /// Server-checked (admin_reset_two_step refuses anyone but a super
+  /// admin, patch 311), so hiding the row is convenience, not security.
+  Future<void> _resetTwoStep() async {
+    final name = _profile?.fullName ?? 'this member';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Reset two-step login?'),
+        content: Text(
+          'Only do this after confirming it is really $name — for example '
+          'they emailed from their account address, or you spoke to them. '
+          'Anyone with their password will then be able to sign in until '
+          'they turn two-step on again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text('Reset',
+                style: TextStyle(color: AppColors.red)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final removed = await Supabase.instance.client.rpc(
+        'admin_reset_two_step',
+        params: {'p_user': widget.userId},
+      );
+      messenger.showSnackBar(SnackBar(
+        content: Text((removed is int && removed > 0)
+            ? 'Two-step login reset. $name can sign in with their password.'
+            : '$name did not have two-step login on.'),
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(e.toString().contains('admin_reset_two_step')
+            ? 'Run database patch 311 first.'
+            : 'Could not reset it. Try again.'),
+      ));
     }
   }
 

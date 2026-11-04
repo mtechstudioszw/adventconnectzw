@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleListener, AppLifecycleState;
 
 import 'cache_service.dart';
 import 'music_player_service.dart';
@@ -209,7 +210,56 @@ class QuizMusic {
     ),
   );
 
+  /// The arena WANTS music (a quiz screen called [start] and has not
+  /// called [stop]). Separate from [_player] because the player is torn
+  /// down while the app is in the background and rebuilt on return.
+  static bool _wanted = false;
+
+  /// The app is not on screen (home button, app switcher, screen off).
+  static bool _backgrounded = false;
+  static AppLifecycleListener? _lifecycle;
+
+  /// Bug (owner, 4 Nov 2026): "quiz music keeps playing in the background
+  /// when you leave the app unless you force close it". Nothing stopped
+  /// the loop except leaving the quiz screens, and leaving the APP doesn't
+  /// leave a screen. Now the music stops whenever the app is hidden and
+  /// comes back when the member returns to the arena.
+  static void _watchLifecycle() {
+    _lifecycle ??= AppLifecycleListener(
+      onStateChange: (state) => unawaited(handleLifecycle(state)),
+    );
+  }
+
+  @visibleForTesting
+  static Future<void> handleLifecycle(AppLifecycleState state) async {
+    switch (state) {
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _backgrounded = true;
+        await _release();
+        revision.value++;
+      case AppLifecycleState.resumed:
+        _backgrounded = false;
+        if (_wanted && _player == null) await _startPlayer();
+      case AppLifecycleState.inactive:
+        // A notification shade or a call sheet over the app — still on
+        // screen. Leave the music alone.
+        break;
+    }
+  }
+
+  @visibleForTesting
+  static bool get debugWanted => _wanted;
+
   static Future<void> start() async {
+    _wanted = true;
+    _watchLifecycle();
+    await _startPlayer();
+  }
+
+  static Future<void> _startPlayer() async {
+    if (_backgrounded) return;
     _loadPrefs();
     if (!shouldPlay(
       enabled: enabled,
@@ -233,6 +283,15 @@ class QuizMusic {
       await player.setSourceAsset(_asset);
       await player.setVolume(_volume);
       await player.resume();
+      // The member left the app (or the arena) while the asset loaded:
+      // don't leave a loop running nobody asked for.
+      if (_backgrounded || !_wanted || _player != null) {
+        try {
+          await player.stop();
+          await player.dispose();
+        } catch (_) {}
+        return;
+      }
       _player = player;
       _unavailable = false;
     } catch (e) {
@@ -246,6 +305,7 @@ class QuizMusic {
 
   /// Stop and release. Called when the round ends or the arena is left.
   static Future<void> stop() async {
+    _wanted = false;
     await _release();
     revision.value++;
   }
@@ -277,7 +337,7 @@ class QuizMusic {
       muted: QuizSfx.masterMuted,
     );
     if (should && _player == null) {
-      await start();
+      if (_wanted) await _startPlayer();
     } else if (!should && _player != null) {
       await stop();
     }
@@ -286,6 +346,8 @@ class QuizMusic {
   @visibleForTesting
   static void resetForTest() {
     _player = null;
+    _wanted = false;
+    _backgrounded = false;
     _off = false;
     _volume = defaultVolume;
     _loaded = false;

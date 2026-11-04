@@ -620,6 +620,7 @@ class _BuyBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final trial = BillingService.offer?.trialLabel;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: BoxDecoration(
@@ -638,12 +639,28 @@ class _BuyBar extends StatelessWidget {
             // is Advent AI now, and naming the removal of an annoyance
             // as the thing being bought is what made this screen feel
             // like a squeeze.
-            label: busy ? 'Setting up Premium' : 'Go Premium — $price',
+            label: busy
+                ? 'Setting up Premium'
+                : trial != null
+                ? 'Start $trial free trial'
+                : 'Go Premium — $price',
             icon: Icons.star_rounded,
             loading: busy,
             enabled: enabled,
             onPressed: BillingService.buy,
           ),
+          // Play's subscription policy: a trial must say plainly what it
+          // costs afterwards and how to stop it, right at the button.
+          if (trial != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'Free for ${BillingService.offer?.trialDuration}, then $price. Cancel any time in Google '
+                'Play before it ends and you pay nothing.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: palette.textMuted),
+              ),
+            ),
           const SizedBox(height: 4),
           TextButton(
             onPressed: () => Navigator.of(context).maybePop(),

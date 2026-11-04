@@ -39,6 +39,7 @@ class PremiumOffer {
     required this.currencyCode,
     required this.rawPrice,
     this.basePlanId,
+    this.trialPeriod,
     this.native,
   });
 
@@ -52,6 +53,18 @@ class PremiumOffer {
   /// plugin ever stops reporting it; [BillingConfig.tierForBasePlan]
   /// treats null as the lowest paid tier for that reason.
   final String? basePlanId;
+
+  /// ISO-8601 length of a free trial this member is eligible for on this
+  /// plan ("P7D", "P1W", "P1M"), or null. Play only returns a trial
+  /// offer to someone eligible for it, so a non-null value is a promise
+  /// the store will keep. [price] is always the RECURRING price.
+  final String? trialPeriod;
+
+  /// "7-day", "1-week", "1-month" — for "Start your 7-day free trial".
+  String? get trialLabel => trialLabelFor(trialPeriod);
+
+  /// "7 days", "1 week", "1 month" — for "Free for 7 days, then …".
+  String? get trialDuration => trialDurationFor(trialPeriod);
 
   final String title;
   final String description;
@@ -190,4 +203,37 @@ abstract class BillingPlatform {
   Future<void> completePurchase(BillingPurchase purchase);
 
   void dispose();
+}
+
+/// "P7D" → "7-day", "P1W" → "1-week", "P2W" → "14-day", "P1M" → "1-month".
+/// Null for anything unrecognised, so a label is never guessed.
+String? trialLabelFor(String? iso) {
+  if (iso == null) return null;
+  final m = RegExp(r'^P(\d+)([DWMY])$').firstMatch(iso);
+  if (m == null) return null;
+  final n = int.parse(m.group(1)!);
+  return switch (m.group(2)) {
+    'D' => '$n-day',
+    'W' => n == 1 ? '1-week' : '${n * 7}-day',
+    'M' => '$n-month',
+    'Y' => '$n-year',
+    _ => null,
+  };
+}
+
+/// "P7D" → "7 days", "P1W" → "1 week", "P1M" → "1 month".
+String? trialDurationFor(String? iso) {
+  if (iso == null) return null;
+  final m = RegExp(r'^P(\d+)([DWMY])$').firstMatch(iso);
+  if (m == null) return null;
+  final n = int.parse(m.group(1)!);
+  final unit = switch (m.group(2)) {
+    'D' => 'day',
+    'W' => 'week',
+    'M' => 'month',
+    'Y' => 'year',
+    _ => null,
+  };
+  if (unit == null) return null;
+  return '$n $unit${n == 1 ? '' : 's'}';
 }

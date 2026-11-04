@@ -3,6 +3,8 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_android/billing_client_wrappers.dart'
+    show SubscriptionOfferDetailsWrapper;
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 
 import 'billing_platform.dart';
@@ -98,21 +100,22 @@ class PlayBillingPlatform implements BillingPlatform {
       if (response.error != null) {
         debugPrint('PlayBilling.loadOffers error: ${response.error}');
       }
-      final details = response.productDetails.toList()
+      // One entry per BASE PLAN. Play returns one ProductDetails per
+      // offer, so a plan with a free-trial offer comes back twice — once
+      // plain, once with the trial. Keep the trial one: Play only returns
+      // it to members eligible for it, and buying through it is what
+      // actually starts the trial.
+      final byPlan = <String, PremiumOffer>{};
+      for (final p in response.productDetails) {
+        final o = _toOffer(p);
+        final key = o.basePlanId ?? o.productId;
+        final had = byPlan[key];
+        if (had == null || (had.trialPeriod == null && o.trialPeriod != null)) {
+          byPlan[key] = o;
+        }
+      }
+      return byPlan.values.toList()
         ..sort((a, b) => a.rawPrice.compareTo(b.rawPrice));
-      return [
-        for (final p in details)
-          PremiumOffer(
-            productId: p.id,
-            title: p.title,
-            description: p.description,
-            price: p.price,
-            currencyCode: p.currencyCode,
-            rawPrice: p.rawPrice,
-            basePlanId: _basePlanId(p),
-            native: p,
-          ),
-      ];
     } catch (e) {
       debugPrint('PlayBilling.loadOffers threw: $e');
       return const [];
@@ -139,6 +142,43 @@ class PlayBillingPlatform implements BillingPlatform {
   /// it changes with a Play Console edit, and two plans can share one in
   /// a currency with big rounding — inferring entitlement from it would
   /// be a bug waiting for a promotion.
+  PremiumOffer _toOffer(ProductDetails p) {
+    var price = p.price;
+    var rawPrice = p.rawPrice;
+    String? trial;
+    final offer = _offerDetails(p);
+    final phases = offer?.pricingPhases ?? const [];
+    if (phases.isNotEmpty) {
+      // A trial is a FREE first phase; the last phase is what renews.
+      if (phases.length > 1 && phases.first.priceAmountMicros == 0) {
+        trial = phases.first.billingPeriod;
+      }
+      final recurring = phases.last;
+      price = recurring.formattedPrice;
+      rawPrice = recurring.priceAmountMicros / 1000000.0;
+    }
+    return PremiumOffer(
+      productId: p.id,
+      title: p.title,
+      description: p.description,
+      price: price,
+      currencyCode: p.currencyCode,
+      rawPrice: rawPrice,
+      basePlanId: _basePlanId(p),
+      trialPeriod: trial,
+      native: p,
+    );
+  }
+
+  SubscriptionOfferDetailsWrapper? _offerDetails(ProductDetails p) {
+    if (p is! GooglePlayProductDetails) return null;
+    final index = p.subscriptionIndex;
+    final offers = p.productDetails.subscriptionOfferDetails;
+    if (index == null || offers == null) return null;
+    if (index < 0 || index >= offers.length) return null;
+    return offers[index];
+  }
+
   String? _basePlanId(ProductDetails p) {
     if (p is! GooglePlayProductDetails) return null;
     final index = p.subscriptionIndex;

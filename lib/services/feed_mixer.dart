@@ -21,6 +21,9 @@ enum FeedBlockKind {
   church,
   music,
 
+  /// The Premium card (Android, non-Premium or Plus members).
+  premium,
+
   ad,
 
   /// "You're up to date on your people" — between the last post and the
@@ -96,6 +99,7 @@ class FeedMixer {
     int extraModules = 0,
     int postsBetween = 3,
     int? adAfterPost,
+    int? premiumAfterPost,
   }) {
     final out = <FeedBlock>[];
     final used = <FeedBlockKind, int>{};
@@ -137,6 +141,9 @@ class FeedMixer {
       out.add(FeedBlock(FeedBlockKind.post, i));
       if (adAfterPost != null && i + 1 == adAfterPost) {
         out.add(const FeedBlock(FeedBlockKind.ad, 0));
+      }
+      if (premiumAfterPost != null && i + 1 == premiumAfterPost) {
+        out.add(const FeedBlock(FeedBlockKind.premium, 0));
       }
       if ((i + 1) % postsBetween == 0) {
         final m = nextModule();

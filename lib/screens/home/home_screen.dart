@@ -64,6 +64,9 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_tokens.dart';
 import '../../widgets/ads/feed_ad_card.dart';
+import '../../services/premium_promo_service.dart';
+import '../../services/premium_service.dart';
+import '../../widgets/premium/feed_premium_card.dart';
 import '../../widgets/premium/premium_promo_sheet.dart';
 import '../../widgets/home/comments_sheet.dart';
 import '../../widgets/home/composer_entry.dart';
@@ -310,6 +313,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _loadSuperAdmin();
     _postChangesSub = FeedService.postChanges.listen(_onPostChange);
     FeedService.hiddenPostIds.addListener(_onHiddenChanged);
+    // The Premium card: shown / snoozed / swapped for the Pro upgrade as
+    // the member's tier changes.
+    PremiumPromoService.feedCard.addListener(_onHiddenChanged);
+    PremiumService.tierListenable.addListener(_onTierChanged);
+    unawaited(PremiumPromoService.refreshFeedCard());
     // Header greeting, Sabbath wash and countdown follow the place and
     // flip at sundown without waiting for a refresh.
     SabbathService.changes.addListener(_onSabbathChanged);
@@ -506,6 +514,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
     _postChangesSub?.cancel();
     FeedService.hiddenPostIds.removeListener(_onHiddenChanged);
+    PremiumPromoService.feedCard.removeListener(_onHiddenChanged);
+    PremiumService.tierListenable.removeListener(_onTierChanged);
     SabbathService.changes.removeListener(_onSabbathChanged);
     _newPostTimer?.cancel();
     _lifecycle.dispose();
@@ -2506,6 +2516,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       postsExhausted: _endOfFeed,
       extraModules: _extraModules,
       adAfterPost: posts.length >= _adEveryNPosts ? _adEveryNPosts : null,
+      // Premium card after the 4th post (or the last, on a short feed).
+      premiumAfterPost:
+          kHidePayments ||
+              PremiumPromoService.feedCard.value == FeedPromo.none ||
+              posts.isEmpty
+          ? null
+          : (posts.length < 4 ? posts.length : 4),
     );
     // Keep sermons topped up while the feed is still drawing from them.
     final videosUsed = blocks
@@ -2769,6 +2786,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         return HomeMusicCard(item: _music[i]);
       case FeedBlockKind.ad:
         return const FeedAdCard();
+      case FeedBlockKind.premium:
+        return FeedPremiumCard(kind: PremiumPromoService.feedCard.value);
       case FeedBlockKind.caughtUp:
         return const FeedCaughtUpDivider();
     }
@@ -3065,6 +3084,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _onHiddenChanged() {
     if (mounted) setState(() {});
   }
+
+  void _onTierChanged() => unawaited(PremiumPromoService.refreshFeedCard());
 
   /// The feed as shown: everything loaded, minus posts this member hid.
   List<Post> get _visiblePosts {

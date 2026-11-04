@@ -1,3 +1,4 @@
+import 'package:advent_connect_zw/config/router_config.dart';
 import 'package:advent_connect_zw/services/phone_verification_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -30,5 +31,28 @@ void main() {
   });
   test('status is ok when the server cannot be asked', () async {
     expect(await PhoneVerificationService.status(), 'ok');
+  });
+
+  group('phone block (owner: unverified account no longer works)', () {
+    test('every app screen goes to the verify screen', () {
+      for (final p in ['/home', '/chat/1', '/quiz', '/settings', '/premium',
+          '/group-info/9', '/biometric-lock']) {
+        expect(phoneRedirectFor(p, required: true), '/verify-phone', reason: p);
+      }
+    });
+    test('verify screen and sign-in flow stay reachable', () {
+      for (final p in ['/verify-phone', '/login', '/splash', '/maintenance']) {
+        expect(phoneRedirectFor(p, required: true), isNull, reason: p);
+      }
+    });
+    test('verified: nothing redirected; verify screen bounces away', () {
+      expect(phoneRedirectFor('/home', required: false), isNull);
+      expect(phoneRedirectFor('/verify-phone', required: false), '/splash');
+    });
+    test('no server answer keeps the current block', () async {
+      PhoneVerificationService.required.value = true;
+      expect(await PhoneVerificationService.refresh(), isTrue);
+      PhoneVerificationService.required.value = false;
+    });
   });
 }

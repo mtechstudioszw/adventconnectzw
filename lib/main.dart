@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'services/phone_verification_service.dart';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:firebase_core/firebase_core.dart';
@@ -138,7 +139,12 @@ void main() async {
       // second one that could beat it. Moves the offline-downloads index
       // under `pref:` (sign-out was deleting it) and re-adopts any track
       // files that were already orphaned by that bug.
-      (_) => MusicDownloadService.migrate(),
+      (_) {
+        // Phone-verification block, remembered from last time, so a cold
+        // start blocks before the network answers.
+        PhoneVerificationService.loadCached();
+        return MusicDownloadService.migrate();
+      },
     ),
   );
 

@@ -4,6 +4,7 @@ import '../screens/settings/chat_backup_screen.dart';
 import '../screens/settings/two_step_setup_screen.dart';
 import '../screens/auth/two_step_challenge_screen.dart';
 import '../screens/auth/verify_phone_screen.dart';
+import '../services/phone_verification_service.dart';
 import '../services/two_step_service.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/admin/admin_library_screen.dart';
@@ -246,6 +247,27 @@ String? twoStepRedirectFor(String path, {required bool pending}) {
   return _twoStepOpenPaths.contains(path) ? null : '/two-step-code';
 }
 
+/// Owner, 4 Nov 2026: an account that must verify its phone "will no
+/// longer work" — nothing but the verify screen (and the sign-in flow, so
+/// signing out still works) until it does.
+@visibleForTesting
+String? phoneRedirectFor(String path, {required bool required}) {
+  if (!required) {
+    return path == '/verify-phone' ? '/splash' : null;
+  }
+  if (path == '/verify-phone') return null;
+  // Sign-in screens stay reachable, but NOT the biometric lock: it would
+  // hand off to home, which bounces straight back here anyway.
+  return _twoStepOpenPaths.contains(path) && path != '/biometric-lock'
+      ? null
+      : '/verify-phone';
+}
+
+String? _phoneRedirect(String path) => phoneRedirectFor(
+      path,
+      required: PhoneVerificationService.required.value,
+    );
+
 String? _twoStepRedirect(String path) =>
     twoStepRedirectFor(path, pending: TwoStepService.challengePending);
 
@@ -298,8 +320,13 @@ final GoRouter appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
   initialLocation: '/splash',
   debugLogDiagnostics: false,
+  // Re-run the guards the moment the phone requirement flips, so an open
+  // app is sent to the verify screen without waiting for a tap.
+  refreshListenable: PhoneVerificationService.required,
   redirect: (context, state) =>
-      _twoStepRedirect(state.uri.path) ?? _shareLinkRedirect(state),
+      _twoStepRedirect(state.uri.path) ??
+      _phoneRedirect(state.uri.path) ??
+      _shareLinkRedirect(state),
   routes: [
     GoRoute(
       path: '/splash',

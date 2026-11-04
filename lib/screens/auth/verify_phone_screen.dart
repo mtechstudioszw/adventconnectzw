@@ -110,12 +110,14 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
     return PopScope(
       canPop: false,
       child: AuthShell(
-        eyebrow: 'One last step',
+        eyebrow: 'Required for every account',
         title: sent ? 'Enter the\nSMS code' : 'Verify your\nphone',
         subtitle: sent
             ? 'We sent a 6-digit code to $_sentTo.'
-            : 'This keeps fake accounts out. Each number can verify one '
-                'account. We never show your number to anyone.',
+            : 'To keep fake accounts out, every member now confirms a phone '
+                'number. Each number can verify one account, and we never '
+                'show it to anyone. Until you verify, the app and its '
+                'notifications are paused.',
         icon: Icons.phone_iphone_rounded,
         footer: TextButton(
           onPressed: _busy ? null : _signOut,

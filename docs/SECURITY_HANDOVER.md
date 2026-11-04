@@ -46,20 +46,40 @@ Go to **Authentication → …**:
 - **Multi-Factor:** make sure TOTP is **Enabled** (it is by default).
 - **Bot protection (CAPTCHA):** not switched on yet, because the app would also need a CAPTCHA widget on the sign-up screen. Hold this for now. With rate limits plus phone verification, bots are already expensive.
 
-## YOU: step 3 — phone verification (costs money, do it when ready)
+## YOU: step 3 — phone verification for EVERY account (your decision, 4 Nov)
 
-Honest note: every SMS costs about **US$0.20–0.40 to Zimbabwe**, paid by you. Bots can also try "SMS pumping" (making you send thousands of texts). So:
+What happens when you switch it on:
+- Every account without a verified phone sees only the "Verify your phone" screen.
+- It gets no notifications and no incoming calls, and the database refuses its posts, messages, likes and so on, until it verifies.
+- One number can verify only one account.
+- Exempt: super admins and the Apple review account.
 
-1. **Create a Twilio account** and buy a number or Messaging Service.
-2. Twilio → **Messaging → Geo permissions**: allow **only** the countries your members are in (Zimbabwe, South Africa, Zambia, Botswana…). This is the main defence against SMS pumping.
-3. Supabase → **Authentication → Sign In / Providers → Phone**: enable it, choose Twilio, and paste the Account SID, Auth Token and Messaging Service SID.
-4. Turn the requirement on in the SQL Editor:
+**Cost (checked 4 Nov):** 856 accounts, 248 active in the last 30 days, 0 verified.
+- If everyone verifies: about 860 texts, roughly US$170–350.
+- More likely, about the 250 active members: roughly US$50–100.
+- After that, only new sign-ups and re-sends.
+
+**Be honest with yourself about the risk:**
+- Some real members will leave rather than verify.
+- Members abroad, or on numbers that don't receive SMS reliably, can get stuck. They will call you.
+
+**Do these in this order.** Switching the flag on before Twilio works locks EVERYONE out.
+
+1. **Create a Twilio account.** Buy a number or a Messaging Service.
+2. **Twilio → Messaging → Geo permissions:** allow ONLY the countries your members are in. This stops "SMS pumping" fraud.
+3. **Supabase → Authentication → Sign In / Providers → Phone:** enable it, choose Twilio, and paste the SID, token and Messaging Service SID.
+4. **Supabase → Authentication → Rate Limits:** set SMS to about 30/hour.
+5. **Make sure patch 311 has been run** (step 1).
+6. **Wait until the update with the verify screen is live on both stores.** Then raise `min_build_android` / `min_build_ios` in `app_config` to that build. Otherwise people on old versions have no screen to verify with.
+7. **Test with your own non-admin account first.** Switch it on, verify your own phone, and check posting and notifications work.
+8. **Switch it on:**
    ```sql
    update app_config set value = 'true' where key = 'require_phone_verification';
    ```
-   - Only accounts created **after you ran patch 311** must verify.
-   - Existing members, staff and the Apple review account are exempt.
-   - To turn it off again, set it to `'false'`.
+
+**To switch it off instantly:** set it to `'false'`. Every account works again on its next app open.
+
+**Gentler option, if you change your mind:** exempt older accounts by setting `phone_verification_cutoff` to a date, e.g. `'2026-11-10T00:00:00Z'`. Then only accounts created after that date must verify.
 
 ## Support: a member lost their authenticator phone
 

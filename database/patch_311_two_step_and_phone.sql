@@ -15,12 +15,19 @@
 --  3. phone_ok(): phone verification, OFF until the owner switches it on
 --     (app_config.require_phone_verification = 'true', which needs an SMS
 --     provider set up in Supabase first — see docs/SECURITY_HANDOVER.md).
---     When on, an account created after phone_verification_cutoff cannot
---     post, comment, message, add friends, list products or jobs, pray
---     publicly or post stories until its phone is confirmed. One phone
---     number can belong to only one account (Supabase Auth enforces that
---     itself). Existing accounts, staff and the App Review demo account
---     are exempt.
+--     When on, EVERY account (owner, 4 Nov 2026: "once the update is live
+--     everyone is required to verify … if it's not verified the account
+--     will no longer work, no notification or anything") must confirm a
+--     phone number:
+--       * the app shows only the verify screen (client side);
+--       * the database refuses new posts, comments, messages, friend
+--         requests, listings, jobs, prayers, stories, events and calls;
+--       * no notification is created for it, so no push either;
+--       * nobody's call rings it.
+--     One phone number can belong to only one account (Supabase Auth
+--     enforces that itself). Exempt: super admins and the App Review demo
+--     account. To exempt accounts created before a date instead, set
+--     app_config.phone_verification_cutoff to that ISO date.
 --
 --  4. chat_media / voice_notes had NO size limit: a bot could fill storage
 --     (and the bill) with multi-gigabyte uploads. Now 50 MB / 20 MB.
@@ -95,10 +102,36 @@ GRANT EXECUTE ON FUNCTION public.admin_reset_two_step(uuid) TO authenticated, se
 
 INSERT INTO public.app_config (key, value, updated_at) VALUES
   ('require_phone_verification', 'false', now()),
-  -- Accounts created before this moment never need it.
-  ('phone_verification_cutoff', to_char(now() AT TIME ZONE 'UTC',
-     'YYYY-MM-DD"T"HH24:MI:SS"Z"'), now())
+  -- Empty = nobody is exempt by age (the owner's call: everyone).
+  ('phone_verification_cutoff', '', now())
 ON CONFLICT (key) DO NOTHING;
+
+-- For ANY account — used by the notification and call-ring gates below,
+-- which run without a signed-in user.
+CREATE OR REPLACE FUNCTION public.phone_ok_for(p_user uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $$
+  SELECT p_user IS NULL
+      OR coalesce((SELECT value FROM public.app_config
+                    WHERE key = 'require_phone_verification'), 'false') <> 'true'
+      OR EXISTS (
+           SELECT 1 FROM auth.users u
+            WHERE u.id = p_user
+              AND (u.phone_confirmed_at IS NOT NULL
+                   OR u.created_at < coalesce(
+                        (SELECT nullif(value, '')::timestamptz FROM public.app_config
+                          WHERE key = 'phone_verification_cutoff'), '-infinity')
+                   -- App Review demo account (never lock the reviewer out).
+                   OR lower(u.email) = 'adiswamikuwa@gmail.com'))
+      OR EXISTS (SELECT 1 FROM public.profiles p
+                  WHERE p.id = p_user AND p.is_super_admin);
+$$;
+REVOKE EXECUTE ON FUNCTION public.phone_ok_for(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.phone_ok_for(uuid) TO service_role;
 
 CREATE OR REPLACE FUNCTION public.phone_ok()
  RETURNS boolean
@@ -107,19 +140,7 @@ CREATE OR REPLACE FUNCTION public.phone_ok()
  SECURITY DEFINER
  SET search_path TO ''
 AS $$
-  SELECT coalesce((SELECT value FROM public.app_config
-                    WHERE key = 'require_phone_verification'), 'false') <> 'true'
-      OR EXISTS (
-           SELECT 1 FROM auth.users u
-            WHERE u.id = auth.uid()
-              AND (u.phone_confirmed_at IS NOT NULL
-                   OR u.created_at < coalesce(
-                        (SELECT nullif(value, '')::timestamptz FROM public.app_config
-                          WHERE key = 'phone_verification_cutoff'), '-infinity')
-                   -- App Review demo account (never lock the reviewer out).
-                   OR lower(u.email) = 'adiswamikuwa@gmail.com'))
-      OR EXISTS (SELECT 1 FROM public.profiles p
-                  WHERE p.id = auth.uid() AND p.is_super_admin);
+  SELECT public.phone_ok_for(auth.uid());
 $$;
 REVOKE EXECUTE ON FUNCTION public.phone_ok() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.phone_ok() TO authenticated, service_role;
@@ -142,7 +163,8 @@ DO $$
 DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY['posts', 'post_comments', 'messages', 'conversations',
-      'friendships', 'products', 'jobs', 'prayers', 'stories', 'events']
+      'friendships', 'products', 'jobs', 'prayers', 'stories', 'events',
+      'calls', 'prayer_responses', 'post_likes', 'follows', 'quiz_scores']
   LOOP
     IF to_regclass('public.' || t) IS NULL THEN CONTINUE; END IF;
     EXECUTE format('DROP POLICY IF EXISTS phone_verified_to_create ON public.%I', t);
@@ -151,6 +173,65 @@ BEGIN
       'FOR INSERT TO authenticated WITH CHECK ((SELECT public.phone_ok()))', t);
   END LOOP;
 END $$;
+
+-- No notifications (and so no pushes) for an account that must verify.
+-- INSERT only, so RETURN NULL here deliberately skips the row; it is not
+-- the BEFORE-DELETE trap from patch 189.
+CREATE OR REPLACE FUNCTION public.skip_notifications_until_phone_verified()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $$
+BEGIN
+  IF NOT public.phone_ok_for(NEW.user_id) THEN
+    RETURN NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_skip_notifications_until_phone_verified ON public.notifications;
+CREATE TRIGGER trg_skip_notifications_until_phone_verified
+  BEFORE INSERT ON public.notifications
+  FOR EACH ROW EXECUTE FUNCTION public.skip_notifications_until_phone_verified();
+
+-- Nobody's call rings an account that must verify. Same function as live
+-- (patch 263) with one gate added; cancels still go out.
+CREATE OR REPLACE FUNCTION public.call_dispatch(p_call uuid, p_user uuid, p_action text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'net'
+AS $function$
+DECLARE
+  v_url    TEXT := public.call_cfg_text_safe('call.push_endpoint', '');
+  v_secret TEXT := public.call_push_secret();
+BEGIN
+  IF v_url = '' THEN RETURN; END IF;
+  IF p_action = 'ring' AND NOT public.phone_ok_for(p_user) THEN RETURN; END IF;
+
+  IF v_secret IS NULL OR length(v_secret) = 0 THEN
+    PERFORM public.call_log_event(p_call, p_user, 'push_unconfigured',
+      jsonb_build_object('reason', 'no vault secret call_push_secret'));
+    RETURN;
+  END IF;
+
+  PERFORM net.http_post(
+    url     := v_url,
+    headers := jsonb_build_object(
+                 'Content-Type',  'application/json',
+                 'x-call-secret', v_secret),
+    body    := jsonb_build_object(
+                 'call_id', p_call,
+                 'user_id', p_user,
+                 'action',  p_action),
+    timeout_milliseconds := 5000
+  );
+EXCEPTION WHEN OTHERS THEN
+  PERFORM public.call_log_event(p_call, p_user, 'push_failed',
+    jsonb_build_object('code', SQLSTATE));
+END;
+$function$;
 
 -- ============================================ 4. chat storage size caps
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'phone_verification_service.dart';
 import 'dart:convert';
 import 'dart:math';
 
@@ -910,6 +911,9 @@ class AuthService {
       );
     }
     unawaited(_client.auth.signOut().catchError((_) {}));
+    // The phone block belongs to the account, not the device: the next
+    // person to sign in here starts unblocked until the server says so.
+    PhoneVerificationService.required.value = false;
     unawaited(
       GoogleSignIn(
         serverClientId: _googleWebClientId,

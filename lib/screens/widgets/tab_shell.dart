@@ -72,13 +72,23 @@ class _TabShellState extends State<TabShell> with NavVisibilityMixin {
     // Phone verification for new accounts (patch 311). Asked once per app
     // start; the server answers 'ok' while the owner has it switched off,
     // so normally nothing happens here.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkPhone());
+    // Asked on every start and every return to the app; when the answer
+    // is 'required' the router (refreshListenable) moves the member to
+    // /verify-phone by itself.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => PhoneVerificationService.refresh(),
+    );
+    _lifecycle = AppLifecycleListener(
+      onResume: () => PhoneVerificationService.refresh(),
+    );
   }
 
-  Future<void> _checkPhone() async {
-    if (await PhoneVerificationService.status() != 'required') return;
-    if (!mounted) return;
-    context.pushNamed('verify_phone');
+  AppLifecycleListener? _lifecycle;
+
+  @override
+  void dispose() {
+    _lifecycle?.dispose();
+    super.dispose();
   }
 
   void _select(int index) {

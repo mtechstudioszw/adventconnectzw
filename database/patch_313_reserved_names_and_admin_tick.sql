@@ -65,3 +65,33 @@ CREATE TRIGGER trg_profiles_reserved_name
   BEFORE INSERT OR UPDATE OF full_name, username, is_super_admin, is_verified
   ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.profiles_reserved_name_guard();
+
+-- 3. Chats keep the name each person had when the chat started
+--    (participant_a_name / participant_b_name). After a rename the other
+--    person kept seeing the old name (24 chats found stale, 4 Nov 2026,
+--    repaired by hand). Now a name change updates that person's chats.
+CREATE OR REPLACE FUNCTION public.profiles_sync_conversation_names()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $$
+BEGIN
+  IF NEW.full_name IS DISTINCT FROM OLD.full_name
+     AND coalesce(NEW.full_name, '') <> '' THEN
+    UPDATE public.conversations SET participant_a_name = NEW.full_name
+     WHERE participant_a_id = NEW.id AND is_group IS NOT TRUE
+       AND participant_a_name IS DISTINCT FROM NEW.full_name;
+    UPDATE public.conversations SET participant_b_name = NEW.full_name
+     WHERE participant_b_id = NEW.id AND is_group IS NOT TRUE
+       AND participant_b_name IS DISTINCT FROM NEW.full_name;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.profiles_sync_conversation_names() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_profiles_sync_conversation_names ON public.profiles;
+CREATE TRIGGER trg_profiles_sync_conversation_names
+  AFTER UPDATE OF full_name ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.profiles_sync_conversation_names();

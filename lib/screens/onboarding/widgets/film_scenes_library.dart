@@ -31,6 +31,15 @@ double _op(double v) => v.clamp(0.0, 1.0);
 /// browser: the whole Bible, Sabbath School, ~995 hymns and EGW, bundled
 /// and readable with no signal. The scene makes the point by cutting the
 /// connection — the page keeps reading while an "Offline" badge appears.
+/// John 3:16 (KJV), broken to fit the card.
+const _verse = [
+  '16 For God so loved the world,',
+  'that he gave his only begotten Son,',
+  'that whosoever believeth in him',
+  'should not perish, but have',
+  'everlasting life. — John 3:16',
+];
+
 class SceneLibrary extends StatelessWidget {
   const SceneLibrary({super.key, required this.t});
   final double t;
@@ -137,29 +146,27 @@ class SceneLibrary extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    // Verse lines write themselves in, one after another.
-                    for (var i = 0; i < 4; i++)
+                    // The verse writes itself in, line by line — real
+                    // Scripture, not grey bars (owner, 4 Nov 2026).
+                    for (var i = 0; i < _verse.length; i++)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 7),
+                        padding: const EdgeInsets.only(bottom: 2),
                         child: Opacity(
                           opacity: seg(
                             versesIn,
-                            i * 0.18,
-                            i * 0.18 + 0.40,
+                            i * 0.15,
+                            i * 0.15 + 0.40,
                           ).clamp(0.0, 1.0),
-                          child: Container(
-                            height: 7,
-                            width: const [206.0, 224.0, 192.0, 146.0][i] *
-                                (0.45 +
-                                    0.55 *
-                                        seg(
-                                          versesIn,
-                                          i * 0.18,
-                                          i * 0.18 + 0.55,
-                                        )),
-                            decoration: BoxDecoration(
-                              color: ink(context, i == 0 ? 0.30 : 0.16),
-                              borderRadius: BorderRadius.circular(4),
+                          child: Text(
+                            _verse[i],
+                            maxLines: 1,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: i == 0
+                                  ? context.palette.text
+                                  : context.palette.textMuted,
+                              fontWeight:
+                                  i == 0 ? FontWeight.w600 : FontWeight.w400,
+                              height: 1.35,
                             ),
                           ),
                         ),

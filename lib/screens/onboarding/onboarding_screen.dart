@@ -66,6 +66,9 @@ class OnboardingScreen extends StatefulWidget {
     // last kept scene ends, the film hands over to sign-in by itself.
   ];
 
+  /// How far into a scene a jump lands (fraction of the master timeline).
+  static const entryLead = 0.012;
+
   /// The moment the film is over and sign-in opens.
   static double get filmEnd => keptScenes.last.$2;
 
@@ -76,7 +79,10 @@ class OnboardingScreen extends StatefulWidget {
     for (var i = 0; i < keptScenes.length - 1; i++) {
       final end = keptScenes[i].$2;
       final nextStart = keptScenes[i + 1].$1;
-      if (t >= end && t < nextStart) return nextStart;
+      // Land a little INTO the next scene: its first beat is an empty
+      // stage while it starts to enter, which after a cut read as a
+      // blank, frozen screen.
+      if (t >= end && t < nextStart) return nextStart + entryLead;
     }
     return null;
   }
@@ -260,6 +266,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   loop: _ambient.value,
                   film: _film.value,
                   dark: Theme.of(context).brightness == Brightness.dark,
+                  // Redesign (owner, 4 Nov 2026): the ghost outlines and
+                  // dust dots competed with the scenes and read as broken
+                  // layout — the same reason they left the real screens
+                  // on 28 Oct. Calm field only.
+                  quiet: true,
                 ),
               ),
             ),
@@ -318,8 +329,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _buildStage(double t) {
     bool live((double, double) w) => t > w.$1 - 0.01 && t < w.$2 + 0.03;
     return Padding(
-      // Keep the action clear of the CTA zone at the bottom.
-      padding: const EdgeInsets.only(bottom: 120),
+      // There is no CTA zone any more (the finale and its buttons went on
+      // 4 Nov 2026), so the scenes sit in the true centre of the screen
+      // instead of the top half — a slight lift for optical balance.
+      padding: const EdgeInsets.only(bottom: 40),
       child: Stack(
         alignment: Alignment.center,
         children: [

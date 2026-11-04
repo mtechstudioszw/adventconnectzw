@@ -314,6 +314,30 @@ class _MiniSurface extends StatelessWidget {
 }
 
 /// Grey placeholder text bar whose width "types itself in".
+/// A line of real text that fades and slides in with [t] (0→1).
+class _FadeText extends StatelessWidget {
+  const _FadeText(this.text, {required this.t, required this.style});
+  final String text;
+  final double t;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: t.clamp(0.0, 1.0),
+      child: Transform.translate(
+        offset: Offset(8 * (1 - t), 0),
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+        ),
+      ),
+    );
+  }
+}
+
 class _TextBar extends StatelessWidget {
   const _TextBar({required this.grow, required this.width, this.height = 9});
   final double grow; // 0→1
@@ -417,8 +441,12 @@ class SceneLine extends StatelessWidget {
                     // caption in the film went through this one line.
                     color: context.palette.text,
                     fontWeight: emphasis ? FontWeight.w800 : FontWeight.w700,
+                    // Bigger and firmer (redesign, 4 Nov 2026): the line
+                    // IS the message of each scene and read as an
+                    // afterthought under the card.
+                    fontSize: emphasis ? 30 : 26,
                     height: 1.2,
-                    letterSpacing: -0.2,
+                    letterSpacing: -0.3,
                   ),
         ),
       ),
@@ -591,7 +619,19 @@ class SceneChurch extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              _TextBar(grow: barsIn, width: 110, height: 11),
+                              // Real words, not grey bars (owner, 4 Nov
+                              // 2026 redesign): placeholder bars read as
+                              // an unfinished app.
+                              Flexible(
+                                child: _FadeText(
+                                  'Harare City SDA',
+                                  t: barsIn,
+                                  style: AppTextStyles.titleSmall.copyWith(
+                                    color: context.palette.text,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
                               const SizedBox(width: 6),
                               Transform.scale(
                                 scale: tickPop,
@@ -603,9 +643,15 @@ class SceneChurch extends StatelessWidget {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 7),
-                          _TextBar(grow: barsIn, width: 76, height: 8),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 3),
+                          _FadeText(
+                            'Harare · Zimbabwe',
+                            t: barsIn,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: context.palette.textMuted,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
                           Row(
                             children: [
                               Icon(

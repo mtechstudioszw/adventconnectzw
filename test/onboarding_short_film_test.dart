@@ -10,10 +10,10 @@ void main() {
   test('dropped scenes are jumped over', () {
     // Prayer (s2) sits between churches and chat.
     expect(OnboardingScreen.jumpTargetFor(FilmTimeline.s1.$2 + 0.001),
-        FilmTimeline.s3.$1);
+        FilmTimeline.s3.$1 + OnboardingScreen.entryLead);
     // Marketplace, Watch (s4, s5) between chat and Library.
     expect(OnboardingScreen.jumpTargetFor(FilmTimeline.s5.$1),
-        FilmTimeline.s6.$1);
+        FilmTimeline.s6.$1 + OnboardingScreen.entryLead);
     // Nothing after the Library: the film ends there and sign-in opens.
     expect(OnboardingScreen.filmEnd, FilmTimeline.s6.$2);
     expect(OnboardingScreen.keptScenes.contains(FilmTimeline.s10), isFalse);

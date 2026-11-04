@@ -281,7 +281,7 @@ class _CreateScreenState extends State<_CreateScreen>
     if (page != null) return (name: page.name, photo: page.logoUrl);
     try {
       final meta = AuthService.currentUser?.userMetadata ?? const {};
-      final full = (meta['full_name'] as String?)?.trim() ?? '';
+      final full = AuthService.myFullName;
       return (
         name: full.isEmpty ? 'You' : full,
         photo: meta['profile_photo_url'] as String?,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/messaging_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/phone_verification_service.dart';
 import '../../widgets/ads/ad_banner.dart';
 import '../../widgets/motion/hide_on_scroll.dart';
@@ -75,11 +76,15 @@ class _TabShellState extends State<TabShell> with NavVisibilityMixin {
     // Asked on every start and every return to the app; when the answer
     // is 'required' the router (refreshListenable) moves the member to
     // /verify-phone by itself.
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => PhoneVerificationService.refresh(),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PhoneVerificationService.refresh();
+      AuthService.refreshProfileName();
+    });
     _lifecycle = AppLifecycleListener(
-      onResume: () => PhoneVerificationService.refresh(),
+      onResume: () {
+        PhoneVerificationService.refresh();
+        AuthService.refreshProfileName();
+      },
     );
   }
 

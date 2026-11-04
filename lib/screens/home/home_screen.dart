@@ -316,6 +316,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // The Premium card: shown / snoozed / swapped for the Pro upgrade as
     // the member's tier changes.
     PremiumPromoService.feedCard.addListener(_onHiddenChanged);
+    // Greeting follows the profile name (see AuthService.profileName).
+    AuthService.profileName.addListener(_onHiddenChanged);
     PremiumService.tierListenable.addListener(_onTierChanged);
     unawaited(PremiumPromoService.refreshFeedCard());
     // Header greeting, Sabbath wash and countdown follow the place and
@@ -515,6 +517,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _postChangesSub?.cancel();
     FeedService.hiddenPostIds.removeListener(_onHiddenChanged);
     PremiumPromoService.feedCard.removeListener(_onHiddenChanged);
+    AuthService.profileName.removeListener(_onHiddenChanged);
     PremiumService.tierListenable.removeListener(_onTierChanged);
     SabbathService.changes.removeListener(_onSabbathChanged);
     _newPostTimer?.cancel();
@@ -1298,8 +1301,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   String _firstName() {
     final user = AuthService.currentUser;
-    final meta = user?.userMetadata ?? const {};
-    final raw = (meta['full_name'] as String?)?.trim() ?? '';
+    final raw = AuthService.myFullName;
     if (raw.isEmpty) {
       final email = user?.email ?? '';
       final at = email.indexOf('@');
@@ -1310,8 +1312,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   String _initials() {
     final user = AuthService.currentUser;
-    final meta = user?.userMetadata ?? const {};
-    final raw = (meta['full_name'] as String?)?.trim() ?? '';
+    final raw = AuthService.myFullName;
     if (raw.isEmpty) return (user?.email ?? '?').substring(0, 1).toUpperCase();
     final parts = raw.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
@@ -1919,8 +1920,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   String _displayFullName() {
     final user = AuthService.currentUser;
-    final meta = user?.userMetadata ?? const {};
-    final raw = (meta['full_name'] as String?)?.trim() ?? '';
+    final raw = AuthService.myFullName;
     if (raw.isNotEmpty) return raw;
     return user?.email ?? 'Welcome';
   }

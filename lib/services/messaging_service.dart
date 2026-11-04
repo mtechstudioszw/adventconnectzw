@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'auth_service.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -840,9 +841,13 @@ class MessagingService {
       );
     }
     final meta = user.userMetadata ?? const {};
-    final myName = ((meta['full_name'] as String?)?.trim().isNotEmpty == true)
-        ? (meta['full_name'] as String).trim()
-        : 'Member';
+    // The profile name, not the login metadata (a Google sign-in rewrites
+    // that with the Google account's name).
+    final myName = AuthService.myFullName.isNotEmpty
+        ? AuthService.myFullName
+        : ((meta['full_name'] as String?)?.trim().isNotEmpty == true
+              ? (meta['full_name'] as String).trim()
+              : 'Member');
     final inserted = await _client
         .from(_conversationsTable)
         .insert({
@@ -892,9 +897,13 @@ class MessagingService {
     }
     final body = (firstMessage ?? '').trim();
     final meta = user.userMetadata ?? const {};
-    final myName = ((meta['full_name'] as String?)?.trim().isNotEmpty == true)
-        ? (meta['full_name'] as String).trim()
-        : 'Member';
+    // The profile name, not the login metadata (a Google sign-in rewrites
+    // that with the Google account's name).
+    final myName = AuthService.myFullName.isNotEmpty
+        ? AuthService.myFullName
+        : ((meta['full_name'] as String?)?.trim().isNotEmpty == true
+              ? (meta['full_name'] as String).trim()
+              : 'Member');
 
     // Resolve the other participant's REAL display name from their
     // profile rather than trusting the caller-supplied name. Jobs /

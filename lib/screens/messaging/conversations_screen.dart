@@ -495,8 +495,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
   String _viewerName() {
     final user = AuthService.currentUser;
-    final meta = user?.userMetadata ?? const {};
-    final raw = (meta['full_name'] as String?)?.trim() ?? '';
+    final raw = AuthService.myFullName;
     if (raw.isEmpty) return user?.email ?? 'You';
     return raw;
   }

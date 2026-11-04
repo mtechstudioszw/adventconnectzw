@@ -123,7 +123,7 @@ class MainBottomNav extends StatelessWidget {
       final user = AuthService.currentUser;
       final meta = user?.userMetadata ?? const {};
       final photo = (meta['profile_photo_url'] as String?)?.trim() ?? '';
-      final name = (meta['full_name'] as String?)?.trim() ?? '';
+      final name = AuthService.myFullName;
       final email = user?.email ?? '';
       final initial = name.isNotEmpty
           ? name.substring(0, 1).toUpperCase()

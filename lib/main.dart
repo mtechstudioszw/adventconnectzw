@@ -147,6 +147,8 @@ void main() async {
         // Phone-verification block, remembered from last time, so a cold
         // start blocks before the network answers.
         PhoneVerificationService.loadCached();
+        // The profile name (not the Google-rewritten login name).
+        AuthService.loadCachedProfileName();
         return MusicDownloadService.migrate();
       },
     ),

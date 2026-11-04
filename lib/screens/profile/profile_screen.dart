@@ -97,11 +97,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadMinistryTags();
     TabShell.activeIndex.addListener(_onTabChanged);
     _postChangesSub = FeedService.postChanges.listen(_onPostChange);
+    AuthService.profileName.addListener(_onNameChanged);
+  }
+
+  void _onNameChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     TabShell.activeIndex.removeListener(_onTabChanged);
+    AuthService.profileName.removeListener(_onNameChanged);
     FollowService.revision.removeListener(_loadPublicRow);
     _postChangesSub?.cancel();
     super.dispose();
@@ -416,8 +422,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _displayName() {
     final user = AuthService.currentUser;
-    final meta = user?.userMetadata ?? const {};
-    final name = (meta['full_name'] as String?)?.trim() ?? '';
+    final name = AuthService.myFullName;
     if (name.isNotEmpty) return name;
     return user?.email ?? 'Welcome';
   }

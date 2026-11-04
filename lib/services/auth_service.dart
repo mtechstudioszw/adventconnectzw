@@ -34,6 +34,59 @@ class AuthService {
   static const _birthDateKey = 'birth_date';
 
   static User? get currentUser => _client.auth.currentUser;
+
+  // ---- The member's own display name ---------------------------------
+  //
+  // Owner, 4 Nov 2026: the official account was renamed "Adventist Super
+  // App Team", but Home kept greeting "Tanatswa" now and then. The app read
+  // the name from the LOGIN's metadata, and every Google sign-in writes the
+  // Google account's name back into that metadata. The profile row is the
+  // real source — Google never touches it — so every screen reads it from
+  // here: remembered on the phone, refreshed on each start and resume.
+
+  static final ValueNotifier<String?> profileName = ValueNotifier<String?>(
+    null,
+  );
+  // User-scoped (no `pref:`), so signing out clears it.
+  static const _kMyName = 'my_full_name_v1';
+
+  /// The name to show for the signed-in member, '' if unknown.
+  static String get myFullName {
+    final fromProfile = profileName.value?.trim() ?? '';
+    if (fromProfile.isNotEmpty) return fromProfile;
+    try {
+      final meta = currentUser?.userMetadata ?? const {};
+      return (meta['full_name'] as String?)?.trim() ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  static void loadCachedProfileName() {
+    try {
+      final v = CacheService.readPref(_kMyName);
+      if (v != null && v.trim().isNotEmpty) profileName.value = v;
+    } catch (_) {}
+  }
+
+  static Future<void> refreshProfileName() async {
+    final id = currentUser?.id;
+    if (id == null) return;
+    try {
+      final row = await _client
+          .from('profiles')
+          .select('full_name')
+          .eq('id', id)
+          .maybeSingle()
+          .timeout(const Duration(seconds: 8));
+      final name = (row?['full_name'] as String?)?.trim() ?? '';
+      if (name.isEmpty) return;
+      profileName.value = name;
+      await CacheService.writePref(_kMyName, name);
+    } catch (_) {
+      // Keep whatever we had.
+    }
+  }
   static Session? get currentSession => _client.auth.currentSession;
   static bool get isSignedIn => currentSession != null;
 
@@ -927,6 +980,7 @@ class AuthService {
     // The phone block belongs to the account, not the device: the next
     // person to sign in here starts unblocked until the server says so.
     PhoneVerificationService.required.value = false;
+    profileName.value = null;
     unawaited(
       GoogleSignIn(
         serverClientId: _googleWebClientId,
@@ -1190,6 +1244,7 @@ class AuthService {
         }
       }
 
+      unawaited(refreshProfileName());
       return AuthResult.success(response.user);
     } on AuthException catch (e) {
       return AuthResult.failure(

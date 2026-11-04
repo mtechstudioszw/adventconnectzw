@@ -1294,8 +1294,8 @@ class _IdentityRowState extends State<_IdentityRow> {
         ? page.name
         : isChurch
         ? (_church?.name ?? 'Your church')
-        : ((meta['full_name'] as String?)?.trim().isNotEmpty ?? false
-              ? (meta['full_name'] as String).trim()
+        : (AuthService.myFullName.isNotEmpty
+              ? AuthService.myFullName
               : 'You');
     final photo = page != null
         ? page.logoUrl

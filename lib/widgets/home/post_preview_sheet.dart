@@ -45,8 +45,8 @@ Future<bool> showPostPreview(
     // Never persisted — the real id is assigned by the insert.
     id: 'preview',
     authorId: user?.id ?? 'preview',
-    authorName: (meta['full_name'] as String?)?.trim().isNotEmpty == true
-        ? (meta['full_name'] as String).trim()
+    authorName: AuthService.myFullName.isNotEmpty
+        ? AuthService.myFullName
         : 'You',
     authorPhotoUrl: (meta['profile_photo_url'] as String?)?.trim(),
     authorIsVerified: authorIsVerified,

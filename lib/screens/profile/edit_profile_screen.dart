@@ -98,7 +98,7 @@ class _EditProfileScreenState extends State<EditProfileScreen>
     // Stored as one string, so split it back the way signup joined it:
     // everything before the last space is the first name (middle names stay
     // with it), the last word is the surname.
-    final storedName = ((meta['full_name'] as String?) ?? '').trim();
+    final storedName = AuthService.myFullName;
     final nameParts = storedName
         .split(RegExp(r'\s+'))
         .where((p) => p.isNotEmpty)

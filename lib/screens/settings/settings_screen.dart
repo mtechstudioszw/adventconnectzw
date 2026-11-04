@@ -1310,7 +1310,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   Widget _buildHero() {
     final user = AuthService.currentUser;
     final meta = user?.userMetadata ?? const {};
-    final name = (meta['full_name'] ?? '').toString().trim();
+    final name = AuthService.myFullName;
     final photo = (meta['profile_photo_url'] ?? '').toString().trim();
     final email = (user?.email ?? '').trim();
     final palette = context.palette;
